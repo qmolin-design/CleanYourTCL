@@ -1,0 +1,861 @@
+diff --git a/tvagent/AndroidManifest.xml b/tvagent/AndroidManifest.xml
+index 1ec46f6..5c83825 100644
+--- a/tvagent/AndroidManifest.xml
++++ b/tvagent/AndroidManifest.xml
+@@ -1,22 +1,15 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-    package="com.example.tvagent" android:versionCode="1" android:versionName="1">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.tvagent" android:versionCode="2" android:versionName="2">
+     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="30" />
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+-    <application android:label="tvagent 實驗" android:allowBackup="false" android:debuggable="true">
++    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
++    <application android:label="看電視時間" android:allowBackup="false" android:debuggable="true">
+         <service android:name=".AgentService" android:exported="false" />
+-        <receiver android:name=".BootReceiver" android:exported="true">
+-            <intent-filter>
+-                <action android:name="android.intent.action.BOOT_COMPLETED" />
+-            </intent-filter>
+-        </receiver>
+-        <receiver android:name=".TestReceiver" android:exported="true">
+-            <intent-filter>
+-                <action android:name="com.example.tvagent.SELFTEST" />
+-            </intent-filter>
+-        </receiver>
++        <receiver android:name=".BootReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter></receiver>
++        <receiver android:name=".KickReceiver" android:exported="true"><intent-filter><action android:name="com.example.tvagent.KICK" /></intent-filter></receiver>
+         <receiver android:name=".AlarmReceiver" android:exported="false" />
++        <activity android:name=".NoticeActivity" android:exported="true" android:excludeFromRecents="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+     </application>
+ </manifest>
+diff --git a/tvagent/README.md b/tvagent/README.md
+index 69aa89b..9c93b35 100644
+--- a/tvagent/README.md
++++ b/tvagent/README.md
+@@ -1,94 +1,47 @@
+-# tvagent 實驗 App（PLAN v5 WO-A1）
++# 看電視時間
+ 
+-目的：驗證「電視上的 App 不靠 Mac，能不能自己連本機 adbd、通過 RSA 認證，
+-停用／啟用 App」。只做實驗，不碰額度、不碰 Cloudflare、不取代 v4。
++電視端自行計算 YouTube 前景且螢幕亮著的用量、持有額度，並每分鐘與 Cloudflare 同步。只有 `com.google.android.youtube.tv` 會被停用或啟用；沒有桌面啟動圖示。開機與鬧鐘啟動前景服務，TGuard 名單每跳檢查補回。使用同一把 `debug.keystore` 覆蓋安裝，以保留 App 的 adb 金鑰與授權。
+ 
+-- 套件：`com.example.tvagent`，無桌面圖示，minSdk 26、targetSdk 30。
+-- 停用／啟用只針對 `com.example.tkey`；心跳另會維護 TGuard 的保護名單。
+-
+-## 檔案
+-
+-- `AndroidManifest.xml`：INTERNET、RECEIVE_BOOT_COMPLETED、FOREGROUND_SERVICE；
+-  BootReceiver（exported）、TestReceiver（exported）、AgentService。
+-- `build.sh`：Docker 映像 `cleanyourtv-android-build-amd64` 編譯，
+-  產出 `tvagent.apk`（`debug.keystore` 不存在就產生，alias `tvagent`）。
+-- `src/com/example/tvagent/AdbClient.java`：純 Java adb 連線端
+-  （CNXN／AUTH／OPEN／OKAY／WRTE／CLSE），不依賴 android.*。
+-  附 `main` 供 Docker 單獨執行（電視上不用）。
+-- `src/.../AgentService.java`：前景服務。所有 adb 動作在同一個單執行緒
+-  序列化；心跳由鬧鐘驅動（每 60 秒 `echo ok`），寫 `files/agent.log`。
+-- `src/.../BootReceiver.java`、`TestReceiver.java`：只負責啟動服務。
+-- `src/.../AlarmReceiver.java`：鬧鐘廣播入口（exported=false），
+-  只負責用 action `HEARTBEAT` 把服務叫起來；見「TCL 凍結機制與鬧鐘心跳」。
+-- `test/AdbClientTest.java`＋`test.sh`：離線協定測試（假 adbd＋測試向量）。
+-
+-## 安裝
++## 建置與安裝
+ 
+ ```sh
++sh tvagent/test.sh
+ sh tvagent/build.sh
+-# 用現有 adb 把 tvagent.apk 裝到電視（不代勞，只記指令形狀）
+-```
+-
+-## 讀紀錄
+-
+-```sh
+-adb shell run-as com.example.tvagent cat files/agent.log
++adb install -r tvagent/tvagent.apk
++adb shell cmd appops get com.example.tvagent APP_AUTO_START
++adb shell cmd appops get com.example.tvagent APP_ASSOC_START
++adb shell cmd appops get com.example.tvagent GET_USAGE_STATS
+ ```
+ 
+-心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息> wl=<狀態>`；
+-服務啟動記 `start reason=<boot|test|other>`。`adb=ok` 表示輸出 trim 後等於 `ok`。
+-pid 變化＝程序曾被系統砍掉重啟。
+-
+-`wl=keep` 表示名單已有 tvagent；`wl=set` 表示已設定並驗證；`wl=fail` 表示設定後仍未查到；`wl=skip` 表示 adb 心跳失敗，未檢查名單。`wl=unexpected` 表示指令輸出不符合預期，`wl=<錯誤類別:訊息>` 表示名單指令發生例外。
++每個程序啟動時 App 會重新設定以上三個 appops、standby bucket 與 deviceidle 白名單。`agent.log` 的 `setup=11111` 表示五條設定均成功；失敗會在下一跳重試。
+ 
+-## TGuard 保護名單
++## 設定與觀察
+ 
+-`AgentService` 的 `WHITELIST` 常數保存 Owner 選定的九個套件：
++在安全位置建立 `config.properties`，內容只有以下三個欄位（填入實際 HTTPS 同步網址及 Cloudflare Access service token；勿提交或分享憑證）：
+ 
+-```text
+-com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent
++```properties
++url=https://example.com/tv/api/sync
++client_id=填入服務憑證 ID
++client_secret=填入服務憑證密鑰
+ ```
+ 
+-名單只存在 TGuard 的記憶體；TGuard 重啟或電視重開後會恢復預設。心跳每分鐘檢查 tvagent 是否在名單中，缺少時以常數整份取代並重新驗證。若 tvagent 已在名單中，其他成員不會被變更。
+-
+-手動還原原本的 11 個套件（之後心跳仍會自動補回選定名單）：
++以已連線的維運裝置推入 App 私有目錄，然後叫服務跑一跳：
+ 
+ ```sh
+-adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList 'com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV'
++adb push config.properties /data/local/tmp/tvagent-config.properties
++adb shell 'run-as com.example.tvagent sh -c "cat /data/local/tmp/tvagent-config.properties > files/config.properties && chmod 600 files/config.properties"'
++adb shell rm /data/local/tmp/tvagent-config.properties
++adb shell am broadcast -n com.example.tvagent/.KickReceiver -a com.example.tvagent.KICK
++adb shell run-as com.example.tvagent cat files/agent.log
+ ```
+ 
+-## TCL 凍結機制與鬧鐘心跳
+-
+-實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結，
+-前景服務也一樣；`ScheduledExecutorService` 的週期心跳因此停擺。
+-收到廣播時系統會立即解凍該程序，所以心跳改由 `AlarmManager` 驅動：
+-
+-- 服務啟動（boot／test／other）與每次心跳後，都用
+-  `setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, now+60秒)` 排下一次
+-  精確鬧鐘（API 26～30 不需要 `SCHEDULE_EXACT_ALARM` 權限，故不新增權限；
+-  不用 `setRepeating`，每次觸發後重新排）。
+-- 鬧鐘送明確廣播給 `AlarmReceiver`（`exported=false`，無 intent-filter）。
+-- `AlarmReceiver` 收到後用 `startForegroundService` 送 action `HEARTBEAT` 給
+-  `AgentService`（服務若曾被殺也會因此重建）；服務把一次心跳排進原本的
+-  單執行緒 executor，並排下一次鬧鐘。executor 只留單次工作佇列，
+-  沒有 `scheduleAtFixedRate` 週期任務。
+-- `PendingIntent` 用固定 requestCode＋`FLAG_UPDATE_CURRENT`（另加
+-  `FLAG_IMMUTABLE`），同一時間只有一個待發鬧鐘。
+-- 心跳 `src=alarm` 表示鬧鐘觸發，`src=start` 表示服務啟動時先做的一次。
+-  心跳執行期間若被凍結，解凍時可能補跑：距上次心跳（`elapsedRealtime`）
+-  `< 30 秒` 就略過，同一分鐘內不重複寫兩次。
+-
+-## 自我測試
++每跳一行：`uptime pid bal used_today fg yt screen act sync adb wl`，另有啟動設定結果與必要時的 `gap`、`clock=jump`。記錄超過 1MB 時只保留後約 512KB，不記憑證或私鑰。狀態保存在 `files/state.properties`。
+ 
+-```sh
+-adb shell am broadcast -n com.example.tvagent/.TestReceiver \
+-  -a com.example.tvagent.SELFTEST
+-```
++## 影子模式、切換與回滾
++
++執行開關 `enforce` 存在 Cloudflare D1，由 Worker 同步下發；預設 false 是影子模式，只記 `dry-*`，不操作 YouTube 或提示畫面。完成影子驗證後在 D1 設為 true，下一次成功同步生效；切回 false 也是透過 D1 下發。回滾到舊方案前，先確認 YouTube 狀態與舊方案接手情況。覆蓋安裝沿用同一把簽章金鑰。
+ 
+-服務在背景執行緒依序：停用 tkey → 查停用清單有 tkey → 啟用 tkey →
+-查停用清單無 tkey，最後寫 `selftest PASS`（或 `selftest FAIL <步驟>`）。
+-開始前若 tkey 已在停用清單，記 `selftest SKIP tkey-disabled` 不動作；
+-無論中途哪步失敗都會再嘗試 `pm enable` 恢復。
++斷網時仍使用本機保存的額度及最後收到的 enforce 值，照事件補扣；沒有設定檔時不會同步。adb 查詢失敗時當跳不操作 YouTube、不顯示提示，直到 adb 恢復；不能保證離線或 adb 故障期間即時鎖定。
+ 
+ ## 移除
+ 
+@@ -96,5 +49,4 @@ adb shell am broadcast -n com.example.tvagent/.TestReceiver \
+ adb uninstall com.example.tvagent
+ ```
+ 
+-收尾只做 uninstall，不撤銷電視的 USB 偵錯授權（殘留公鑰對應的私鑰
+-已隨 App 刪除，無法再被使用）。
++移除只用 `adb uninstall`；不准撤銷電視的 USB 偵錯授權。
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index fa12860..31d69f4 100644
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -1,341 +1,167 @@
+ package com.example.tvagent;
+ 
+-import android.app.AlarmManager;
+-import android.app.Notification;
+-import android.app.NotificationChannel;
+-import android.app.NotificationManager;
+-import android.app.PendingIntent;
+-import android.app.Service;
+-import android.content.Context;
+-import android.content.Intent;
+-import android.os.Build;
+-import android.os.IBinder;
+-import android.os.Process;
+-import android.os.SystemClock;
+-
+-import java.io.File;
+-import java.io.FileWriter;
+-import java.io.IOException;
++import android.app.*;
++import android.app.usage.UsageEvents;
++import android.app.usage.UsageStatsManager;
++import android.content.*;
++import android.os.*;
++import android.provider.Settings;
++import org.json.*;
++import java.io.*;
++import java.net.*;
+ import java.text.SimpleDateFormat;
+-import java.util.Date;
+-import java.util.Locale;
+-import java.util.concurrent.ExecutorService;
+-import java.util.concurrent.Executors;
++import java.util.*;
++import java.util.concurrent.*;
++import javax.net.ssl.HttpsURLConnection;
+ 
+-/**
+- * 前景服務：所有 adb 動作都在同一個單執行緒上序列化。
+- * 心跳由 AlarmManager 精確鬧鐘驅動，每 60 秒一次（見 AlarmReceiver）：
+- * 連本機 adbd 跑 echo ok，寫進 files/agent.log。
+- * TCL 的 FreezeManager 會凍結閒置程序（含前景服務），
+- * ScheduledExecutorService 的週期心跳因此停擺；改用鬧鐘＋廣播喚醒
+- * （收到廣播時系統會解凍該程序）。executor 只留單次工作佇列。
+- * SELFTEST 也排進同一條執行緒，不和心跳並行。
+- *
+- * 電視上可觸發的只有固定的心跳與 SELFTEST；沒有任何從 Intent extra
+- * 或檔案讀入指令的路徑。
+- */
+ public class AgentService extends Service {
+-
+-    static final String EXTRA_REASON = "reason";
+-    static final String EXTRA_SELFTEST = "selftest";
+-    static final String SELFTEST_ACTION = "com.example.tvagent.SELFTEST";
+-    static final String HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
+-
+-    static final long HEARTBEAT_MS = 60 * 1000;
+-    static final long DEDUP_MS = 30 * 1000;
+-    static final int ALARM_REQ = 1;
+-
+-    static final String TARGET = "com.example.tkey";
+-    static final String CMD_ECHO = "echo ok";
++    static final String EXTRA_REASON = "reason", HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
++    static final String DISABLE = "pm disable-user --user 0 com.google.android.youtube.tv";
++    static final String ENABLE = "pm enable --user 0 com.google.android.youtube.tv";
++    static final String LIST = "pm list packages -d";
+     static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
+     static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+             + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+             + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
+             + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+-    static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+-    static final String CMD_LIST_DISABLED = "pm list packages -d";
+-    static final String CMD_ENABLE = "pm enable com.example.tkey";
+-
+-    static final String HOST = "127.0.0.1";
+-    static final int PORT = 5555;
+-    static final long AUTH_TIMEOUT_MS = 60000;
+-    static final long IO_TIMEOUT_MS = 10000;
+-
+     private ExecutorService exec;
+-    private File logFile;
+-    private File keyFile;
+-    // 上次實際寫下心跳的 elapsedRealtime（毫秒）；凍結後補跑導致
+-    // 密集重複時，距上次 < DEDUP_MS 就略過，避免同一分鐘寫兩次。
+-    private volatile long lastHeartbeatElapsed = 0;
++    private File keyFile, stateFile, logFile;
++    private boolean configured;
+ 
+-    @Override
+-    public void onCreate() {
+-        super.onCreate();
+-        startAsForeground();
+-        logFile = new File(getFilesDir(), "agent.log");
+-        keyFile = new File(getFilesDir(), "adbkey");
+-        // 單次工作佇列：心跳與 SELFTEST 都排進這裡序列化，不再做週期排程。
+-        exec = Executors.newSingleThreadExecutor();
++    @Override public void onCreate() {
++        super.onCreate(); keyFile = new File(getFilesDir(), "adbkey"); stateFile = new File(getFilesDir(), "state.properties"); logFile = new File(getFilesDir(), "agent.log");
++        exec = Executors.newSingleThreadExecutor(); startAsForeground();
+     }
+-
+-    /**
+-     * 排下一次鬧鐘（精確鬧鐘，每次觸發後由服務重新排下一次）。
+-     * PendingIntent 用固定 requestCode＋FLAG_UPDATE_CURRENT，
+-     * 同一時間只會有一個待發鬧鐘。API 26～30 用
+-     * setExactAndAllowWhileIdle，不需要 SCHEDULE_EXACT_ALARM 權限。
+-     */
+-    static void scheduleNextAlarm(Context ctx) {
+-        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+-        if (am == null) {
+-            return;
+-        }
+-        Intent i = new Intent(ctx, AlarmReceiver.class);
+-        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+-        PendingIntent pi = PendingIntent.getBroadcast(ctx, ALARM_REQ, i, flags);
+-        long next = SystemClock.elapsedRealtime() + HEARTBEAT_MS;
+-        am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, next, pi);
++    static void scheduleNextAlarm(Context context, long delay) {
++        AlarmManager am = (AlarmManager) context.getSystemService(ALARM_SERVICE);
++        if (am != null) am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + delay,
++                PendingIntent.getBroadcast(context, 1, new Intent(context, AlarmReceiver.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+     }
+-
+     private void startAsForeground() {
+-        String ch = "tvagent";
+-        if (Build.VERSION.SDK_INT >= 26) {
+-            NotificationChannel nc = new NotificationChannel(
+-                    ch, "tvagent 實驗", NotificationManager.IMPORTANCE_LOW);
+-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+-            if (nm != null) {
+-                nm.createNotificationChannel(nc);
+-            }
+-        }
+-        Notification n;
+-        if (Build.VERSION.SDK_INT >= 26) {
+-            n = new Notification.Builder(this, ch)
+-                    .setContentTitle("tvagent 實驗")
+-                    .setContentText("adb 心跳執行中")
+-                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+-                    .build();
+-        } else {
+-            n = new Notification.Builder(this)
+-                    .setContentTitle("tvagent 實驗")
+-                    .setContentText("adb 心跳執行中")
+-                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+-                    .build();
+-        }
+-        startForeground(1, n);
++        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
++        if (nm != null) nm.createNotificationChannel(new NotificationChannel("tvagent", "看電視時間", NotificationManager.IMPORTANCE_LOW));
++        startForeground(1, new Notification.Builder(this, "tvagent").setContentTitle("看電視時間").setContentText("額度服務執行中").setSmallIcon(android.R.drawable.stat_notify_sync).build());
+     }
+-
+-    @Override
+-    public int onStartCommand(final Intent intent, int flags, int startId) {
+-        // 立刻確保前景狀態（若系統重建服務時 intent 為 null 也要能撐住）。
+-        try {
+-            startAsForeground();
+-        } catch (Exception ignored) {
+-            // 已經是前景時重複呼叫無害
+-        }
+-        // 鬧鐘心跳：排一次心跳進單執行緒，並排下一次鬧鐘；
+-        // 服務若曾被殺，這裡的 startForegroundService 會把它重建。
+-        if (intent != null && HEARTBEAT_ACTION.equals(intent.getAction())) {
+-            if (exec != null) {
+-                exec.execute(new Runnable() {
+-                    @Override
+-                    public void run() {
+-                        heartbeat("alarm");
+-                    }
+-                });
+-            }
+-            scheduleNextAlarm(this);
+-            return START_STICKY;
+-        }
+-        String reason = "other";
+-        boolean wantSelftest = false;
+-        if (intent != null) {
+-            String r = intent.getStringExtra(EXTRA_REASON);
+-            if ("boot".equals(r) || "test".equals(r)) {
+-                reason = r;
+-            }
+-            wantSelftest = intent.getBooleanExtra(EXTRA_SELFTEST, false);
+-        }
+-        final String logReason = reason;
+-        // start 行由主執行緒直接寫，避免和背景工作搶順序造成混淆。
+-        logLine("start reason=" + logReason);
+-        // 服務啟動（boot／test／other，含系統重建時的 null intent）
+-        // 都要確保下一次鬧鐘已排好，並先做一次心跳（src=start）。
+-        scheduleNextAlarm(this);
+-        if (exec != null) {
+-            exec.execute(new Runnable() {
+-                @Override
+-                public void run() {
+-                    heartbeat("start");
+-                }
+-            });
+-            if (wantSelftest) {
+-                exec.execute(new Runnable() {
+-                    @Override
+-                    public void run() {
+-                        runSelftest();
+-                    }
+-                });
+-            }
+-        }
++    @Override public int onStartCommand(Intent intent, int flags, int startId) {
++        if (intent != null) intent.getStringExtra("reason");
++        scheduleNextAlarm(this, 60000);
++        exec.execute(new Runnable() { public void run() { heartbeat(); } });
+         return START_STICKY;
+     }
+-
+-    @Override
+-    public IBinder onBind(Intent intent) {
+-        return null;
++    @Override public IBinder onBind(Intent intent) { return null; }
++    @Override public void onDestroy() { exec.shutdown(); super.onDestroy(); }
++    private String adb(String command) throws AdbClient.AdbException {
++        try { AdbClient c = AdbClient.withKeyFile("127.0.0.1", 5555, keyFile); c.setAuthTimeoutMs(60000); c.setIoTimeoutMs(10000); return c.shell(command); }
++        catch (AdbClient.AdbException e) { throw e; }
++        catch (Exception e) { throw new AdbClient.AdbException(AdbClient.IO, "key error"); }
+     }
+-
+-    @Override
+-    public void onDestroy() {
+-        if (exec != null) {
+-            exec.shutdownNow();
+-            exec = null;
+-        }
+-        super.onDestroy();
++    private Quota load() {
++        try (FileInputStream in = new FileInputStream(stateFile)) { Properties p = new Properties(); p.load(in); return Quota.load(p); }
++        catch (Exception e) { return new Quota(); }
+     }
+-
+-    private String runAdb(String cmd) throws AdbClient.AdbException {
+-        try {
+-            AdbClient c = AdbClient.withKeyFile(HOST, PORT, keyFile);
+-            c.setAuthTimeoutMs(AUTH_TIMEOUT_MS);
+-            c.setIoTimeoutMs(IO_TIMEOUT_MS);
+-            return c.shell(cmd);
+-        } catch (AdbClient.AdbException e) {
+-            throw e;
+-        } catch (Exception e) {
+-            throw new AdbClient.AdbException(AdbClient.IO, "key error: " + e.getMessage());
+-        }
++    private void save(Quota q) throws IOException {
++        File tmp = new File(getFilesDir(), "state.properties.tmp");
++        try (FileOutputStream out = new FileOutputStream(tmp)) { q.save().store(out, null); out.getFD().sync(); }
++        if (!tmp.renameTo(stateFile)) throw new IOException("rename");
+     }
+-
+-    private void heartbeat(String src) {
+-        // 凍結期間被略過的心跳可能在解凍時補跑：距上次 < 30 秒就略過，
+-        // 同一分鐘內不重複寫兩次。心跳都在單執行緒上跑，不會有並行問題。
+-        long now = SystemClock.elapsedRealtime();
+-        if (now - lastHeartbeatElapsed < DEDUP_MS) {
+-            return;
+-        }
+-        lastHeartbeatElapsed = now;
+-        String status;
++    private static final class Status { String yt = "unknown", screen = "unknown", adb = "ok", wl = "skip"; Boolean fg; }
++    private Status status() {
++        Status s = new Status();
+         try {
+-            String output = runAdb(CMD_ECHO);
+-            status = output.trim().equals("ok") ? "ok" : "io:unexpected-output";
+-        } catch (AdbClient.AdbException e) {
+-            status = e.kind + ":" + oneLine(e.getMessage());
+-        } catch (Exception e) {
+-            status = AdbClient.IO + ":" + oneLine(e.getMessage());
+-        }
+-        String wl = "skip";
+-        if ("ok".equals(status)) {
+-            try {
+-                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
+-            } catch (AdbClient.AdbException e) {
+-                wl = e.kind + ":" + oneLine(e.getMessage());
+-            } catch (Exception e) {
+-                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
++            if (!configured) {
++                String setup = adb("for c in 'cmd appops set com.example.tvagent APP_AUTO_START allow' 'cmd appops set com.example.tvagent APP_ASSOC_START allow' 'cmd appops set com.example.tvagent GET_USAGE_STATS allow' 'am set-standby-bucket com.example.tvagent active' 'dumpsys deviceidle whitelist +com.example.tvagent'; do sh -c \"$c\" >/dev/null 2>&1 && printf 1 || printf 0; done; echo");
++                configured = setup.trim().equals("11111");
++                // Setup result is included in the heartbeat log without command output.
++                setupResult = setup.trim().matches("[01]{5}") ? setup.trim() : "failed";
+             }
+-        }
+-        long uptime = SystemClock.elapsedRealtime() / 1000;
+-        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
++            String out = adb("echo __POWER__; dumpsys power || echo __FAIL__; echo __DISABLED__; pm list packages -d || echo __FAIL__; echo __ACTIVITY__; if pm list packages -d | grep -qx package:com.google.android.youtube.tv; then echo __SKIP__; else dumpsys activity activities || echo __FAIL__; fi; echo __END__");
++            int p = out.indexOf("__POWER__"), d = out.indexOf("__DISABLED__"), a = out.indexOf("__ACTIVITY__"), e = out.indexOf("__END__");
++            if (out.contains("__FAIL__") || p < 0 || d <= p || a <= d || e <= a) throw new AdbClient.AdbException(AdbClient.IO, "status");
++            String power = out.substring(p, d), disabled = out.substring(d, a), activity = out.substring(a, e);
++            if (!power.contains("mWakefulness=")) throw new AdbClient.AdbException(AdbClient.IO, "power");
++            s.screen = power.contains("mWakefulness=Awake") ? "on" : "off";
++            boolean off = Arrays.asList(disabled.split("\\r?\\n")).contains("package:" + Quota.YT);
++            s.yt = off ? "disabled" : "enabled";
++            if (!off) { if (!activity.contains("mResumedActivity")) throw new AdbClient.AdbException(AdbClient.IO, "activity"); s.fg = false; for (String line : activity.split("\\r?\\n")) if (line.contains("mResumedActivity") && line.contains(Quota.YT)) s.fg = true; }
++            s.wl = Whitelist.wlStatus(adb(CMD_WHITELIST));
++        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.screen = "unknown"; s.fg = null; }
++        return s;
+     }
+-
+-    private void runSelftest() {
+-        // 0. 先確認有授權（必要時等授權）；沒有就結束。
++    private String setupResult = "pending";
++    private String act(Quota q, Status s) {
++        Quota.Action action = q.decide(s.yt, Boolean.TRUE.equals(s.fg), s.screen.equals("on"));
++        String name = action.name().toLowerCase(Locale.US);
++        if (action == Quota.Action.NONE) return name;
++        if (!q.enforce) return "dry-" + name;
+         try {
+-            String echo = runAdb(CMD_ECHO);
+-            if (!echo.trim().equals("ok")) {
+-                logLine("selftest FAIL auth");
+-                return;
+-            }
+-        } catch (AdbClient.AdbException e) {
+-            logLine("selftest FAIL auth");
+-            return;
+-        }
+-        // 開始前檢查：tkey 已停用就不動。
+-        try {
+-            if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+-                logLine("selftest SKIP tkey-disabled");
+-                return;
+-            }
+-        } catch (AdbClient.AdbException e) {
+-            logLine("selftest FAIL 0");
+-            tryEnable();
+-            return;
+-        }
+-        int fail = -1;
+-        // 1. 停用
+-        try {
+-            runAdb(CMD_DISABLE);
+-        } catch (AdbClient.AdbException e) {
+-            fail = 1;
+-        }
+-        // 2. 確認出現在停用清單
+-        if (fail < 0) {
+-            try {
+-                if (!runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+-                    fail = 2;
+-                }
+-            } catch (AdbClient.AdbException e) {
+-                fail = 2;
+-            }
+-        }
+-        // 3. 啟用
+-        if (fail < 0) {
+-            try {
+-                runAdb(CMD_ENABLE);
+-            } catch (AdbClient.AdbException e) {
+-                fail = 3;
+-            }
+-        }
+-        // 4. 確認已不在停用清單
+-        if (fail < 0) {
+-            try {
+-                if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+-                    fail = 4;
+-                }
+-            } catch (AdbClient.AdbException e) {
+-                fail = 4;
++            if (action == Quota.Action.WARN || action == Quota.Action.END) adb("am start -n com.example.tvagent/.NoticeActivity --es kind " + (action == Quota.Action.WARN ? "warn" : "end"));
++            if (action == Quota.Action.END) Thread.sleep(10000);
++            if (action == Quota.Action.END || action == Quota.Action.LOCK) {
++                adb("am force-stop " + Quota.YT + "; " + DISABLE);
++                if (!Arrays.asList(adb(LIST).split("\\r?\\n")).contains("package:" + Quota.YT)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
++                s.yt = "disabled"; s.fg = null;
++            } else if (action == Quota.Action.UNLOCK) {
++                adb(ENABLE);
++                if (Arrays.asList(adb(LIST).split("\\r?\\n")).contains("package:" + Quota.YT)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
++                s.yt = "enabled"; s.fg = false;
+             }
+-        }
+-        // 無論成敗都要嘗試恢復啟用。
+-        tryEnable();
+-        if (fail < 0) {
+-            logLine("selftest PASS");
+-        } else {
+-            logLine("selftest FAIL " + fail);
+-        }
++        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.fg = null; }
++        catch (InterruptedException ex) { Thread.currentThread().interrupt(); s.adb = "io"; s.yt = "unknown"; s.fg = null; }
++        return name;
+     }
+-
+-    private void tryEnable() {
+-        try {
+-            runAdb(CMD_ENABLE);
+-        } catch (Exception ignored) {
+-            // 恢復盡力而為
+-        }
++    private void heartbeat() {
++        Quota q = load(); long wall = System.currentTimeMillis(), el = SystemClock.elapsedRealtime();
++        long boot = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
++        long gap = q.qEl > 0 && q.bootCount == boot ? Math.max(0, (el - q.qEl) / 1000) : 0;
++        boolean jump = q.qWall > 0 && Quota.clockJump(q.qWall, wall, q.qEl, el, q.bootCount, boot);
++        Quota.Usage usage = new Quota.Usage(0, q.ytFg, q.scrOn);
++        if (q.qWall > 0 && wall >= q.qWall) {
++            UsageStatsManager manager = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
++            List<Quota.Ev> events = new ArrayList<>(); UsageEvents results = manager.queryEvents(q.qWall, wall); UsageEvents.Event event = new UsageEvents.Event();
++            while (results.hasNextEvent()) { results.getNextEvent(event); events.add(new Quota.Ev(event.getTimeStamp(), event.getEventType(), event.getPackageName())); }
++            usage = Quota.usage(events, q.qWall, wall, q.ytFg, q.scrOn);
++        }
++        Status s = status();
++        long seconds = jump ? (Boolean.TRUE.equals(s.fg) && s.screen.equals("on") ? Math.max(0, (el - q.qEl) / 1000) : 0) : usage.seconds;
++        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.US); format.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
++        q.consume(seconds, format.format(new Date(wall))); q.qWall = wall; q.qEl = el; q.bootCount = boot; q.ytFg = usage.ytFg; q.scrOn = usage.scrOn;
++        if (!s.yt.equals("unknown")) { q.ytFg = Boolean.TRUE.equals(s.fg); q.scrOn = s.screen.equals("on"); }
++        String action = act(q, s), sync = "skip";
++        try { save(q); sync = sync(q, s, gap, boot, el); if (sync.equals("ok")) { action += "," + act(q, s); save(q); } }
++        catch (Exception ex) { sync = "io"; }
++        scheduleNextAlarm(this, q.nextAlarmMs(Boolean.TRUE.equals(s.fg) && s.screen.equals("on")));
++        log("uptime=" + el / 1000 + " pid=" + android.os.Process.myPid() + " bal=" + q.balance + " used_today=" + q.usedToday + " fg=" + s.fg + " yt=" + s.yt + " screen=" + s.screen + " act=" + action + " sync=" + sync + " adb=" + s.adb + " wl=" + s.wl + " setup=" + setupResult + (gap > 300 ? " gap=" + gap : "") + (jump ? " clock=jump" : ""));
+     }
+-
+-    private static String oneLine(String s) {
+-        if (s == null) {
+-            return "";
+-        }
+-        return s.replace('\n', ' ').replace('\r', ' ').trim();
++    private String sync(Quota q, Status s, long gap, long boot, long el) throws Exception {
++        Properties config = new Properties();
++        try (FileInputStream in = new FileInputStream(new File(getFilesDir(), "config.properties"))) { config.load(in); }
++        catch (FileNotFoundException e) { return "skip"; }
++        String url = config.getProperty("url"), id = config.getProperty("client_id"), secret = config.getProperty("client_secret");
++        if (url == null || id == null || secret == null || id.isEmpty() || secret.isEmpty()) return "config";
++        JSONObject request = new JSONObject();
++        request.put("v", 1); request.put("last_seq", q.lastSeq < 0 ? JSONObject.NULL : q.lastSeq); request.put("db_id", q.dbId == null ? JSONObject.NULL : q.dbId);
++        request.put("balance_s", q.balance); request.put("capped", q.capped); request.put("used_today_s", q.usedToday); request.put("used_total_s", q.usedTotal);
++        request.put("yt", s.yt); request.put("fg_yt", s.fg == null ? JSONObject.NULL : s.fg); request.put("screen", s.screen); request.put("adb", s.adb); request.put("enforce", q.enforce);
++        request.put("boot_count", boot); request.put("uptime_s", el / 1000); request.put("gap_s", gap); request.put("wl", s.wl); request.put("app_ver", 2);
++        HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
++        try {
++            c.setConnectTimeout(10000); c.setReadTimeout(10000); c.setRequestMethod("POST"); c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("CF-Access-Client-Id", id); c.setRequestProperty("CF-Access-Client-Secret", secret);
++            try (OutputStream out = c.getOutputStream()) { out.write(request.toString().getBytes("UTF-8")); }
++            int code = c.getResponseCode(); if (code != 200) return "http:" + code;
++            ByteArrayOutputStream bytes = new ByteArrayOutputStream(); try (InputStream in = c.getInputStream()) { byte[] buf = new byte[4096]; int n; while ((n = in.read(buf)) != -1) { bytes.write(buf, 0, n); if (bytes.size() > 1048576) throw new IOException("response too large"); } }
++            JSONObject data = new JSONObject(bytes.toString("UTF-8")); JSONArray array = data.getJSONArray("grants"); List<Quota.Grant> grants = new ArrayList<>();
++            long max = data.getLong("max_seq"), cap = data.getLong("cap_s"); String db = data.getString("db_id"); boolean enforce = data.getBoolean("enforce");
++            if (max < 0 || cap < 0 || db.isEmpty()) throw new IOException("response");
++            for (int i = 0; i < array.length(); i++) { JSONObject g = array.getJSONObject(i); long seq = g.getLong("seq"), seconds = g.getLong("seconds"); String kind = g.getString("kind"); if (seq < 0 || seq > max || seconds < 0 || seconds > 86400 || (!kind.equals("add") && !kind.equals("set"))) throw new IOException("grant"); grants.add(new Quota.Grant(seq, kind, seconds)); }
++            q.applySync(grants, max, db, cap, enforce); return "ok";
++        } finally { c.disconnect(); }
+     }
+-
+-    synchronized void logLine(String msg) {
+-        String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+-                .format(new Date());
+-        FileWriter w = null;
++    private void log(String line) {
+         try {
+-            w = new FileWriter(logFile, true);
+-            w.write(ts + " " + msg + "\n");
+-        } catch (IOException ignored) {
+-            // 寫 log 失敗不影響主流程
+-        } finally {
+-            if (w != null) {
+-                try {
+-                    w.close();
+-                } catch (IOException ignored) {
+-                    // 忽略
+-                }
++            if (logFile.length() > 1048576) {
++                try (RandomAccessFile file = new RandomAccessFile(logFile, "rw")) { long start = file.length() - 524288; file.seek(start); file.readLine(); start = file.getFilePointer(); byte[] tail = new byte[(int)(file.length() - start)]; file.readFully(tail); file.seek(0); file.write(tail); file.setLength(tail.length); }
+             }
+-        }
++            try (FileWriter out = new FileWriter(logFile, true)) { out.write(line + "\n"); }
++        } catch (IOException ignored) { }
+     }
+ }
+diff --git a/tvagent/src/com/example/tvagent/KickReceiver.java b/tvagent/src/com/example/tvagent/KickReceiver.java
+new file mode 100644
+index 0000000..3f52d4b
+--- /dev/null
++++ b/tvagent/src/com/example/tvagent/KickReceiver.java
+@@ -0,0 +1,12 @@
++package com.example.tvagent;
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++public class KickReceiver extends BroadcastReceiver {
++    @Override public void onReceive(Context context, Intent intent) {
++        if (!"com.example.tvagent.KICK".equals(intent.getAction())) return;
++        Intent service = new Intent(context, AgentService.class);
++        service.putExtra("reason", "kick");
++        BootReceiver.startServiceCompat(context, service);
++    }
++}
+diff --git a/tvagent/src/com/example/tvagent/NoticeActivity.java b/tvagent/src/com/example/tvagent/NoticeActivity.java
+new file mode 100644
+index 0000000..3c4f833
+--- /dev/null
++++ b/tvagent/src/com/example/tvagent/NoticeActivity.java
+@@ -0,0 +1,24 @@
++package com.example.tvagent;
++import android.app.Activity;
++import android.os.Bundle;
++import android.os.Handler;
++import android.view.Gravity;
++import android.view.KeyEvent;
++import android.widget.TextView;
++public class NoticeActivity extends Activity {
++    private boolean end;
++    @Override public void onCreate(Bundle state) {
++        super.onCreate(state);
++        String kind = getIntent().getStringExtra("kind");
++        if (!"warn".equals(kind) && !"end".equals(kind)) { finish(); return; }
++        end = "end".equals(kind);
++        TextView text = new TextView(this); text.setText(end ? "電視時間已到" : "電視時間剩 5 分鐘");
++        text.setTextSize(36); text.setGravity(Gravity.CENTER); setContentView(text);
++        new Handler().postDelayed(new Runnable() { public void run() { finish(); } }, end ? 12000 : 5000);
++    }
++    @Override public boolean dispatchKeyEvent(KeyEvent event) {
++        if (!end) { finish(); return true; }
++        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) return true;
++        return super.dispatchKeyEvent(event);
++    }
++}
+diff --git a/tvagent/src/com/example/tvagent/Quota.java b/tvagent/src/com/example/tvagent/Quota.java
+new file mode 100644
+index 0000000..0c32025
+--- /dev/null
++++ b/tvagent/src/com/example/tvagent/Quota.java
+@@ -0,0 +1,100 @@
++package com.example.tvagent;
++
++import java.util.*;
++
++final class Quota {
++    static final String YT = "com.google.android.youtube.tv";
++    long balance, lastSeq = -1, usedTotal, usedToday, qWall, qEl, bootCount = -1, cap = 3600;
++    String dbId, today = "";
++    boolean ytFg, scrOn, warned, enforce, capped;
++    static final class Ev {
++        final long wallMs; final int type; final String pkg;
++        Ev(long wallMs, int type, String pkg) { this.wallMs = wallMs; this.type = type; this.pkg = pkg; }
++    }
++    static final class Usage {
++        long seconds; boolean ytFg, scrOn;
++        Usage(long seconds, boolean ytFg, boolean scrOn) { this.seconds = seconds; this.ytFg = ytFg; this.scrOn = scrOn; }
++    }
++    static final class Grant {
++        final long seq, seconds; final String kind;
++        Grant(long seq, String kind, long seconds) { this.seq = seq; this.kind = kind; this.seconds = seconds; }
++    }
++    static Quota load(Properties p) {
++        try {
++            Quota q = new Quota();
++            q.balance = number(p, "balance_s"); q.usedTotal = number(p, "used_total_s"); q.usedToday = number(p, "used_today_s");
++            q.qWall = number(p, "q_wall"); q.qEl = number(p, "q_el"); q.bootCount = Long.parseLong(required(p, "boot_count"));
++            q.cap = number(p, "cap_s"); String seq = required(p, "last_seq"); q.lastSeq = seq.isEmpty() ? -1 : Long.parseLong(seq);
++            q.dbId = required(p, "db_id"); if (q.dbId.isEmpty()) q.dbId = null;
++            q.today = required(p, "today"); q.ytFg = bool(p, "yt_fg"); q.scrOn = bool(p, "scr_on");
++            q.warned = bool(p, "warned"); q.enforce = bool(p, "enforce"); q.capped = bool(p, "capped");
++            if (q.lastSeq < -1 || q.bootCount < -1 || q.balance > 86400) throw new IllegalArgumentException();
++            return q;
++        } catch (RuntimeException e) { return new Quota(); }
++    }
++    private static String required(Properties p, String k) { String v = p.getProperty(k); if (v == null) throw new IllegalArgumentException(); return v; }
++    private static long number(Properties p, String k) { long n = Long.parseLong(required(p, k)); if (n < 0) throw new IllegalArgumentException(); return n; }
++    private static boolean bool(Properties p, String k) { String v = required(p, k); if (!v.equals("true") && !v.equals("false")) throw new IllegalArgumentException(); return Boolean.parseBoolean(v); }
++    Properties save() {
++        Properties p = new Properties();
++        p.setProperty("balance_s", "" + balance); p.setProperty("last_seq", lastSeq < 0 ? "" : "" + lastSeq);
++        p.setProperty("db_id", dbId == null ? "" : dbId); p.setProperty("used_total_s", "" + usedTotal); p.setProperty("today", today);
++        p.setProperty("used_today_s", "" + usedToday); p.setProperty("q_wall", "" + qWall); p.setProperty("q_el", "" + qEl);
++        p.setProperty("boot_count", "" + bootCount); p.setProperty("yt_fg", "" + ytFg); p.setProperty("scr_on", "" + scrOn);
++        p.setProperty("warned", "" + warned); p.setProperty("enforce", "" + enforce); p.setProperty("cap_s", "" + cap); p.setProperty("capped", "" + capped);
++        return p;
++    }
++    static Usage usage(List<Ev> events, long from, long to, boolean fg, boolean screen) {
++        List<Ev> sorted = new ArrayList<>(events); Collections.sort(sorted, new Comparator<Ev>() { public int compare(Ev a, Ev b) { return Long.compare(a.wallMs, b.wallMs); } });
++        long cursor = from, total = 0;
++        for (Ev e : sorted) {
++            if (e.wallMs < from || e.wallMs > to) continue;
++            if (fg && screen) total += e.wallMs - cursor;
++            cursor = e.wallMs;
++            switch (e.type) {
++                case 1: fg = YT.equals(e.pkg); break;
++                case 2: case 23: if (YT.equals(e.pkg)) fg = false; break;
++                case 15: screen = true; break;
++                case 16: screen = false; break;
++                case 26: fg = false; screen = false; break;
++                case 27: fg = false; screen = true; break;
++            }
++        }
++        if (fg && screen && to > cursor) total += to - cursor;
++        return new Usage(total / 1000, fg, screen);
++    }
++    static boolean clockJump(long oldWall, long wall, long oldEl, long el, long oldBoot, long boot) {
++        return oldBoot >= 0 && oldBoot == boot && Math.abs((wall - oldWall) - (el - oldEl)) > 60000;
++    }
++    void consume(long seconds, String date) {
++        if (!today.equals(date)) { today = date; usedToday = 0; }
++        long n = Math.min(balance, Math.max(0, seconds)); balance -= n; usedTotal += n; usedToday += n;
++    }
++    void applySync(List<Grant> grants, long maxSeq, String id, long capS, boolean enforceValue) {
++        cap = capS; enforce = enforceValue; capped = false;
++        List<Grant> sorted = new ArrayList<>(grants); Collections.sort(sorted, new Comparator<Grant>() { public int compare(Grant a, Grant b) { return Long.compare(a.seq, b.seq); } });
++        boolean changedDb = !Objects.equals(dbId, id);
++        for (Grant g : sorted) {
++            if (!changedDb && g.seq <= lastSeq) continue;
++            if (g.kind.equals("set")) balance = g.seconds;
++            else if (g.kind.equals("add")) { long sum = balance + g.seconds; if (sum > cap) capped = true; balance = Math.max(balance, Math.min(sum, cap)); }
++            lastSeq = g.seq;
++        }
++        if (changedDb) { lastSeq = maxSeq; dbId = id; }
++    }
++    enum Action { NONE, LOCK, UNLOCK, WARN, END }
++    Action decide(String yt, boolean fg, boolean screen) {
++        if (balance > 300) warned = false;
++        if (yt.equals("unknown")) return Action.NONE;
++        if (balance > 0 && yt.equals("disabled")) return Action.UNLOCK;
++        if (balance == 0 && yt.equals("enabled")) return fg && screen ? Action.END : Action.LOCK;
++        if (balance > 0 && balance <= 300 && fg && screen && !warned) { warned = true; return Action.WARN; }
++        return Action.NONE;
++    }
++    long nextAlarmMs(boolean fgAndScreen) {
++        if (!fgAndScreen) return 60000;
++        if (balance < 60) return Math.max(balance, 5) * 1000;
++        if (balance > 300) return Math.max(5, Math.min(60, balance - 300)) * 1000;
++        return 60000;
++    }
++}
+diff --git a/tvagent/test.sh b/tvagent/test.sh
+index 2dff070..0c333bb 100644
+--- a/tvagent/test.sh
++++ b/tvagent/test.sh
+@@ -1,8 +1,7 @@
+ #!/bin/sh
+-# 離線協定測試：在 Docker 內用純 Java 編譯並執行 AdbClient + AdbClientTest。
+-# 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+ cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+ rm -rf testout && mkdir -p testout
+-javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java test/AdbClientTest.java
++trap "rm -rf testout" EXIT
++javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java src/com/example/tvagent/Quota.java test/AdbClientTest.java test/QuotaTest.java
+ java -cp testout com.example.tvagent.AdbClientTest testdata
+-rm -rf testout'
++java -cp testout com.example.tvagent.QuotaTest'
+diff --git a/tvagent/test/QuotaTest.java b/tvagent/test/QuotaTest.java
+new file mode 100644
+index 0000000..82cdbcd
+--- /dev/null
++++ b/tvagent/test/QuotaTest.java
+@@ -0,0 +1,40 @@
++package com.example.tvagent;
++import java.util.*;
++public class QuotaTest {
++    static void check(boolean b, String name) { if (!b) throw new AssertionError(name); System.out.println("PASS " + name); }
++    static Quota.Ev e(long sec, int type, String pkg) { return new Quota.Ev(sec * 1000, type, pkg); }
++    static Quota.Usage usage(Quota.Ev... e) { return Quota.usage(Arrays.asList(e), 0, 100000, false, true); }
++    static Quota.Grant g(long n, String kind, long sec) { return new Quota.Grant(n, kind, sec); }
++    public static void main(String[] args) {
++        String y = Quota.YT;
++        Quota.Usage u = usage(e(10,1,y), e(70,2,y)); check(u.seconds == 60 && !u.ytFg && u.scrOn, "usage 60 and end state");
++        u = usage(e(10,1,y),e(30,16,null),e(50,15,null),e(70,2,y)); check(u.seconds == 40, "usage screen off");
++        check(usage(e(10,1,y),e(30,1,"other")).seconds == 20, "usage other resumed");
++        check(Quota.usage(Collections.emptyList(), 0, 100000, true, true).seconds == 100, "usage initial");
++        u = usage(e(10,1,y),e(30,26,null),e(40,27,null)); check(u.seconds == 20 && !u.ytFg && u.scrOn, "usage shutdown startup");
++        u = usage(e(-1,1,y),e(10,1,y),e(101,2,y)); check(u.seconds == 90 && u.ytFg && u.seconds <= 100, "usage bounds");
++        check(Quota.clockJump(1000,3602000,1000,2000,1,1), "clock jump");
++        check(!Quota.clockJump(1000,32000,1000,2000,1,1) && !Quota.clockJump(1000,3602000,1000,2000,1,2), "clock tolerance boot");
++        Quota q = new Quota(); q.balance = 30; q.consume(60,"2026-10-30"); check(q.balance == 0 && q.usedTotal == 30 && q.usedToday == 30, "consume limited");
++        q.balance = 50; q.consume(10,"2026-10-31"); check(q.usedToday == 10 && q.usedTotal == 40, "consume new date");
++        q = new Quota(); q.dbId = "db"; q.lastSeq = 3;
++        List<Quota.Grant> gs = Arrays.asList(g(6,"add",900),g(3,"add",300),g(5,"set",0),g(4,"add",1800));
++        q.applySync(gs,6,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6 && q.enforce, "sync sorted and dedup");
++        q.applySync(gs,6,"db",3600,true); q.applySync(Collections.emptyList(),20,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6, "sync repeated empty");
++        q.applySync(Arrays.asList(g(1,"add",100)),8,"new",3600,false); check(q.balance == 1000 && q.lastSeq == 8 && q.dbId.equals("new") && !q.enforce, "sync reset");
++        Quota fresh = new Quota(); fresh.applySync(Arrays.asList(g(1,"add",100)),4,"db",3600,false); check(fresh.balance == 100 && fresh.lastSeq == 4, "sync initial");
++        q.balance = 3500; q.applySync(Arrays.asList(g(9,"add",500)),9,"new",3600,true); check(q.balance == 3600 && q.capped, "sync capped");
++        q.balance = 3000; q.applySync(Arrays.asList(g(10,"add",500)),10,"new",1800,false); check(q.balance == 3000 && q.cap == 1800 && q.capped && !q.enforce, "sync cap decrease");
++        q = new Quota(); check(q.decide("unknown",true,true) == Quota.Action.NONE, "decide unknown");
++        q.balance = 1; check(q.decide("disabled",false,true) == Quota.Action.UNLOCK, "decide unlock");
++        q.balance = 0; check(q.decide("enabled",true,true) == Quota.Action.END && q.decide("enabled",false,true) == Quota.Action.LOCK, "decide end lock");
++        q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",true,true) == Quota.Action.NONE, "decide warn once");
++        q.balance = 301; q.decide("enabled",true,true); q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",false,true) == Quota.Action.NONE, "decide warn reset");
++        long[] balances = {20,2,330,302,3000}; long[] alarms = {20000,5000,30000,5000,60000}; for (int i=0;i<balances.length;i++) { q.balance=balances[i]; check(q.nextAlarmMs(true)==alarms[i], "alarm " + balances[i]); } check(q.nextAlarmMs(false)==60000,"alarm background");
++        Properties saved = q.save(); Quota copy = Quota.load(saved); check(copy.save().equals(saved), "save load");
++        check(Quota.load(new Properties()).balance == 0 && Quota.load(new Properties()).lastSeq == -1 && !Quota.load(new Properties()).enforce, "load garbage");
++        saved.setProperty("balance_s", "bad"); check(Quota.load(saved).lastSeq == -1 && !Quota.load(saved).enforce, "load bad number");
++        q = new Quota(); q.dbId="db"; q.lastSeq=3; Properties before=q.save(); q.applySync(gs,6,"db",3600,false); q=Quota.load(before); q.applySync(gs,6,"db",3600,false); check(q.balance==900 && q.lastSeq==6, "retry after unsaved sync");
++        System.out.println("ALL PASS");
++    }
++}

@@ -1,0 +1,11 @@
+launcher（10-29 22:10）：CleanYourTV launcher（com.gathin.tvhome，repo v3.2.0，Docker amd64 編譯，APK 存 research/tvhome.apk）。
+只用 launcher，未跑任何停用清單。config：dock 6 格 YouTube/Netflix/四季/Spotify/Disney+/HBO Max；hidden_apps：com.tcl.tv、tv.settings、vending、guard、partnercustomizer、ui_mediaCenter；live_tv_package=com.tcl.tv；app_library+library_ok_opens 開（Play 商店等從 App 庫進）。
+set-home-activity 無效（原廠 tvlauncher 為系統 App priority=2，新桌面 0）→ 必須停用 com.google.android.tvlauncher 才能接手 HOME。
+還原原廠桌面：adb -s 192.0.2.69:5555 shell pm enable com.google.android.tvlauncher
+移除新桌面：adb -s 192.0.2.69:5555 shell pm uninstall com.gathin.tvhome（先 enable 原廠）
+- 22:15 Owner 測試：語音鍵可用（Owner：40 分→90 分）。
+- 22:20 第二版（Owner 要求）：底色藍灰 0xFF22303C（Config.java 預設值）、ambient_glow 關；日期上方加年份（values-zh-rTW date_format_home "yyyy年\nM月d日 EEEE"＋date_single_line=false）；輸入來源、Wi-Fi 按鈕隱藏；右上加 TCL 一鍵清理按鈕（top_bar_apps com.tcl.guard + launch_actions com.tcl.tvweishi.ACTION_VIEW → WidgetCleanActivity，實測 MemAvailable 507→697MB）。重裝 Home 套件後須重開，語音鍵才恢復。
+- 22:33 第三版：清理鈕改成膠囊「⚡ 清理」（Owner 選 A；MainActivity.addTopBarApps：有 app_labels 的 top_bar_apps 用 top_app_pill 版型＋ic_bolt；config app_labels com.tcl.guard=清理）。
+  桌布：支援 2 張通用桌布圖輪播（30 分、依序）；由 `wallpapers/make.py` 製作主圖置於 App 列上方 y210–760、同圖模糊壓暗填滿四周並羽化邊緣；再用此流程推送：檔案 push 到 /data/local/tmp 後 content write --uri content://com.gathin.tvhome.theme/wallpapers/<名> 及 /config.json，再 am force-stop com.gathin.tvhome。剛 install 完 provider 會暫時找不到，要等桌面起來再寫。
+  換回純色：content delete --uri content://com.gathin.tvhome.theme/config.json（並刪 wallpapers/*）。
+- 22:36 冷開機（第二次，桌面換新後）：15/15 仍停用、HOME=com.gathin.tvhome、原廠 tvlauncher 維持停用；開機 2 分 MemAvailable 635MB、SwapFree 497MB。

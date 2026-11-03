@@ -1,0 +1,220 @@
+### date; uptime
+Thu Oct 29 20:38:28 CST 2026
+ 20:38:28 up  2:06,  0 users,  load average: 19.70, 19.47, 19.72
+### getprop ro.build.fingerprint; getprop ro.build.version.release; getprop ro.product.model; getprop ro.boot.hardware; getprop ro.adb.secure
+TCL/BeyondTV2/BeyondTV:11/PPR1.180610.011/AR05:user/release-keys
+11
+BeyondTV2
+rtd285o
+1
+### cat /proc/meminfo
+MemTotal:        2097152 kB
+MemFree:           39100 kB
+MemAvailable:     401644 kB
+Buffers:            3968 kB
+Cached:           417292 kB
+SwapCached:         7888 kB
+Active:           547508 kB
+Inactive:         500776 kB
+Active(anon):     320148 kB
+Inactive(anon):   319840 kB
+Active(file):     227360 kB
+Inactive(file):   180936 kB
+Unevictable:        6236 kB
+Mlocked:               0 kB
+HighTotal:       1269760 kB
+HighFree:          14360 kB
+LowTotal:         827392 kB
+LowFree:           24740 kB
+SwapTotal:        614396 kB
+SwapFree:         224184 kB
+Dirty:               240 kB
+Writeback:             0 kB
+AnonPages:        626844 kB
+Mapped:           310452 kB
+Shmem:             11164 kB
+Slab:              67376 kB
+SReclaimable:      21168 kB
+SUnreclaim:        46208 kB
+KernelStack:       17592 kB
+PageTables:        44000 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     1444220 kB
+Committed_AS:   37795112 kB
+VmallocTotal:     507904 kB
+VmallocUsed:           0 kB
+VmallocChunk:          0 kB
+CmaTotal:         622592 kB
+CmaFree:            1992 kB
+MemReserved:      437500 kB
+DefragPoolFree:    15712 kB
+RealMemFree:       23388 kB
+### df -h /data /system /cache 2>/dev/null; df -h
+Filesystem            Size  Used Avail Use% Mounted on
+/dev/block/mmcblk0p17  10G  2.7G  7.2G  28% /data/user/0
+/dev/root             1.9G  1.3G  597M  71% /apex/com.android.wifi
+/dev/block/mmcblk0p7   27M  484K   26M   2% /cache
+Filesystem            Size  Used Avail Use% Mounted on
+/dev/root             1.9G  1.3G  597M  71% /
+tmpfs                 810M  1.3M  809M   1% /dev
+tmpfs                 810M     0  810M   0% /mnt
+/dev/block/mmcblk0p14 1.2G  1.0G  137M  89% /product
+/dev/block/dm-1       472M  356M  106M  78% /vendor
+tmpfs                 810M     0  810M   0% /apex
+tmpfs                 810M  208K  810M   1% /linkerconfig
+tmpfs                  20M  8.4M   12M  43% /var/tmp
+/dev/block/mmcblk0p17  10G  2.7G  7.2G  28% /data
+/dev/block/mmcblk0p7   27M  484K   26M   2% /cache
+/dev/block/mmcblk0p8   22M  1.8M   19M  10% /userdata
+/dev/block/mmcblk0p10 6.7M  154K  6.0M   3% /impdata
+/dev/block/mmcblk0p12  30M   14M   16M  47% /tclconfig
+/dev/block/mmcblk0p11 6.7M  391K  5.8M   7% /persist
+/dev/block/mmcblk0p9   14M  141K   13M   2% /rtdata
+/dev/fuse              10G  2.7G  7.2G  28% /storage/emulated
+### dumpsys cpuinfo | head -40
+Load: 19.33 / 19.31 / 19.78
+CPU usage from 521100ms to 286475ms ago (2026-10-29 20:29:48.577 to 2026-10-29 20:33:43.201):
+  16% 367/sitatvservice: 12% user + 3.4% kernel / faults: 1011 minor 8 major
+  10% 340/surfaceflinger: 5.1% user + 5.5% kernel / faults: 1610 minor 12 major
+  9.9% 1535/com.android.tv.settings: 7% user + 2.9% kernel / faults: 33534 minor 237 major
+  6.9% 699/system_server: 4.7% user + 2.1% kernel / faults: 47820 minor 246 major
+  5.9% 1880/com.google.android.tvlauncher: 4.1% user + 1.8% kernel / faults: 60623 minor 249 major
+  5.5% 184/ueventd: 4.5% user + 0.9% kernel / faults: 179 minor
+  4.9% 332/audioserver: 3.5% user + 1.3% kernel / faults: 543 minor 8 major
+  3.4% 292/android.hardware.graphics.composer-rtk@2.1-service: 1.3% user + 2% kernel / faults: 262 minor 5 major
+  2.8% 279/android.hardware.audio.service: 0.7% user + 2.1% kernel / faults: 135 minor 3 major
+  1.2% 63/kswapd0: 0% user + 1.2% kernel
+  0.8% 194/logd: 0.4% user + 0.3% kernel / faults: 502 minor 2 major
+  0.7% 3085/com.google.android.youtube.tv: 0.4% user + 0.2% kernel / faults: 1982 minor 68 major
+  0.6% 3289/hdmi_task: 0% user + 0.6% kernel
+  0.5% 1480/com.google.android.gms: 0.3% user + 0.2% kernel / faults: 13261 minor 601 major
+  0.4% 106/mmcqd/0: 0% user + 0.4% kernel
+  0.3% 947/com.tcl.guard: 0.2% user + 0.1% kernel / faults: 5420 minor 22 major
+  0.3% 1293/com.tcl.bi:service: 0.2% user + 0% kernel / faults: 6519 minor 23 major
+  0.3% 26/ksoftirqd/3: 0% user + 0.3% kernel
+  0.3% 1697/com.tcl.inputmethod.international: 0.2% user + 0.1% kernel / faults: 5148 minor 240 major
+  0.3% 440/media.codec: 0% user + 0.2% kernel / faults: 3 minor
+  0.3% 291/android.hardware.graphics.allocator-rtk@2.0-service: 0% user + 0.3% kernel / faults: 91 minor
+  0.3% 2723/com.google.android.apps.mediashell: 0.2% user + 0.1% kernel / faults: 5826 minor 250 major
+  0.3% 167/RtdLogReader: 0% user + 0.3% kernel
+  0.3% 1544/kworker/u8:15: 0% user + 0.3% kernel
+  0.2% 1537/kworker/u8:9: 0% user + 0.2% kernel
+  0.2% 1732/com.tcl.tv: 0% user + 0.2% kernel / faults: 139 minor
+  0.2% 21/ksoftirqd/2: 0% user + 0.2% kernel
+  0.2% 3351/com.netflix.ninja: 0.2% user + 0% kernel / faults: 2293 minor 131 major
+  0.2% 1489/kworker/1:1: 0% user + 0.2% kernel
+  0.2% 1239/com.tcl.keycustomfunctionservice: 0.1% user + 0% kernel / faults: 3637 minor
+  0.2% 1576/kworker/0:3: 0% user + 0.2% kernel
+  0.2% 1359/com.tcl.keycustomfunctionservice:remote: 0.2% user + 0% kernel / faults: 3498 minor 1 major
+  0.2% 1543/kworker/u8:14: 0% user + 0.2% kernel
+  0.2% 1538/kworker/u8:10: 0% user + 0.2% kernel
+  0.2% 272/statsd: 0.1% user + 0% kernel / faults: 580 minor 19 major
+  0.2% 3290/infoframe_task: 0% user + 0.2% kernel
+  0.2% 1867/kworker/2:0: 0% user + 0.2% kernel
+  0.1% 995/com.android.systemui: 0.1% user + 0% kernel / faults: 5883 minor 279 major
+### top -b -n 1 -m 25 2>/dev/null || top -n 1 | head -40
+Tasks: 264 total,   1 running, 263 sleeping,   0 stopped,   0 zombie
+  Mem: 16777216T total,  2047476K used,  50868224 free,   3727360 buffers
+ Swap:   614396K total,   392412K used,   221984K free,   402412K cached
+400%cpu  35%user  43%nice  37%sys 283%idle   0%iow   0%irq   2%sirq   0%host
+   PID USER         PR  NI VIRT  RES  SHR S[%CPU] %MEM     TIME+ ARGS
+  1398 u0_a42       20   0 1.2G 121M  85M S 28.3   5.9   0:00.73 com.android.vending:background
+  1157 u0_a42       20   0 1.3G 172M 125M S 26.6   8.4   0:03.84 com.android.vending
+   184 root         20   0  22M 2.6M 1.8M S 21.6   0.1   2:06.87 ueventd
+    63 root         20   0    0    0    0 S 21.6   0.0   0:57.78 [kswapd0]
+  1577 shell        20   0  11M 3.5M 2.8M R 18.3   0.1   0:00.18 top -b -n 1 -m 25
+   367 root         20   0 220M  14M 3.2M S 15.0   0.6  16:11.87 sitatvservice all 7
+   340 system       -3  -8 122M 7.8M 4.7M S 13.3   0.3   2:31.70 surfaceflinger
+   292 system       -3  -8 101M 3.7M 3.2M S  8.3   0.1   2:00.29 android.hardware.graphics.composer-rtk@2.1-service
+  1880 u0_a36       10 -10 1.3G 130M  58M S  5.0   6.3   1:12.42 com.google.android.tvlauncher
+    21 root         20   0    0    0    0 S  3.3   0.0   0:25.77 [ksoftirqd/2]
+  3360 bluetooth    20   0 1.2G  71M  49M S  1.6   3.4   0:01.37 com.android.bluetooth
+  3290 root         20   0    0    0    0 S  1.6   0.0   0:01.11 [infoframe_task]
+  1543 root         20   0    0    0    0 I  1.6   0.0   0:01.06 [kworker/u8:14]
+   699 system       18  -2 2.1G 139M  81M S  1.6   6.8   3:10.54 system_server
+   195 lmkd         -2   0 8.5M 2.3M 1.9M S  1.6   0.1   0:03.27 lmkd
+   131 root         20   0    0    0    0 D  1.6   0.0   0:04.21 [new_game_mode_t]
+   106 root         -2   0    0    0    0 S  1.6   0.0   0:24.08 [mmcqd/0]
+     9 root         20   0    0    0    0 I  1.6   0.0   0:06.96 [rcu_preempt]
+  1567 shell        20   0  11M 2.2M 1.8M S  0.0   0.1   0:00.03 sh -c top -b -n 1 -m 25 2>/dev/null || top -n 1 | head -40
+  1269 u0_a11       20   0 1.1G  74M  53M S  0.0   3.5   0:00.28 com.google.process.gapps
+  1109 u0_a11       20   0 1.1G  74M  53M S  0.0   3.5   0:00.29 com.google.process.gservices
+  1081 u0_a64       20   0 1.8G 111M  85M S  0.0   5.4   0:02.52 com.google.android.videos
+  1076 root         20   0    0    0    0 I  0.0   0.0   0:00.02 [kworker/u8:0]
+  3994 u0_a33       20   0 1.2G  98M  72M S  0.0   4.7   0:03.12 com.google.android.tungsten.setupwraith
+  3954 shell        20   0  29M 4.4M 3.6M S  0.0   0.2   0:00.17 adbd --root_seclabel=u:r:su:s0
+### dumpsys meminfo | sed -n "1,80p"
+
+*** SERVICE 'meminfo' DUMP TIMEOUT (10000ms) EXPIRED ***
+
+
+*** SERVICE 'meminfo' DUMP TIMEOUT (10000ms) EXPIRED ***
+
+### dumpsys diskstats
+Latency: 2ms [512B Data Write]
+Recent Disk Write Speed (kB/s) = 4265
+Data-Free: 7576488K / 10653956K total = 71% free
+Cache-Free: 7576488K / 10653956K total = 71% free
+System-Free: 611156K / 2062780K total = 29% free
+App Size: 1754546176
+App Data Size: 803168256
+App Cache Size: 95268864
+Photos Size: 0
+Videos Size: 0
+Audio Size: 0
+Downloads Size: 0
+System Size: 5090349056
+Other Size: 154537984
+Package Names: ["com.android.cts.priv.ctsshim","com.google.android.ext.services","com.google.android.apps.mediashell","com.google.android.katniss","com.tcl.esticker","com.android.dynsystem","uk.co.freeview.mdsclient","com.tcl.initsetup","com.android.providers.calendar","com.android.tv.settings","com.tcl.tvinput","uk.co.freeview.amc_catchup","com.android.providers.media","com.google.android.onetimeinitializer","com.google.android.ext.shared","uk.co.freeview.onnow","com.tcl.factory.view","au.com.stan.and","com.android.externalstorage","uk.co.freeview.uktv","hami.androidtv","com.android.htmlviewer","com.android.companiondevicemanager","com.android.providers.downloads","com.android.providers.tv","com.android.networkstack.inprocess","com.google.android.backdrop","com.android.tv.settings.gms.resoverlay","com.tcl.useragreement","com.tcl.miracast","com.google.android.tungsten.setupwraith","com.tcl.gallery","com.google.android.overlay.modules.permissioncontroller","com.spotify.tv.android","com.android.vending","com.android.pacprocessor","uk.co.freeview.fvpconfigauth","com.android.certinstaller","com.google.android.marvin.talkback","android","uk.co.freeview.systemdistributor","com.tcl.inputmethod.international","uk.co.freeview.bbc_sounds","com.android.backupconfirm","com.tcl.xian.StartandroidService","com.tvos","tv.fourgtv.video","com.tcl.overlay.systemui","com.tcl.guard","com.android.statementservice","com.android.settings.intelligence","com.google.android.permissioncontroller","com.amazon.amazonvideo.livingroom","com.tcl.tv.tclhome_master","com.android.providers.settings","com.tcl.versionUpdateApp","com.android.sharedstoragebackup","uk.co.freeview.tifbridge","com.tcl.waterfall.overseas","com.android.printspooler","com.tcl.assistant","com.android.dreams.basic","com.google.android.overlay.modules.ext.services","com.tcl.copydatatotv","com.tcl.micmanager","com.android.se","com.android.inputdevices","com.tcl.notereminder","com.wbd.stream","com.google.android.tvrecommendations","uk.co.freeview.explore","com.tcl.MultiScreenInteraction_TV","com.google.android.modulemetadata","com.google.android.tvlauncher","com.google.android.webview","com.android.keychain","com.google.android.youtube.tvmusic","com.google.android.packageinstaller","com.google.android.gms","com.google.android.gsf","com.google.android.tts","com.android.wifi.resources","com.google.android.partnersetup","com.android.localtransport","com.google.android.videos","com.tcl.systemserver","com.tcl.partnercustomizer","com.android.proxyhandler","com.google.android.overlay.modules.permissioncontroller.forframework","com.google.android.feedback","com.google.android.syncadapters.calendar","android.autoinstalls.config.tcl.device","com.android.soundpicker","tv.wuaki.apptv","uk.co.freeview.bbc","uk.co.freeview.ch5","uk.co.freeview.itv","uk.co.freeview.stv","com.android.tethering.overlay","uk.co.freeview.amc_horror","com.tcl.tv.tclhome_passive","com.tcl.keycustomfunctionservice","com.android.wallpaper.livepicker","com.tcl.providers.config","com.tcl.usercenter","com.google.android.apps.nbu.smartconnect.tv","com.android.networkstack.tethering.inprocess","com.android.networkstack.permissionconfig","com.tcl.bi","com.tcl.tv","com.tcl.overseasappshow","com.google.android.sss.authbridge","com.android.cts.ctsshim","com.google.android.overlay.modules.modulemetadata.forframework","com.tcl.settings","com.tcl.autopair","com.google.android.youtube.tv","com.android.vpndialogs","com.tcl.smartalexa","com.google.android.tv.frameworkpackagestubs","com.tcl.ui_mediaCenter","com.android.shell","com.android.wallpaperbackup","com.android.providers.userdictionary","com.android.providers.media.module","com.tcl.messagebox","com.android.hotspot2.osulogin","com.google.android.tv.assistant","com.google.android.tv.remote.service","com.android.location.fused","com.android.systemui","com.google.android.play.games","com.netflix.ninja","com.android.bluetooth","com.android.providers.contacts","com.android.captiveportallogin","com.disney.disneyplus","uk.co.freeview.ch4_vod","com.android.tethering.overlay.gsi","com.google.android.inputmethod.latin"]
+App Sizes: [4096,94208,114307072,57315328,49152,49152,237568,57344,274432,61440,53248,159744,49152,45056,36864,159744,49152,20488192,36864,159744,32776192,36864,36864,49152,40960,49152,29958144,4096,2154496,53248,32698368,49152,4096,50802688,95809536,40960,155648,40960,23703552,49152,49152,4747264,159744,36864,8712192,4096,31858688,4096,57344,40960,172032,2039808,37220352,49152,49152,61440,36864,155648,65179648,69632,53248,36864,4096,49152,49152,40960,49152,6676480,142512128,12898304,159744,49209344,4096,27910144,21540864,49152,5763072,471040,283729920,53248,93515776,4096,475136,49152,51007488,49152,9007104,36864,4096,57344,5275648,4096,49152,14458880,159744,155648,159744,155648,4096,159744,245760,49152,106496,49152,32751616,2117632,49152,36864,4632576,49152,53248,49152,4096,4096,49152,49152,58830848,36864,49152,36864,57344,53248,49152,49152,331776,14360576,49152,53248,8351744,49152,1789952,21348352,143122432,978944,53248,53248,90099712,155648,4096,35332096]
+App Data Sizes: [32768,36864,512000,16986112,32768,36864,40960,98304,253952,106496,36864,32768,45056,45056,36864,32768,32768,32768,36864,32768,14204928,32768,32768,69632,974848,77824,35258368,32768,45056,40960,618496,32768,32768,86593536,152637440,32768,118784,32768,94208,36864,40960,90112,32768,32768,4534272,32768,16584704,32768,172032,40960,49152,135168,19963904,32768,40960,286720,32768,32768,12877824,32768,90112,32768,32768,32768,40960,36864,36864,61440,13828096,5832704,32768,274432,32768,24424448,299008,69632,73728,69632,101007360,397312,168185856,36864,106496,53248,2428928,32768,1060864,36864,32768,32768,421888,32768,32768,32768,32768,32768,32768,32768,32768,32768,45056,49152,32768,81920,1110016,352256,36864,32768,4079616,69632,102400,32768,32768,32768,61440,36864,3899392,32768,45056,32768,290816,53248,32768,36864,1478656,114688,32768,32768,151552,36864,86016,434176,28667904,618496,843776,32768,50774016,32768,32768,25174016]
+Cache Sizes: [16384,16384,110592,1126400,16384,16384,16384,57344,16384,65536,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,86016,16384,16384,16384,16384,16384,26390528,16384,16384,16384,20480,16384,16384,5648384,22536192,16384,16384,16384,16384,16384,16384,36864,16384,16384,4468736,16384,430080,16384,53248,20480,16384,40960,45056,16384,16384,151552,16384,16384,1138688,16384,16384,16384,16384,16384,16384,16384,16384,20480,16384,172032,16384,20480,16384,12009472,172032,16384,16384,40960,12611584,16384,36864,16384,16384,16384,659456,16384,20480,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,16384,24576,16384,16384,905216,16384,16384,16384,3796992,36864,16384,16384,16384,16384,36864,16384,348160,16384,16384,16384,69632,16384,16384,16384,16384,20480,16384,16384,16384,16384,40960,36864,81920,16384,16384,16384,16384,16384,16384,40960]
+### cmd package resolve-activity -c android.intent.category.HOME -a android.intent.action.MAIN
+priority=2 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+ActivityInfo:
+  name=com.google.android.tvlauncher.MainActivity
+  packageName=com.google.android.tvlauncher
+  enabled=true exported=true directBootAware=false
+  taskAffinity=.TvLauncher targetActivity=null persistableMode=PERSIST_ROOT_ONLY
+  launchMode=2 flags=0x4230 privateFlags=0x0 theme=0x0
+  screenOrientation=0 configChanges=0x13 softInputMode=0x0
+  lockTaskLaunchMode=LOCK_TASK_LAUNCH_MODE_DEFAULT
+  resizeMode=RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION
+  ApplicationInfo:
+    name=com.google.android.tvlauncher.application.TvLauncherApplication
+    packageName=com.google.android.tvlauncher
+    labelRes=0x7f130055 nonLocalizedLabel=null icon=0x7f100000 banner=0x7f08024a
+    className=com.google.android.tvlauncher.application.TvLauncherApplication
+    processName=com.google.android.tvlauncher
+    taskAffinity=com.google.android.tvlauncher
+    uid=10036 flags=0x38c83ec5 privateFlags=0x8c001118 theme=0x7f140010
+    requiresSmallestWidthDp=0 compatibleWidthLimitDp=0 largestWidthLimitDp=0
+    sourceDir=/data/app/~~hSf7uZsHlvRZgUXe4SApLg==/com.google.android.tvlauncher-yzRp50Wkx5PHa9RTt97wRA==/base.apk
+    splitSourceDirs=[/data/app/~~hSf7uZsHlvRZgUXe4SApLg==/com.google.android.tvlauncher-yzRp50Wkx5PHa9RTt97wRA==/split_config.xhdpi.apk, /data/app/~~hSf7uZsHlvRZgUXe4SApLg==/com.google.android.tvlauncher-yzRp50Wkx5PHa9RTt97wRA==/split_config.zh.apk]
+    seinfo=default:privapp:targetSdkVersion=30
+    seinfoUser=:complete
+    dataDir=/data/user/0/com.google.android.tvlauncher
+    deviceProtectedDataDir=/data/user_de/0/com.google.android.tvlauncher
+    credentialProtectedDataDir=/data/user/0/com.google.android.tvlauncher
+    splitClassLoaderNames=[null, null]
+    enabled=true minSdkVersion=29 targetSdkVersion=36 versionCode=1010943512 targetSandboxVersion=1
+    supportsRtl=true
+    fullBackupContent=true
+    crossProfile=false
+    category=7
+    HiddenApiEnforcementPolicy=2
+    usesNonSdkApi=false
+    allowsPlaybackCapture=true
+### cat /proc/pressure/memory 2>/dev/null; cat /proc/vmstat | grep -E "pgmajfault|allocstall|kswapd|lowmem"
+allocstall_normal 21
+allocstall_high 0
+allocstall_movable 270
+allocstall_zone_zram 0
+pgmajfault 0
+pgsteal_kswapd 18158
+pgscan_kswapd 50488
+kswapd_inodesteal 388
+kswapd_low_wmark_hit_quickly 216
+kswapd_high_wmark_hit_quickly 910

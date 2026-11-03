@@ -1,0 +1,24 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-c2b（分支 v5-c2b）施工。只改 tvagent/src/com/example/tvagent/AgentService.java（必要時 tvagent/README.md 的 log 格式那一句）。小修三項，其他程式一行都不要動。
+
+## 背景
+電視 App「看電視時間」已實機上線（影子模式）。agent.log 每跳一行，例如：
+uptime=10574 pid=847 bal=0 used_today=0 fg=null yt=disabled screen=off act=none,none sync=ok adb=ok wl=keep setup=11111
+問題：①沒有時間戳，無法比對心跳間隔與 v4 紀錄；②onStartCommand 讀了 intent 的 reason 卻丟掉（`intent.getStringExtra("reason")` 那行沒用）；③heartbeat() 同步成功後一律再跑一次 act()，就算同步沒改任何東西，log 也出現 `act=none,none`／`dry-lock,dry-lock`。
+
+## 要做
+1. log() 每行開頭加台北時間 `yyyy-MM-dd HH:mm:ss `（SimpleDateFormat、Locale.US、TimeZone Asia/Taipei），例：`2026-10-31 00:18:02 uptime=…`。
+2. 啟動原因寫進 log：onStartCommand 讀 `AgentService.EXTRA_REASON`（BootReceiver 給 "boot"、KickReceiver 給 "kick"；KickReceiver 目前用字串 "reason"——若 EXTRA_REASON 的值就是 "reason" 就不用改 KickReceiver，否則也只准改這一處讓兩者一致）；沒有值＝"alarm"。把它傳給 heartbeat()，log 在 `pid=` 後加 `src=<boot|kick|alarm>`。注意 exec 是單執行緒，多個 onStartCommand 排隊時各跳記自己的 src。
+3. 同步成功後一律 save；只有「同步改變了 balance 或 enforce」才重跑 act() 並在 log 寫 `act=<第一次>,<第二次>`，沒變就只寫第一次的 act。（00:23 更正：原寫「不必多 save」是錯的）
+4. README.md 中「每跳一行：…」那句同步更新欄位（加時間、src）。
+
+## 完成標準（你自己跑到全過才交件，原樣貼輸出；Docker 可用）
+1. `sh tvagent/test.sh` → 輸出含兩個 `ALL PASS`，exit 0。
+2. `sh tvagent/build.sh` 成功，產出 tvagent/tvagent.apk。
+3. 設 `D='docker run --rm --platform linux/amd64 -v '"$PWD"'/tvagent:/w -w /w cleanyourtv-android-build-amd64'`、`BT=/opt/android-sdk/build-tools/34.0.0`：`git show v5-design:tvagent/tvagent.apk > tvagent/old.apk`；`$D $BT/apksigner verify --print-certs old.apk` 與 `$D $BT/apksigner verify --print-certs tvagent.apk` 的 SHA-256 digest 那行相同；`$D $BT/aapt2 dump badging tvagent.apk` 仍是 versionCode='2'、label='看電視時間'；做完 `rm tvagent/old.apk`。
+4. `git diff --stat` 只有 tvagent/src/com/example/tvagent/AgentService.java、tvagent/README.md、tvagent/tvagent.apk（KickReceiver.java 只在第 2 項需要時出現）。
+5. `grep -n 'getStringExtra("reason");' tvagent/src/com/example/tvagent/AgentService.java` 沒有輸出。
+
+## 禁止
+不連電視、不執行真 adb；不碰 Quota.java、AdbClient.java、Whitelist.java、NoticeActivity.java、Manifest、debug.keystore、testdata/、test/、cfquota/、tvgate/、research/、~/.secrets；不加外部函式庫；不改同步／扣額／鎖定邏輯（第 3 項只改「是否重跑」的條件）；不 commit、不 push。
+
+最後輸出：①改動檔案清單 ②完成標準 1～5 的實際輸出 ③疑問或保守選擇（沒有就寫「無」）。

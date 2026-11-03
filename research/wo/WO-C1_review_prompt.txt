@@ -1,0 +1,14 @@
+你是唯讀審查員。審查 WO-C1（Cloudflare Worker cfquota）的施工結果。不要改任何檔案、不要登入或部署 Cloudflare、不要連網。
+
+只准讀這些檔案，不要讀清單外的檔案：
+1. /Users/example-owner/TV-wt-v5design/research/PLAN_v5.md 的這幾節：「架構」、「Cloudflare 端」全節（介面、驗證、D1 表、家長頁）、「WO-C1 Cloudflare Worker」全節。
+2. /Users/example-owner/TV-wt-c1/cfquota/ 底下全部 6 個檔：lib.mjs、worker.mjs、schema.sql、wrangler.toml、lib.test.mjs、README.md。
+
+測試與 wrangler dry-run 已由施工方跑過且全過，你不用重跑。請專心讀程式碼，對照規格檢查：
+A. 驗證：RS256 固定、依 kid 選鑰、未知 kid 重抓每分鐘最多一次、certs 快取 1 小時、aud／exp／iss；家長靠 email∈PARENTS、電視靠 common_name==TV_CLIENT_ID；路徑身分不符 403；/tv/ 以外 404。
+B. sync：輸入驗證（欄位、型別、範圍、64 字）錯就 400 且不寫任何東西；選加值三條規則（db_id 不符、last_seq null 有／無電視紀錄、一般）；acked_seq 只進不退；事件 received／lock／unlock／adb-bad／adb-ok（連 3 筆才記、只記一次）／online（≥OFFLINE_MIN）／gap／reinstall／db-reset；每次 sync 刪 90 天前 events；回應含 grants、max_seq、db_id、cap_s、enforce。
+C. 家長端：/tv/api/state 欄位與 alerts 規則（紅：失聯且最後 screen=on、adb_bad≥3；黃：失聯但 screen 非 on、24 小時內 reinstall／db-reset、enforce=false）；/tv/api/grant 的 req_id 冪等、minutes 只收 15/30/60、zero＝set 0、would_cap、Origin 只檢查 grant（sync 不檢查）；GET /tv/ 內嵌 HTML、no-store、無外部網址、不含秘密、按鈕 +15/+30/+60/歸零、送出時 randomUUID 並鎖按鈕。
+D. schema.sql 是否與 PLAN 原文一致；wrangler.toml 是否照規格（route 不是 custom_domain、無 triggers、無 email／token）。
+E. 測試是否真的測到 WO-C1 清單 1～6 的每一點（不是空測、不是只測 200）；SQL 是否都用 bind 參數（無字串拼接注入）。
+
+輸出格式：第一行只能是 `PASS` 或 `FAIL`。之後列出問題，每條寫「嚴重度（阻擋／建議）＋檔案:行號＋規格依據＋說明」。只有「阻擋」級問題才判 FAIL。

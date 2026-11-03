@@ -1,0 +1,51 @@
+退修完成，回報如下。
+
+## 改了什麼
+
+**`tvagent/src/com/example/tvagent/AdbClient.java`**（只動這支主檔）
+1. `loadOrGenerateKey()` 原第 199 行 `(RSAPrivateCrtKey) priv` 強制轉型刪除，改呼叫新增的 `publicKeyFromPrivate(priv)`。
+2. 新增 `publicKeyFromPrivate()`：主路徑用 `KeyFactory.getKeySpec(priv, RSAPrivateCrtKeySpec.class)` 拿 modulus／publicExponent，再由 `RSAPublicKeySpec` 產生公鑰——全程無轉型。備援路徑：若提供者拒絕 getKeySpec，直接解析 `getEncoded()` 的 PKCS#8 DER（新增 `parsePkcs8()`，取出內層 PKCS#1 再沿用既有 `parsePkcs1()`）。舊版只存私鑰的金鑰檔照樣可用，檔案格式沒變。
+3. `mincryptPublicKey()` 的 `(RSAPublicKey) pub` 轉型刪除，改 `getKeySpec(pub, RSAPublicKeySpec.class)` 取 n、e（連帶 `adbPublicKeyString()` 加 `throws Exception`；呼叫端 `authenticate()` 原本就 catch `Exception`，測試方法也都 `throws Exception`，無需他動）。
+4. 全檔檢查：已無任何 `instanceof`／`PrivateKey`／`PublicKey` 轉型；`getInstance("RSA")`（KeyFactory／KeyPairGenerator）與 `Cipher.getInstance("RSA/ECB/NoPadding")` 都是標準 JCA 名稱，Conscrypt 皆支援（NoPadding 加密模式＋私鑰做 raw RSA 運算正是我們自組 EM 填充要的；`Signature.getInstance("NONEwithRSA")` 本來就沒用，不用動）。`java.util.Base64` 需 API 26+，minSdk 正好 26，可用。
+
+**`tvagent/test/AdbClientTest.java`**（只新增斷言，既有不斷言沒放寬）
+- `testVectors` 加 `vector-loadOrGenerate-pubkey`：從既有 `testdata/adbkey` 經 `loadOrGenerateKey` 推導的公鑰與向量公鑰逐 byte 比對（走修過的程式碼路徑）。
+- 新增 `testOpaquePrivateKey`：把真私鑰包進「不實作任何 RSA 介面」的 `PrivateKey`（模擬 Conscrypt 回傳的類別），`publicKeyFromPrivate` 必須推導出正確公鑰——舊程式碼在此會丟 `ClassCastException`，正是實機 `agent.log` 的錯誤，在桌面 JVM 即可重現／驗證。
+
+**`tvagent/tvagent.apk`**：`build.sh` 重新編出（含上述修正）。
+
+## 為什麼在 Android 上可行
+- 實機錯誤是 Conscrypt 的私鑰類別（`OpenSSLRSAPrivateKey`）只實作 `RSAPrivateKey`、不實作 `RSAPrivateCrtKey`，舊程式碼硬轉型所以炸；桌面 SunRsaSign 的實作類別有實作該介面，所以 Docker 測試抓不到。
+- 新主路徑 `getKeySpec(RSAPrivateCrtKeySpec)` 是向 KeyFactory「要參數」而非轉型物件，Conscrypt 對自家金鑰可從底層 OpenSSL 結構取出 CRT 參數（含 publicExponent），此為 JCA 標準行為；萬一某提供者不支援，備援直接解析 DER（金鑰檔本身就是標準 PKCS#8，CRT 參數都在裡面），不依賴任何提供者類別。
+- 簽章路徑 `Cipher("RSA/ECB/NoPadding")`＋私鑰 ENCRYPT，Conscrypt 有支援，不用改。
+
+## 指令實際輸出
+```
+$ sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+Note: src/com/example/tvagent/AgentService.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+-rw-r--r--@ 1 example-owner  staff  20888 10月 30 08:56 tvagent/tvagent.apk
+
+$ sh tvagent/test.sh 2>&1 | tail -3
+PASS err-garbage-kind
+PASS err-garbage-time
+ALL PASS
+
+$ sh tvagent/test.sh 2>&1 | grep -E "opaque|direct-priv|loadOrGenerate|vector|FAIL|ALL PASS"
+PASS vector-pubkey
+PASS vector-sig
+PASS vector-pubkey-nul
+PASS vector-loadOrGenerate-pubkey
+PASS opaque-priv-pubkey
+PASS direct-priv-pubkey
+ALL PASS
+
+$ grep -n "RSAPrivateCrtKey)|(RSAPrivateKey)|(RSAPublicKey)|instanceof" tvagent/src/com/example/tvagent/AdbClient.java
+（無結果，exit 1）
+
+$ git status --porcelain --untracked-files=all
+ M tvagent/src/com/example/tvagent/AdbClient.java
+ M tvagent/test/AdbClientTest.java
+ M tvagent/tvagent.apk
+```
+註：build 初次重編時曾因我把 `RSAPublicKeySpec` 的 import 寫錯套件失敗一次，已修正並重編成功（上為最終輸出）；只有 `tvagent/` 下三個檔案異動，無 commit。

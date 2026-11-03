@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.example.tvgate</string>
+  <key>ProgramArguments</key><array><string>/opt/homebrew/bin/python3.12</string><string>/Users/example-owner/TV/tvgate/gate.py</string></array>
+  <key>EnvironmentVariables</key><dict><key>TVGATE_DEVICE</key><string>192.0.2.69:5555</string><key>TVGATE_PORT</key><string>8790</string><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/example-owner/Library/Logs/tvgate.out</string>
+  <key>StandardErrorPath</key><string>/Users/example-owner/Library/Logs/tvgate.err</string>
+</dict></plist>

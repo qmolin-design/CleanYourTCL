@@ -1,0 +1,1448 @@
+OpenAI Codex v0.163.0
+--------
+workdir: /Users/example-owner/TV
+model: openai/gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: high
+reasoning summaries: none
+session id: 000000021-0000-4000-8000-000000000000
+--------
+user
+你是計畫挑戰者（不寫 code、不改檔）。挑戰 research/PLAN_adult.md：找漏洞、錯誤假設、過度設計、驗收標準不可執行之處。必讀：research/PLAN_adult.md、tvagent/src/com/example/tvagent/Quota.java、tvagent/src/com/example/tvagent/AgentService.java、tvagent/test/QuotaTest.java、cfquota/lib.mjs、cfquota/schema.sql、cfquota/lib.test.mjs（只看 setup 與幾個測試範例）。不要讀清單外的檔案。
+背景：v5 已上線控管電視（額度＋自動停用 YouTube/Netflix，伺服器是 Cloudflare Worker＋D1，電視 App 每分鐘 sync）。升級絕不能讓電視額度重置或鎖定失效。Owner 要「爸媽時段」：平日 00:00–06:00、10:00–16:00、22:00–24:00，週末只有 00:00–06:00、22:00–24:00；時段內不鎖、不扣額度；國定假日用手機按「關閉這一段」。Owner 已確認週末白天不算。小孩可能會試著鑽漏洞（例如改電視時間、拔網路、重開機），但只用遙控器，沒有 adb。
+輸出：編號清單，每條寫 嚴重度(高/中/低)、問題、建議改法；最多 12 條，只寫有實質影響的。最後一行寫 總評：可施工 / 需修改後施工。
+
+hook: SessionStart
+hook: SessionStart
+hook: SessionStart Completed
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+我會依指定清單檢視計畫、既有額度與同步邏輯，特別追查升級、斷網、重開機和時間被修改時的影響；不會修改檔案。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat -n cfquota/lib.mjs' in /Users/example-owner/TV
+ succeeded in 0ms:
+     1	const certCache = new Map();
+     2	const decode = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+     3	const jsonPart = s => JSON.parse(new TextDecoder().decode(decode(s)));
+     4	
+     5	async function identity(req, env, now) {
+     6	  try {
+     7	    const [h, p, s, ...extra] = (req.headers.get('Cf-Access-Jwt-Assertion') || '').split('.');
+     8	    if (!h || !p || !s || extra.length) return null;
+     9	    const header = jsonPart(h), claims = jsonPart(p);
+    10	    if (header.alg !== 'RS256' || typeof header.kid !== 'string') return null;
+    11	    const issuer = `https://${env.ACCESS_TEAM}.cloudflareaccess.com`;
+    12	    if (claims.iss !== issuer || !Number.isFinite(claims.exp) || claims.exp <= now / 1000 || !(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(env.ACCESS_AUD)) return null;
+    13	    let cache = certCache.get(issuer);
+    14	    if (!cache || now - cache.at >= 3600000) {
+    15	      const response = await fetch(`${issuer}/cdn-cgi/access/certs`);
+    16	      if (!response.ok) return null;
+    17	      cache = { keys: (await response.json()).keys, at: now, unknownAt: -Infinity };
+    18	      certCache.set(issuer, cache);
+    19	    }
+    20	    let jwk = cache.keys.find(k => k.kid === header.kid);
+    21	    if (!jwk && now - cache.unknownAt >= 60000) {
+    22	      cache.unknownAt = now;
+    23	      const response = await fetch(`${issuer}/cdn-cgi/access/certs`);
+    24	      if (!response.ok) return null;
+    25	      cache.keys = (await response.json()).keys;
+    26	      cache.at = now;
+    27	      jwk = cache.keys.find(k => k.kid === header.kid);
+    28	    }
+    29	    if (!jwk) return null;
+    30	    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    31	    if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(s), new TextEncoder().encode(`${h}.${p}`))) return null;
+    32	    const parents = JSON.parse(env.PARENTS);
+    33	    if (typeof claims.email === 'string' && Object.hasOwn(parents, claims.email)) return { role: 'parent', name: parents[claims.email] };
+    34	    if (typeof claims.common_name === 'string' && claims.common_name === env.TV_CLIENT_ID) return { role: 'tv', name: '電視' };
+    35	    return { role: 'other' };
+    36	  } catch { return null; }
+    37	}
+    38	
+    39	const response = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+    40	const error = status => response({ error: status }, status);
+    41	const stmt = (db, sql, ...args) => db.prepare(sql).bind(...args);
+    42	const all = async (db, sql, ...args) => (await stmt(db, sql, ...args).all()).results;
+    43	const first = (db, sql, ...args) => stmt(db, sql, ...args).first();
+    44	const event = (db, ts, who, kind, detail = null) => stmt(db, 'INSERT INTO events(ts,who,kind,detail) VALUES(?,?,?,?)', ts, who, kind, detail);
+    45	const integer = n => Number.isSafeInteger(n) && n >= 0;
+    46	const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    47	function validUsageFields(r) {
+    48	  const keys = ['today', 'used_today_yt_s', 'used_today_nf_s'].filter(k => r[k] !== undefined);
+    49	  if (!keys.length) return true;
+    50	  if (keys.length !== 3) return false;
+    51	  if (typeof r.today !== 'string' || !DATE_RE.test(r.today)) return false;
+    52	  return ['used_today_yt_s', 'used_today_nf_s'].every(k => integer(r[k]) && r[k] <= 86400);
+    53	}
+    54	function validReport(r) {
+    55	  return r && typeof r === 'object' && !Array.isArray(r) && r.v === 1 &&
+    56	    (r.last_seq === null || integer(r.last_seq)) && (r.db_id === null || typeof r.db_id === 'string') &&
+    57	    integer(r.balance_s) && r.balance_s <= 86400 && typeof r.capped === 'boolean' &&
+    58	    integer(r.used_today_s) && integer(r.used_total_s) && ['enabled','disabled','unknown'].includes(r.yt) &&
+    59	    (r.fg_yt === null || typeof r.fg_yt === 'boolean') && ['on','off','unknown'].includes(r.screen) &&
+    60	    typeof r.adb === 'string' && r.adb.length <= 64 && typeof r.enforce === 'boolean' &&
+    61	    integer(r.boot_count) && integer(r.uptime_s) && integer(r.gap_s) &&
+    62	    typeof r.wl === 'string' && r.wl.length <= 64 && integer(r.app_ver) && validUsageFields(r);
+    63	}
+    64	async function meta(db) {
+    65	  return Object.fromEntries((await all(db, 'SELECT k,v FROM meta')).map(x => [x.k, x.v]));
+    66	}
+    67	async function sync(db, r, now, offline) {
+    68	  const m = await meta(db), old = await first(db, 'SELECT * FROM tv WHERE id=1');
+    69	  const prev = old && JSON.parse(old.report), ack = old?.acked_seq ?? 0;
+    70	  const max = (await first(db, 'SELECT COALESCE(MAX(seq),0) AS n FROM grants')).n;
+    71	  const reset = r.db_id !== null && r.db_id !== m.db_id;
+    72	  const grants = reset || (r.last_seq === null && !old) ? [] : await all(db, 'SELECT seq,kind,seconds FROM grants WHERE seq>? ORDER BY seq', r.last_seq === null ? ack : r.last_seq);
+    73	  const actions = [];
+    74	  if (reset) actions.push(event(db, now, '電視', 'db-reset'));
+    75	  else if (r.last_seq === null && old) actions.push(event(db, now, '電視', 'reinstall'));
+    76	  if (r.last_seq !== null && r.last_seq > ack) actions.push(event(db, now, '電視', 'received', String(r.last_seq)));
+    77	  if (prev && r.yt !== prev.yt && (r.yt === 'disabled' || r.yt === 'enabled')) actions.push(event(db, now, '電視', r.yt === 'disabled' ? 'lock' : 'unlock'));
+    78	  if (old && now - old.last_seen >= offline * 60) actions.push(event(db, now, '電視', 'online', `中斷 ${Math.floor((now - old.last_seen) / 60)} 分`));
+    79	  if (r.gap_s > 300) actions.push(event(db, now, '電視', 'gap', String(r.gap_s)));
+    80	  if (r.adb !== 'ok' && (old?.adb_bad ?? 0) === 2) actions.push(event(db, now, '電視', 'adb-bad', r.adb));
+    81	  if (r.adb === 'ok' && (old?.adb_bad ?? 0) >= 3) actions.push(event(db, now, '電視', 'adb-ok'));
+    82	  actions.push(stmt(db, `INSERT INTO tv(id,last_seen,report,acked_seq,adb_bad) VALUES(1,?,?,?,CASE WHEN ?='ok' THEN 0 ELSE 1 END)
+    83	    ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen, report=excluded.report,
+    84	    acked_seq=MAX(COALESCE(tv.acked_seq,0),COALESCE(excluded.acked_seq,0)), adb_bad=CASE WHEN ?='ok' THEN 0 ELSE tv.adb_bad+1 END`, now, JSON.stringify(r), r.last_seq, r.adb, r.adb));
+    85	  actions.push(stmt(db, 'DELETE FROM events WHERE ts < ?', now - 90 * 86400));
+    86	  await db.batch(actions);
+    87	  if (r.today !== undefined) {
+    88	    try {
+    89	      await db.batch([
+    90	        stmt(db, `INSERT INTO usage_daily(date,app,seconds) VALUES(?,?,?) ON CONFLICT(date,app) DO UPDATE SET seconds=MAX(seconds,excluded.seconds)`, r.today, 'youtube', r.used_today_yt_s),
+    91	        stmt(db, `INSERT INTO usage_daily(date,app,seconds) VALUES(?,?,?) ON CONFLICT(date,app) DO UPDATE SET seconds=MAX(seconds,excluded.seconds)`, r.today, 'netflix', r.used_today_nf_s),
+    92	      ]);
+    93	    } catch (e) { console.error('usage_daily upsert failed', e); }
+    94	  }
+    95	  return { grants, max_seq: max, db_id: m.db_id, cap_s: Number(m.cap_s), enforce: m.enforce === 'true' };
+    96	}
+    97	export function eventText(kind, detail = null) {
+    98	  if (kind && typeof kind === 'object' && !Array.isArray(kind)) { detail = kind.detail ?? null; kind = kind.kind; }
+    99	  const mins = s => Math.floor(Number(s) / 60);
+   100	  switch (kind) {
+   101	    case 'grant': { const n = mins(detail); return Number.isFinite(n) ? `加 ${n} 分` : '加值'; }
+   102	    case 'zero': return '歸零';
+   103	    case 'received': return '電視收到加值';
+   104	    case 'lock': return '已鎖 YouTube／Netflix';
+   105	    case 'unlock': return '已開放 YouTube／Netflix';
+   106	    case 'online': return detail == null || detail === '' ? '恢復連線' : `恢復連線（${detail}）`;
+   107	    case 'gap': { const n = mins(detail); return Number.isFinite(n) ? `回報中斷 ${n} 分` : '回報中斷'; }
+   108	    case 'adb-bad': return detail == null || detail === '' ? '無法控制' : `無法控制（${detail}）`;
+   109	    case 'adb-ok': return '恢復控制';
+   110	    case 'reinstall': return '電視 App 重新安裝';
+   111	    case 'db-reset': return '資料庫重建';
+   112	    default: return detail == null || detail === '' ? String(kind) : `${kind} ${detail}`;
+   113	  }
+   114	}
+   115	const taipeiToday = seconds => new Date((seconds + 8 * 3600) * 1000).toISOString().slice(0, 10);
+   116	const addDays = (date, n) => new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+   117	const emptyUsage = () => ({ today: { youtube_s: 0, netflix_s: 0 }, week: { youtube_s: 0, netflix_s: 0 }, month: { youtube_s: 0, netflix_s: 0 }, days: [] });
+   118	async function usage(db, seconds) {
+   119	  try {
+   120	    const today = taipeiToday(seconds);
+   121	    const sinceMonday = (new Date((seconds + 8 * 3600) * 1000).getUTCDay() + 6) % 7;
+   122	    const weekStart = addDays(today, -sinceMonday), monthStart = today.slice(0, 8) + '01';
+   123	    const queryStart = weekStart < monthStart ? weekStart : monthStart;
+   124	    const rows = await all(db, 'SELECT date,app,seconds FROM usage_daily WHERE date>=? AND date<=?', queryStart, today);
+   125	    const byDate = new Map();
+   126	    for (const r of rows) {
+   127	      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, youtube_s: 0, netflix_s: 0 });
+   128	      const d = byDate.get(r.date);
+   129	      if (r.app === 'youtube') d.youtube_s = r.seconds; else if (r.app === 'netflix') d.netflix_s = r.seconds;
+   130	    }
+   131	    const days = [...byDate.values()].filter(d => d.date >= monthStart).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+   132	    const sum = from => { let youtube_s = 0, netflix_s = 0; for (const d of byDate.values()) if (d.date >= from && d.date <= today) { youtube_s += d.youtube_s; netflix_s += d.netflix_s; } return { youtube_s, netflix_s }; };
+   133	    const at = date => { const d = byDate.get(date); return d ? { youtube_s: d.youtube_s, netflix_s: d.netflix_s } : { youtube_s: 0, netflix_s: 0 }; };
+   134	    return { today: at(today), week: sum(weekStart), month: sum(monthStart), days };
+   135	  } catch { return emptyUsage(); }
+   136	}
+   137	async function state(db, name, now, offline) {
+   138	  const m = await meta(db), row = await first(db, 'SELECT * FROM tv WHERE id=1');
+   139	  const report = row && JSON.parse(row.report), alerts = [];
+   140	  if (row && now - row.last_seen >= offline * 60) {
+   141	    const min = Math.floor((now - row.last_seen) / 60);
+   142	    alerts.push(report.screen === 'on' ? { level:'red', text:`電視 App 已 ${min} 分沒回報（最後螢幕開著）` } : { level:'yellow', text:`電視 ${min} 分前回報（之後待機或關機）` });
+   143	  }
+   144	  if (row?.adb_bad >= 3) alerts.push({ level:'red', text:`電視 App 無法控制 YouTube／Netflix（adb：${report.adb}）` });
+   145	  if (await first(db, "SELECT id FROM events WHERE ts>=? AND kind IN ('reinstall','db-reset') LIMIT 1", now - 86400)) alerts.push({ level:'yellow', text:'近期電視重新安裝或資料庫重建' });
+   146	  if (m.enforce !== 'true') alerts.push({ level:'yellow', text:'影子模式：此頁不控制電視' });
+   147	  const tv = row ? { last_seen:row.last_seen, balance_s:report.balance_s, capped:report.capped, used_today_s:report.used_today_s, yt:report.yt, fg_yt:report.fg_yt, screen:report.screen, adb:report.adb, adb_bad:row.adb_bad, wl:report.wl, app_ver:report.app_ver } : null;
+   148	  const eventRows = await all(db, 'SELECT ts,who,kind,detail FROM events ORDER BY id DESC LIMIT 30');
+   149	  const events = eventRows.map(e => ({ ...e, text: eventText(e.kind, e.detail) }));
+   150	  return { me:name, cap_s:Number(m.cap_s), enforce:m.enforce === 'true', tv, alerts,
+   151	    usage:await usage(db, now),
+   152	    pending:await all(db, 'SELECT seq,kind,seconds,by,created_at FROM grants WHERE seq>? ORDER BY seq', row?.acked_seq ?? 0),
+   153	    events };
+   154	}
+   155	async function grant(db, data, who, now) {
+   156	  if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.req_id !== 'string' || !data.req_id.length || data.req_id.length > 64 || !((data.kind === 'add' && [15,30,60].includes(data.minutes)) || (data.kind === 'zero' && !Object.hasOwn(data, 'minutes')))) return null;
+   157	  const kind = data.kind === 'zero' ? 'set' : 'add', seconds = kind === 'set' ? 0 : data.minutes * 60;
+   158	  await db.batch([
+   159	    stmt(db, 'INSERT OR IGNORE INTO grants(kind,seconds,by,req_id,created_at) VALUES(?,?,?,?,?)', kind, seconds, who, data.req_id, now),
+   160	    stmt(db, 'INSERT INTO events(ts,who,kind,detail) SELECT ?,?,?,? WHERE changes()>0', now, who, data.kind === 'zero' ? 'zero' : 'grant', String(seconds))
+   161	  ]);
+   162	  const saved = await first(db, 'SELECT seq FROM grants WHERE req_id=?', data.req_id);
+   163	  const m = await meta(db), row = await first(db, 'SELECT * FROM tv WHERE id=1');
+   164	  const pending = await first(db, "SELECT COALESCE(SUM(seconds),0) AS n FROM grants WHERE seq>? AND kind='add'", row?.acked_seq ?? 0);
+   165	  return { seq:saved.seq, would_cap:(row ? JSON.parse(row.report).balance_s : 0) + pending.n > Number(m.cap_s) };
+   166	}
+   167	const page = `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>看電視時間</title><style>body{font:18px system-ui;margin:1em;max-width:36em}button{font:inherit;padding:1em;margin:.2em} .red{color:#a00}.yellow{color:#865500}li{margin:.4em 0}</style><h1>看電視時間</h1><div id="alerts"></div><p id="status"></p><div id="buttons"><button data-min="15">+15</button><button data-min="30">+30</button><button data-min="60">+60</button><button data-min="0">歸零</button></div><p id="used"></p><h2>使用時間</h2><div id="usage"></div><h2>紀錄</h2><ul id="events"></ul><p id="me"></p><script>
+   168	const $=id=>document.getElementById(id);let cap=0;
+   169	async function refresh(){const r=await fetch('/tv/api/state');if(!r.ok){$('status').textContent='無法取得狀態';return}const s=await r.json();cap=s.cap_s;$('alerts').replaceChildren(...s.alerts.map(a=>{let p=document.createElement('p');p.className=a.level;p.textContent=a.text;return p}));const t=s.tv,pending=s.pending.filter(x=>x.kind==='add').reduce((n,x)=>n+x.seconds,0);$('status').textContent=t?'剩餘 '+Math.floor(t.balance_s/60)+' 分（電視 '+new Date(t.last_seen*1000).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})+' 回報）'+(t.capped?'，已封頂（上限 '+Math.floor(cap/60)+' 分）':'')+'；待電視接收 '+Math.floor(pending/60)+' 分；YouTube／Netflix '+({enabled:'開放中',disabled:'已鎖',unknown:'未知'}[t.yt])+'；'+(Date.now()/1000-t.last_seen<120?'電視在線':Math.floor((Date.now()/1000-t.last_seen)/60)+' 分前回報'):'尚無電視回報；待電視接收 '+Math.floor(pending/60)+' 分';$('used').textContent=t?'今天 YouTube／Netflix 用了 '+Math.floor(t.used_today_s/60)+' 分':'';var u=s.usage,fl=function(n){return Math.floor(n/60)},urow=function(label,v){var p=document.createElement('p');p.textContent=label+'：YouTube '+fl(v.youtube_s)+' 分、Netflix '+fl(v.netflix_s)+' 分、合計 '+fl(v.youtube_s+v.netflix_s)+' 分';return p};$('usage').replaceChildren(urow('今天',u.today),urow('本週',u.week),urow('本月',u.month),...u.days.map(function(d){var p=document.createElement('p');p.textContent=d.date+'：YouTube '+fl(d.youtube_s)+' 分、Netflix '+fl(d.netflix_s)+' 分';return p}));$('events').replaceChildren(...s.events.map(e=>{let li=document.createElement('li');li.textContent=new Date(e.ts*1000).toLocaleString('zh-TW')+' '+e.who+' '+e.text;return li}));$('me').textContent='目前登入：'+s.me}
+   170	$('buttons').addEventListener('click',async e=>{if(!e.target.matches('button'))return;const buttons=[...$('buttons').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{let n=Number(e.target.dataset.min),body=n?{kind:'add',minutes:n,req_id:crypto.randomUUID()}:{kind:'zero',req_id:crypto.randomUUID()};let r=await fetch('/tv/api/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw Error();let data=await r.json();if(data.would_cap)alert('會封頂在 '+Math.floor(cap/60)+' 分');await refresh()}catch{alert('送出失敗，請重新整理確認')}finally{buttons.forEach(b=>b.disabled=false)}});refresh();setInterval(refresh,15000);
+   171	</script></html>`;
+   172	export async function handle(req, env, now) {
+   173	  const path = new URL(req.url).pathname;
+   174	  if (!path.startsWith('/tv/')) return error(404);
+   175	  const user = await identity(req, env, now);
+   176	  if (!user) return error(401);
+   177	  if (req.method === 'POST' && path === '/tv/api/grant' && req.headers.get('Origin') !== 'https://tv-demo.example.net') return error(403);
+   178	  const role = path === '/tv/api/sync' ? 'tv' : 'parent';
+   179	  if (user.role !== role) return error(403);
+   180	  if (req.method === 'GET' && path === '/tv/') return new Response(page, { headers: { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store' } });
+   181	  const offline = Number(env.OFFLINE_MIN) > 0 ? Number(env.OFFLINE_MIN) : 30, seconds = Math.floor(now / 1000);
+   182	  if (req.method === 'GET' && path === '/tv/api/state') return response(await state(env.DB, user.name, seconds, offline));
+   183	  if (req.method === 'POST' && (path === '/tv/api/sync' || path === '/tv/api/grant')) {
+   184	    let body; try { body = await req.json(); } catch { return error(400); }
+   185	    if (path === '/tv/api/sync') return validReport(body) ? response(await sync(env.DB, body, seconds, offline)) : error(400);
+   186	    const result = await grant(env.DB, body, user.name, seconds);
+   187	    return result ? response(result) : error(400);
+   188	  }
+   189	  return error(404);
+   190	}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'cat -n research/PLAN_adult.md' in /Users/example-owner/TV
+exec
+/bin/zsh -lc 'cat -n tvagent/src/com/example/tvagent/AgentService.java' in /Users/example-owner/TV
+exec
+/bin/zsh -lc 'cat -n tvagent/test/QuotaTest.java' in /Users/example-owner/TV
+exec
+/bin/zsh -lc 'cat -n tvagent/src/com/example/tvagent/Quota.java' in /Users/example-owner/TV
+ succeeded in 0ms:
+     1	# PLAN_adult：爸媽時段（排程內不鎖、不扣時間）
+     2	
+     3	狀態：**DRAFT**（2026-11-01 03:00，Opus；TERRA high 挑戰中 → 裁定 → APPROVED）
+     4	
+     5	## 起因（Owner）
+     6	- 11-01 02:4x：小孩睡了／出門時大人看電視不限時、不扣額度。02:5x：要排程（起床前、上學、睡後）。
+     7	- 11-01 03:0x 答：
+     8	  1. 爸媽時間 **00:00–06:00、10:00–16:00、22:00–24:00**，這段時間不鎖、不扣時間。
+     9	  2. 國家假期大人也在家 → 用手機**關閉爸媽模式**。
+    10	- 11-01 03:1x 答：**週末白天不算**（10:00–16:00 只有週一～五；00:00–06:00、22:00–24:00 每天）。
+    11	- 11-01 03:1x 授權：**全程自主，做完再報**（挑戰裁定後 Opus 直接 APPROVED、派工、部署、實機回歸；需要 Owner 動手才停）。
+    12	
+    13	## 做法（一句話）
+    14	Worker 用自己的時鐘算「現在是否爸媽時段、還剩幾秒」，sync 回應多一欄 `adult_left_s`；電視把它當成**一包只隨時間流逝、不被使用扣的免費秒數**：用 `elapsedRealtime` 倒數，期間不扣額度、照常開放 YouTube／Netflix；到期回到一般規則（有額度照扣，沒額度 → 剩 5 分提示 → 時間已到 → 停用）。
+    15	
+    16	## 定義
+    17	- **排程**：存在 D1 `meta` 的 `adult_sched`（JSON），初值：
+    18	  `[{"days":"0123456","from":"00:00","to":"06:00"},{"days":"12345","from":"10:00","to":"16:00"},{"days":"0123456","from":"22:00","to":"24:00"}]`
+    19	  （`days`＝台北時間星期幾，0＝週日；`to` 可為 `24:00`）。之後改時間由 Opus 用 wrangler 改這一列，**本期不做頁面編輯**。
+    20	- **時段合併**：相鄰或重疊的時段合併成一段（22:00–24:00 接 00:00–06:00＝22:00 到隔天 06:00，一段 8 小時）。
+    21	- **關閉（假日用）**：家長頁按「關閉這一段」→ `meta.adult_off_until`＝「現在所在的那一段」的結束時間；不在時段內就是「下一段」的結束時間。`now < adult_off_until` 期間，結束時間 ≤ `adult_off_until` 的時段都不算。到期自動恢復，**不會忘了開回來**。另有「取消關閉」（刪掉這一列）。
+    22	- `adult_left_s`＝現在所在（合併後、未被關閉）時段的剩餘秒數；不在時段內＝0。上限 86400。
+    23	- **電視端**：`adultEnd`（elapsedRealtime 毫秒）＝收到時的 `el + adult_left_s*1000`；每次成功 sync 都覆寫（含變 0，即家長按了關閉）。重開機（boot_count 變了）→ 視為 0，等下一次 sync（開機約 80 秒內）。斷網 → 照已知的 `adultEnd` 倒數，時段結束就回一般規則；斷網期間不會開始新的時段（安全側）。
+    24	- **有效額度**＝`balance + adultLeft`（adultLeft＝`max(0, adultEnd − el)/1000`）。`decide()`、`warned` 重置、`nextAlarmMs()` 一律用有效額度 → 自然得到：時段內停用的會被開放、時段結束前 5 分且沒額度才提示、結束時沒額度才鎖。
+    25	- **扣額**：本跳區間 `[qEl, el]` 與 `[…, adultEnd]` 重疊的部分不扣：`charge = max(0, seconds − overlap)`，`overlap = max(0, min(el, adultEnd) − qEl)/1000`。
+    26	- **使用統計**（usage_daily、家長頁「使用時間」）：只算**扣額的部分**（＝小孩時間）；重疊那一跳 `ytS`、`nfS` 依序截到合計不超過 `charge`（YouTube 先）。爸媽時段看的不進統計。
+    27	- 已知誤差（接受）：時段開始時電視最晚一次 sync 才知道（≤60 秒，這段照扣）；時段結束以電視倒數為準，與 Worker 時鐘差 ≤ 一次 sync 往返。
+    28	
+    29	## WO-A1 Worker＋家長頁（cfquota）
+    30	動到：`cfquota/lib.mjs`、`cfquota/lib.test.mjs`、`cfquota/schema.sql`、`cfquota/README.md`。
+    31	1. `schema.sql`：`INSERT OR IGNORE INTO meta VALUES('adult_sched', '<上面初值>')`（不另開表）。
+    32	2. 純函式 `adultWindow(nowS, sched, offUntil)` → `{active, until, next_from, next_until}`（全部 Unix 秒；台北＝UTC+8 固定，無日光節約）：展開「昨天、今天、明天」的時段 → 合併 → 套用關閉 → 找包含 now 的那段與下一段。`sched` 解析失敗 → 當作沒有排程（不丟例外，sync 照常）。
+    33	3. `sync` 回應加 `adult_left_s`（`active ? until − now : 0`，上限 86400）。
+    34	4. `state` 回應加 `adult: {active, until, next_from, next_until, off_until}`。
+    35	5. 新 API `POST /tv/api/adult`（只限 parent、同 grant 的 Origin 檢查）：body `{action:'off'|'resume', req_id}`。`off`＝寫 `adult_off_until`（規則見定義），`resume`＝刪掉。寫 events：`adult-off`（detail＝off_until 秒）、`adult-resume`。重送同一個 req_id 不重複記事件（同 grant 的作法：events 用 `req_id` 去重，或 `meta` 值相同就不記，擇一，寫在 README）。
+    36	6. `eventText`：`adult-off`→`關閉爸媽時段到 HH:MM`（台北時間）、`adult-resume`→`恢復爸媽時段`。
+    37	7. 家長頁（沿用現有樣式，不改版；改版另走 WO-U4）：狀態下方一行：
+    38	   - 時段中：「爸媽時段（不扣時間）到 HH:MM」＋按鈕「關閉這一段」。
+    39	   - 不在時段：「下一段爸媽時段 HH:MM–HH:MM」＋按鈕「下一段不要」。
+    40	   - 已關閉：「爸媽時段已關閉到 HH:MM」＋按鈕「取消關閉」。
+    41	   - 按鈕送出時變灰（同加值按鈕）。
+    42	完成標準：`cd cfquota && node --test` 全 PASS（現有測試不能改弱），新增：①平日 10:00 → active、until＝16:00；②週六 10:00 → 不在時段、next＝22:00；③週一 23:00 → until＝週二 06:00（跨午夜合併）；④週一 05:00 → until 06:00、next 10:00；⑤10:00 關閉 → active=false，16:00 後 22:00 恢復；⑥08:00 按「下一段不要」→ 10:00–16:00 不算、22:00 照常；⑦`adult_sched` 壞掉 → sync 200、`adult_left_s=0`；⑧`/tv/api/adult` 非 parent 403、錯 Origin 403、錯 action 400；⑨sync 回應有 `adult_left_s`。
+    43	禁止：不改 Access 驗證、grant／歸零、usage 寫入、路由前綴、`wrangler.toml`、`worker.mjs`；不部署。
+    44	
+    45	## WO-A2 電視 App（tvagent）
+    46	動到：`Quota.java`、`AgentService.java`、`tvagent/test/QuotaTest.java`、`tvagent/README.md`（＋重建 apk）。
+    47	1. `Quota` 新欄位 `adultEnd`（ms，elapsedRealtime 基準），存檔鍵 `adult_end_el`，**寬鬆讀取**（缺／錯→0）。新方法 `adultLeft(long el)`；`decide()`、`nextAlarmMs()` 改用有效額度（新增帶 el 或 adultLeft 參數的多載，舊簽名保留給現有測試，行為不變）。
+    48	2. heartbeat：`boot` 與存檔的 `bootCount` 不同 → `adultEnd=0`。算出 `seconds`（含 clock=jump 路徑）後依「扣額」規則扣，per-app 依「使用統計」規則截。
+    49	3. sync 回應解析：`adult_left_s` 用 `optLong(…, 0)`，不在 0～86400 → 當 0（**不得讓整次 sync 失敗**；舊 Worker 沒這欄＝0）。成功後 `adultEnd = el + adult_left_s*1000`。sync 後重跑 `act()` 的條件，從「balance 或 enforce 變了」擴成「有效額度是否 >0、是否 ≤300 有變，或 enforce 變了」。
+    50	4. log 行加 `adult=<剩餘秒>`（放在 `bal=` 後）；`app_ver` 改 4。
+    51	完成標準：`sh tvagent/test.sh` 全 PASS（現有測試一條都不能改弱），QuotaTest 新增：①balance=0、adultLeft=600、YouTube 停用 → UNLOCK；②balance=0、adultLeft=290、前景 → WARN 一次；③balance=0、adultLeft=0、前景 → END；④balance=1000、adultLeft=600 → 不 WARN；⑤區間全在時段內 → 不扣、ytS=nfS=0；⑥區間一半在時段內 → 只扣後半；⑦`nextAlarmMs` 用有效額度（balance=0、adultLeft=50、前景 → 50 秒）；⑧舊 state（無 `adult_end_el`）load → 其他欄位保留、adultEnd=0；⑨`adult_end_el=abc` → 同上。`sh tvagent/build.sh` 成功。
+    52	禁止：不改 `AdbClient.java`、`Whitelist.java`、`NoticeActivity.java`、Manifest、簽章、`testdata/`；不改鎖定／解鎖的 adb 指令與驗證。
+    53	
+    54	## 上線順序（Opus）
+    55	1. 兩張 review PASS＋Opus 審定 → merge main、push。
+    56	2. D1 `INSERT OR IGNORE` adult_sched → `wrangler deploy`（舊電視 app_ver 3 忽略多的欄位，照常 sync）→ 家長頁目視。
+    57	3. 電視 `install -r`（安裝前確認沒人看、記 bal）→ 照 README 檢查 appops／bucket／deviceidle／TGuard 名單 → log 有 `adult=`、bal 不變。
+    58	4. 回歸（用 `wrangler d1` 暫時把 `adult_sched` 改成「現在＋3 分鐘結束」的測試排程）：bal=0 時段內 YouTube 開著且不扣 → 剩 5 分內提示 → 到點時間已到、停用；`adult_off_until` 按鈕關閉 → 一分鐘內停用；`adb reboot`（時段內、bal=0）→ 開機先停用、sync 後開放。測完還原排程與 bal（by Opus測試）。
+    59	5. 回滾：apk 用前一版覆蓋（舊版忽略 `adult_end_el`）；Worker `wrangler rollback`。
+    60	
+    61	## 不做（要再說）
+    62	- 手動「現在開始爸媽時段」（Owner 這次只要排程＋關閉；要再加）。
+    63	- 頁面上改排程時間（改由 Opus 用 wrangler 改）。
+    64	- 國定假日日曆自動判斷（Owner 選手動關閉）。
+    65	- 太太加進 Access 名單（Owner 11-01 說管理介面先不考慮太太）。
+    66	- 時段開始／結束推播。
+
+ succeeded in 0ms:
+     1	package com.example.tvagent;
+     2	import java.util.*;
+     3	public class QuotaTest {
+     4	    static void check(boolean b, String name) { if (!b) throw new AssertionError(name); System.out.println("PASS " + name); }
+     5	    static Quota.Ev e(long sec, int type, String pkg) { return new Quota.Ev(sec * 1000, type, pkg); }
+     6	    static Quota.Usage usage(Quota.Ev... e) { return Quota.usage(Arrays.asList(e), 0, 100000, false, true); }
+     7	    static Quota.Grant g(long n, String kind, long sec) { return new Quota.Grant(n, kind, sec); }
+     8	    public static void main(String[] args) {
+     9	        String y = Quota.YT;
+    10	        Quota.Usage u = usage(e(10,1,y), e(70,2,y)); check(u.seconds == 60 && !u.ytFg && u.scrOn, "usage 60 and end state");
+    11	        u = usage(e(10,1,y),e(30,16,null),e(50,15,null),e(70,2,y)); check(u.seconds == 40, "usage screen off");
+    12	        check(usage(e(10,1,y),e(30,1,"other")).seconds == 20, "usage other resumed");
+    13	        check(Quota.usage(Collections.emptyList(), 0, 100000, true, true).seconds == 100, "usage initial");
+    14	        u = usage(e(10,1,y),e(30,26,null),e(40,27,null)); check(u.seconds == 20 && !u.ytFg && u.scrOn, "usage shutdown startup");
+    15	        u = usage(e(-1,1,y),e(10,1,y),e(101,2,y)); check(u.seconds == 90 && u.ytFg && u.seconds <= 100, "usage bounds");
+    16	        String n = Quota.NF;
+    17	        u = usage(e(10,1,n), e(70,2,n)); check(u.seconds == 60 && !u.ytFg, "netflix foreground consumes quota");
+    18	        u = usage(e(10,1,y), e(40,2,y), e(40,1,n), e(70,23,y), e(100,2,n)); check(u.seconds == 90 && !u.ytFg, "youtube to netflix switch uninterrupted");
+    19	        u = Quota.usage(Arrays.asList(e(40,2,y), e(40,1,n)), 0, 50000, true, true); check(u.ytFg && u.seconds == 50, "youtube to netflix batch 1");
+    20	        u = Quota.usage(Arrays.asList(e(60,23,y)), 50000, 100000, u.ytFg, u.scrOn); check(u.ytFg && u.seconds == 50, "netflix fg survives later youtube STOPPED");
+    21	        u = usage(e(10,1,n), e(40,2,n), e(40,1,"launcher"), e(100,23,n)); check(u.seconds == 30 && !u.ytFg, "netflix to launcher stops");
+    22	        u = Quota.usage(Arrays.asList(e(10,23,y)), 0, 100000, true, true); check(u.ytFg && u.seconds == 100, "STOPPED does not clear fg");
+    23	        check(Quota.clockJump(1000,3602000,1000,2000,1,1), "clock jump");
+    24	        check(!Quota.clockJump(1000,32000,1000,2000,1,1) && !Quota.clockJump(1000,3602000,1000,2000,1,2), "clock tolerance boot");
+    25	        Quota q = new Quota(); q.balance = 30; q.consume(60,"2026-10-30"); check(q.balance == 0 && q.usedTotal == 30 && q.usedToday == 30, "consume limited");
+    26	        q.balance = 50; q.consume(10,"2026-10-31"); check(q.usedToday == 10 && q.usedTotal == 40, "consume new date");
+    27	        q = new Quota(); q.dbId = "db"; q.lastSeq = 3;
+    28	        List<Quota.Grant> gs = Arrays.asList(g(6,"add",900),g(3,"add",300),g(5,"set",0),g(4,"add",1800));
+    29	        q.applySync(gs,6,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6 && q.enforce, "sync sorted and dedup");
+    30	        q.applySync(gs,6,"db",3600,true); q.applySync(Collections.emptyList(),20,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6, "sync repeated empty");
+    31	        q.applySync(Arrays.asList(g(1,"add",100)),8,"new",3600,false); check(q.balance == 1000 && q.lastSeq == 8 && q.dbId.equals("new") && !q.enforce, "sync reset");
+    32	        Quota fresh = new Quota(); fresh.applySync(Arrays.asList(g(1,"add",100)),4,"db",3600,false); check(fresh.balance == 100 && fresh.lastSeq == 4, "sync initial");
+    33	        q.balance = 3500; q.applySync(Arrays.asList(g(9,"add",500)),9,"new",3600,true); check(q.balance == 3600 && q.capped, "sync capped");
+    34	        q.balance = 3000; q.applySync(Arrays.asList(g(10,"add",500)),10,"new",1800,false); check(q.balance == 3000 && q.cap == 1800 && q.capped && !q.enforce, "sync cap decrease");
+    35	        q = new Quota(); check(q.decide("unknown",true,true) == Quota.Action.NONE, "decide unknown");
+    36	        q.balance = 1; check(q.decide("disabled",false,true) == Quota.Action.UNLOCK, "decide unlock");
+    37	        q.balance = 0; check(q.decide("enabled",true,true) == Quota.Action.END && q.decide("enabled",false,true) == Quota.Action.LOCK, "decide end lock");
+    38	        q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",true,true) == Quota.Action.NONE, "decide warn once");
+    39	        q.balance = 301; q.decide("enabled",true,true); q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",false,true) == Quota.Action.NONE, "decide warn reset");
+    40	        q = new Quota(); q.balance = 1; check(q.decide("enabled",true,false,true) == Quota.Action.UNLOCK && q.decide("enabled",false,false,true) == Quota.Action.NONE, "decide mixed positive unlocks");
+    41	        q.balance = 0; check(q.decide("enabled",true,false,true) == Quota.Action.LOCK && q.decide("enabled",true,true,true) == Quota.Action.END, "decide mixed zero locks");
+    42	        check(q.decide("unknown",true,true,true) == Quota.Action.NONE, "decide mixed unknown");
+    43	        q.balance = 90; u = Quota.usage(Arrays.asList(e(0,1,y), e(60,2,y), e(60,1,n)), 0, 120000, false, true); q.consume(u.seconds,"2026-10-31");
+    44	        check(u.seconds == 120 && u.ytFg && q.balance == 0 && q.decide("enabled",u.ytFg,true) == Quota.Action.END, "youtube then netflix share quota to END");
+    45	        long[] balances = {20,2,0,330,302,3000}; long[] alarms = {20000,5000,60000,30000,5000,60000}; for (int i=0;i<balances.length;i++) { q.balance=balances[i]; check(q.nextAlarmMs(true)==alarms[i], "alarm " + balances[i]); } check(q.nextAlarmMs(false)==60000,"alarm background");
+    46	        Properties saved = q.save(); Quota copy = Quota.load(saved); check(copy.save().equals(saved), "save load");
+    47	        check(Quota.load(new Properties()).balance == 0 && Quota.load(new Properties()).lastSeq == -1 && !Quota.load(new Properties()).enforce, "load garbage");
+    48	        saved.setProperty("balance_s", "bad"); check(Quota.load(saved).lastSeq == -1 && !Quota.load(saved).enforce, "load bad number");
+    49	        q = new Quota(); q.dbId="db"; q.lastSeq=3; Properties before=q.save(); q.applySync(gs,6,"db",3600,false); q=Quota.load(before); q.applySync(gs,6,"db",3600,false); check(q.balance==900 && q.lastSeq==6, "retry after unsaved sync");
+    50	        check(Quota.usage(Arrays.asList(e(10,1,y), e(70,2,y)), 0, 100000, false, true).seconds == 60, "usage compat overload");
+    51	        Quota.Usage v = Quota.usage(Arrays.asList(e(10,1,y), e(70,2,y), e(70,1,n), e(100,2,n)), 0, 100000, false, "", true);
+    52	        check(v.seconds == 90 && v.ytS == 60 && v.nfS == 30, "usage per-app yt60 nf30");
+    53	        Quota.Usage v1 = Quota.usage(Arrays.asList(e(40,2,y), e(40,1,n)), 0, 50000, true, y, true);
+    54	        check(v1.seconds == 50 && v1.ytS == 40 && v1.nfS == 10 && v1.fgPkg.equals(n), "usage switch split with fgPkg");
+    55	        Quota.Usage v2 = Quota.usage(Arrays.asList(e(60,23,y)), 50000, 100000, v1.ytFg, v1.fgPkg, v1.scrOn);
+    56	        check(v2.seconds == 50 && v2.ytS == 0 && v2.nfS == 50, "usage switch chain keeps app");
+    57	        Quota.Usage v3 = Quota.usage(Collections.emptyList(), 0, 100000, true, "", true);
+    58	        check(v3.seconds == 100 && v3.ytS == 0 && v3.nfS == 0, "usage unknown pkg");
+    59	        Quota.Usage v3b = Quota.usage(Collections.emptyList(), 0, 100000, true, null, true);
+    60	        check(v3b.seconds == 100 && v3b.ytS == 0 && v3b.nfS == 0, "usage null pkg");
+    61	        Quota w = new Quota(); w.balance = 1000; w.today = "2026-10-30"; w.usedToday = 100; w.usedTodayYt = 60; w.usedTodayNf = 30;
+    62	        w.consume(10, "2026-10-30"); check(w.usedToday == 110 && w.usedTodayYt == 60 && w.usedTodayNf == 30, "consume same day keeps per-app");
+    63	        w.consume(10, "2026-10-31"); check(w.usedToday == 10 && w.usedTodayYt == 0 && w.usedTodayNf == 0, "consume rollover resets per-app");
+    64	        Quota o = new Quota(); o.balance = 500; o.lastSeq = 7; o.enforce = true; o.dbId = "db"; o.usedTodayYt = 12; o.usedTodayNf = 34; o.fgPkg = n;
+    65	        Properties op = o.save(); op.remove("used_today_yt_s"); op.remove("used_today_nf_s"); op.remove("fg_pkg");
+    66	        Quota oc = Quota.load(op); check(oc.balance == 500 && oc.lastSeq == 7 && oc.enforce && oc.usedTodayYt == 0 && oc.usedTodayNf == 0 && oc.fgPkg.equals(""), "load old state");
+    67	        Properties bp = o.save(); bp.setProperty("used_today_yt_s", "abc"); bp.setProperty("used_today_nf_s", "-5"); bp.setProperty("fg_pkg", "com.evil.app");
+    68	        Quota bc = Quota.load(bp); check(bc.balance == 500 && bc.lastSeq == 7 && bc.enforce && bc.usedTodayYt == 0 && bc.usedTodayNf == 0 && bc.fgPkg.equals(""), "load bad new keys");
+    69	        Quota ro = Quota.load(o.save()); check(ro.usedTodayYt == 12 && ro.usedTodayNf == 34 && ro.fgPkg.equals(n) && ro.save().equals(o.save()), "save load new keys");
+    70	        Quota.Usage r = Quota.usage(Collections.emptyList(), 0, 91000, false, "", true);
+    71	        check(r.seconds == 0 && r.nfS == 0 && r.ytS == 0 && !r.ytFg, "reboot events lost cleared fg counts zero");
+    72	        Quota.Usage b = Quota.usage(Collections.emptyList(), 0, 91000, true, n, true);
+    73	        check(b.seconds == 91 && b.nfS == 91 && b.ytFg, "stale fg netflix overcounts 91s");
+    74	        System.out.println("ALL PASS");
+    75	    }
+    76	}
+
+ succeeded in 0ms:
+     1	package com.example.tvagent;
+     2	
+     3	import android.app.*;
+     4	import android.app.usage.UsageEvents;
+     5	import android.app.usage.UsageStatsManager;
+     6	import android.content.*;
+     7	import android.os.*;
+     8	import android.provider.Settings;
+     9	import org.json.*;
+    10	import java.io.*;
+    11	import java.net.*;
+    12	import java.text.SimpleDateFormat;
+    13	import java.util.*;
+    14	import java.util.concurrent.*;
+    15	import javax.net.ssl.HttpsURLConnection;
+    16	
+    17	public class AgentService extends Service {
+    18	    static final String EXTRA_REASON = "reason", HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
+    19	    static final String DISABLE = "pm disable-user --user 0 " + Quota.YT + "; pm disable-user --user 0 " + Quota.NF;
+    20	    static final String ENABLE = "pm enable --user 0 " + Quota.YT + "; pm enable --user 0 " + Quota.NF;
+    21	    static final String LIST = "pm list packages -d";
+    22	    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
+    23	    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+    24	            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+    25	            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
+    26	            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+    27	    private ExecutorService exec;
+    28	    private File keyFile, stateFile, logFile;
+    29	    private boolean configured;
+    30	
+    31	    @Override public void onCreate() {
+    32	        super.onCreate(); keyFile = new File(getFilesDir(), "adbkey"); stateFile = new File(getFilesDir(), "state.properties"); logFile = new File(getFilesDir(), "agent.log");
+    33	        exec = Executors.newSingleThreadExecutor(); startAsForeground();
+    34	    }
+    35	    static void scheduleNextAlarm(Context context, long delay) {
+    36	        AlarmManager am = (AlarmManager) context.getSystemService(ALARM_SERVICE);
+    37	        if (am != null) am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + delay,
+    38	                PendingIntent.getBroadcast(context, 1, new Intent(context, AlarmReceiver.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+    39	    }
+    40	    private void startAsForeground() {
+    41	        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+    42	        if (nm != null) nm.createNotificationChannel(new NotificationChannel("tvagent", "看電視時間", NotificationManager.IMPORTANCE_LOW));
+    43	        startForeground(1, new Notification.Builder(this, "tvagent").setContentTitle("看電視時間").setContentText("額度服務執行中").setSmallIcon(android.R.drawable.stat_notify_sync).build());
+    44	    }
+    45	    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    46	        startAsForeground(); // 每次 startForegroundService 都必須回應 startForeground，否則 5 秒規則會當掉
+    47	        String reason = intent != null ? intent.getStringExtra(EXTRA_REASON) : null;
+    48	        if (!"boot".equals(reason) && !"kick".equals(reason)) reason = "alarm";
+    49	        final String src = reason;
+    50	        scheduleNextAlarm(this, 60000);
+    51	        exec.execute(new Runnable() { public void run() { heartbeat(src); } });
+    52	        return START_STICKY;
+    53	    }
+    54	    @Override public IBinder onBind(Intent intent) { return null; }
+    55	    @Override public void onDestroy() { exec.shutdown(); super.onDestroy(); }
+    56	    private String adb(String command) throws AdbClient.AdbException {
+    57	        try { AdbClient c = AdbClient.withKeyFile("127.0.0.1", 5555, keyFile); c.setAuthTimeoutMs(60000); c.setIoTimeoutMs(10000); return c.shell(command); }
+    58	        catch (AdbClient.AdbException e) { throw e; }
+    59	        catch (Exception e) { throw new AdbClient.AdbException(AdbClient.IO, "key error"); }
+    60	    }
+    61	    private Quota load() {
+    62	        try (FileInputStream in = new FileInputStream(stateFile)) { Properties p = new Properties(); p.load(in); return Quota.load(p); }
+    63	        catch (Exception e) { return new Quota(); }
+    64	    }
+    65	    private void save(Quota q) throws IOException {
+    66	        File tmp = new File(getFilesDir(), "state.properties.tmp");
+    67	        try (FileOutputStream out = new FileOutputStream(tmp)) { q.save().store(out, null); out.getFD().sync(); }
+    68	        if (!tmp.renameTo(stateFile)) throw new IOException("rename");
+    69	    }
+    70	    private static final class Status { String yt = "unknown", screen = "unknown", adb = "ok", wl = "skip", fgPkg; Boolean fg; boolean mixed; }
+    71	    private Status status() {
+    72	        Status s = new Status();
+    73	        try {
+    74	            if (!configured) {
+    75	                String setup = adb("for c in 'cmd appops set com.example.tvagent APP_AUTO_START allow' 'cmd appops set com.example.tvagent APP_ASSOC_START allow' 'cmd appops set com.example.tvagent GET_USAGE_STATS allow' 'am set-standby-bucket com.example.tvagent active' 'dumpsys deviceidle whitelist +com.example.tvagent'; do sh -c \"$c\" >/dev/null 2>&1 && printf 1 || printf 0; done; echo");
+    76	                configured = setup.trim().equals("11111");
+    77	                // Setup result is included in the heartbeat log without command output.
+    78	                setupResult = setup.trim().matches("[01]{5}") ? setup.trim() : "failed";
+    79	            }
+    80	            String out = adb("echo __POWER__; dumpsys power || echo __FAIL__; echo __DISABLED__; pm list packages -d || echo __FAIL__; echo __ACTIVITY__; if [ \"$(pm list packages -d | grep -cx -e package:com.google.android.youtube.tv -e package:com.netflix.ninja)\" = 2 ]; then echo __SKIP__; else dumpsys activity activities || echo __FAIL__; fi; echo __END__");
+    81	            int p = out.indexOf("__POWER__"), d = out.indexOf("__DISABLED__"), a = out.indexOf("__ACTIVITY__"), e = out.indexOf("__END__");
+    82	            if (out.contains("__FAIL__") || p < 0 || d <= p || a <= d || e <= a) throw new AdbClient.AdbException(AdbClient.IO, "status");
+    83	            String power = out.substring(p, d), disabled = out.substring(d, a), activity = out.substring(a, e);
+    84	            if (!power.contains("mWakefulness=")) throw new AdbClient.AdbException(AdbClient.IO, "power");
+    85	            s.screen = power.contains("mWakefulness=Awake") ? "on" : "off";
+    86	            List<String> off = Arrays.asList(disabled.split("\\r?\\n"));
+    87	            boolean ytOff = off.contains("package:" + Quota.YT), nfOff = off.contains("package:" + Quota.NF);
+    88	            s.yt = ytOff && nfOff ? "disabled" : "enabled"; s.mixed = ytOff != nfOff;
+    89	            if (!(ytOff && nfOff)) { if (!activity.contains("mResumedActivity")) throw new AdbClient.AdbException(AdbClient.IO, "activity"); s.fg = false; s.fgPkg = null; for (String line : activity.split("\\r?\\n")) if (line.contains("mResumedActivity") && (line.contains(Quota.YT) || line.contains(Quota.NF))) { s.fg = true; s.fgPkg = line.contains(Quota.YT) ? Quota.YT : Quota.NF; } }
+    90	            s.wl = Whitelist.wlStatus(adb(CMD_WHITELIST));
+    91	        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.screen = "unknown"; s.fg = null; s.mixed = false; }
+    92	        return s;
+    93	    }
+    94	    private String setupResult = "pending";
+    95	    private String act(Quota q, Status s) {
+    96	        Quota.Action action = q.decide(s.yt, s.mixed, Boolean.TRUE.equals(s.fg), s.screen.equals("on"));
+    97	        String name = action.name().toLowerCase(Locale.US);
+    98	        if (action == Quota.Action.NONE) return name;
+    99	        if (!q.enforce) return "dry-" + name;
+   100	        try {
+   101	            if (action == Quota.Action.WARN || action == Quota.Action.END) adb("am start -n com.example.tvagent/.NoticeActivity --es kind " + (action == Quota.Action.WARN ? "warn" : "end"));
+   102	            if (action == Quota.Action.END) Thread.sleep(10000);
+   103	            if (action == Quota.Action.END || action == Quota.Action.LOCK) {
+   104	                adb("am force-stop " + Quota.YT + "; am force-stop " + Quota.NF + "; " + DISABLE);
+   105	                List<String> off = Arrays.asList(adb(LIST).split("\\r?\\n"));
+   106	                if (!off.contains("package:" + Quota.YT) || !off.contains("package:" + Quota.NF)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
+   107	                s.yt = "disabled"; s.fg = null; s.mixed = false; q.ytFg = false; q.fgPkg = "";
+   108	            } else if (action == Quota.Action.UNLOCK) {
+   109	                adb(ENABLE);
+   110	                List<String> off = Arrays.asList(adb(LIST).split("\\r?\\n"));
+   111	                if (off.contains("package:" + Quota.YT) || off.contains("package:" + Quota.NF)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
+   112	                s.yt = "enabled"; if (!s.mixed) s.fg = false; s.mixed = false; // mixed 時保持探測到的前景值
+   113	            }
+   114	        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.fg = null; s.mixed = false; }
+   115	        catch (InterruptedException ex) { Thread.currentThread().interrupt(); s.adb = "io"; s.yt = "unknown"; s.fg = null; s.mixed = false; }
+   116	        return name;
+   117	    }
+   118	    private void heartbeat(String src) {
+   119	        Quota q = load(); long wall = System.currentTimeMillis(), el = SystemClock.elapsedRealtime();
+   120	        long boot = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+   121	        long gap = q.qEl > 0 && q.bootCount == boot ? Math.max(0, (el - q.qEl) / 1000) : 0;
+   122	        boolean jump = q.qWall > 0 && Quota.clockJump(q.qWall, wall, q.qEl, el, q.bootCount, boot);
+   123	        Quota.Usage usage = new Quota.Usage(0, 0, 0, q.ytFg, q.fgPkg, q.scrOn);
+   124	        if (q.qWall > 0 && wall >= q.qWall) {
+   125	            UsageStatsManager manager = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+   126	            List<Quota.Ev> events = new ArrayList<>(); UsageEvents results = manager.queryEvents(q.qWall, wall); UsageEvents.Event event = new UsageEvents.Event();
+   127	            while (results.hasNextEvent()) { results.getNextEvent(event); events.add(new Quota.Ev(event.getTimeStamp(), event.getEventType(), event.getPackageName())); }
+   128	            usage = Quota.usage(events, q.qWall, wall, q.ytFg, q.fgPkg, q.scrOn);
+   129	        }
+   130	        Status s = status();
+   131	        long seconds = jump ? (Boolean.TRUE.equals(s.fg) && s.screen.equals("on") ? Math.max(0, (el - q.qEl) / 1000) : 0) : usage.seconds;
+   132	        long ytS = usage.ytS, nfS = usage.nfS;
+   133	        if (jump) { ytS = 0; nfS = 0; if (seconds > 0) { if (Quota.YT.equals(s.fgPkg)) ytS = seconds; else if (Quota.NF.equals(s.fgPkg)) nfS = seconds; } }
+   134	        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.US); format.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
+   135	        String today = format.format(new Date(wall));
+   136	        q.consume(seconds, today); q.usedTodayYt += ytS; q.usedTodayNf += nfS;
+   137	        q.qWall = wall; q.qEl = el; q.bootCount = boot; q.ytFg = usage.ytFg; q.fgPkg = usage.fgPkg; q.scrOn = usage.scrOn;
+   138	        if (!s.yt.equals("unknown")) { q.ytFg = Boolean.TRUE.equals(s.fg); q.fgPkg = s.fgPkg == null ? "" : s.fgPkg; q.scrOn = s.screen.equals("on"); }
+   139	        String action = act(q, s), sync = "skip";
+   140	        try {
+   141	            save(q);
+   142	            long balBefore = q.balance;
+   143	            boolean enforceBefore = q.enforce;
+   144	            sync = sync(q, s, gap, boot, el, today);
+   145	            if (sync.equals("ok")) { if (q.balance != balBefore || q.enforce != enforceBefore) action += "," + act(q, s); save(q); }
+   146	        }
+   147	        catch (Exception ex) { sync = "io"; }
+   148	        scheduleNextAlarm(this, q.nextAlarmMs(Boolean.TRUE.equals(s.fg) && s.screen.equals("on")));
+   149	        log("uptime=" + el / 1000 + " pid=" + android.os.Process.myPid() + " src=" + src + " bal=" + q.balance + " used_today=" + q.usedToday + " yt_s=" + q.usedTodayYt + " nf_s=" + q.usedTodayNf + " fg=" + s.fg + " yt=" + s.yt + " screen=" + s.screen + " act=" + action + " sync=" + sync + " adb=" + s.adb + " wl=" + s.wl + " setup=" + setupResult + (gap > 300 ? " gap=" + gap : "") + (jump ? " clock=jump" : ""));
+   150	    }
+   151	    private String sync(Quota q, Status s, long gap, long boot, long el, String today) throws Exception {
+   152	        Properties config = new Properties();
+   153	        try (FileInputStream in = new FileInputStream(new File(getFilesDir(), "config.properties"))) { config.load(in); }
+   154	        catch (FileNotFoundException e) { return "skip"; }
+   155	        String url = config.getProperty("url"), id = config.getProperty("client_id"), secret = config.getProperty("client_secret");
+   156	        if (url == null || id == null || secret == null || id.isEmpty() || secret.isEmpty()) return "config";
+   157	        JSONObject request = new JSONObject();
+   158	        request.put("v", 1); request.put("last_seq", q.lastSeq < 0 ? JSONObject.NULL : q.lastSeq); request.put("db_id", q.dbId == null ? JSONObject.NULL : q.dbId);
+   159	        request.put("balance_s", q.balance); request.put("capped", q.capped); request.put("used_today_s", q.usedToday); request.put("used_total_s", q.usedTotal);
+   160	        request.put("today", today); request.put("used_today_yt_s", q.usedTodayYt); request.put("used_today_nf_s", q.usedTodayNf);
+   161	        request.put("yt", s.yt); request.put("fg_yt", s.fg == null ? JSONObject.NULL : s.fg); request.put("screen", s.screen); request.put("adb", s.adb); request.put("enforce", q.enforce);
+   162	        request.put("boot_count", boot); request.put("uptime_s", el / 1000); request.put("gap_s", gap); request.put("wl", s.wl); request.put("app_ver", 3);
+   163	        HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
+   164	        try {
+   165	            c.setConnectTimeout(10000); c.setReadTimeout(10000); c.setRequestMethod("POST"); c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("CF-Access-Client-Id", id); c.setRequestProperty("CF-Access-Client-Secret", secret);
+   166	            try (OutputStream out = c.getOutputStream()) { out.write(request.toString().getBytes("UTF-8")); }
+   167	            int code = c.getResponseCode(); if (code != 200) return "http:" + code;
+   168	            ByteArrayOutputStream bytes = new ByteArrayOutputStream(); try (InputStream in = c.getInputStream()) { byte[] buf = new byte[4096]; int n; while ((n = in.read(buf)) != -1) { bytes.write(buf, 0, n); if (bytes.size() > 1048576) throw new IOException("response too large"); } }
+   169	            JSONObject data = new JSONObject(bytes.toString("UTF-8")); JSONArray array = data.getJSONArray("grants"); List<Quota.Grant> grants = new ArrayList<>();
+   170	            long max = data.getLong("max_seq"), cap = data.getLong("cap_s"); String db = data.getString("db_id"); boolean enforce = data.getBoolean("enforce");
+   171	            if (max < 0 || cap < 0 || db.isEmpty()) throw new IOException("response");
+   172	            for (int i = 0; i < array.length(); i++) { JSONObject g = array.getJSONObject(i); long seq = g.getLong("seq"), seconds = g.getLong("seconds"); String kind = g.getString("kind"); if (seq < 0 || seq > max || seconds < 0 || seconds > 86400 || (!kind.equals("add") && !kind.equals("set"))) throw new IOException("grant"); grants.add(new Quota.Grant(seq, kind, seconds)); }
+   173	            q.applySync(grants, max, db, cap, enforce); return "ok";
+   174	        } finally { c.disconnect(); }
+   175	    }
+   176	    private void log(String line) {
+   177	        try {
+   178	            SimpleDateFormat ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+   179	            ts.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
+   180	            line = ts.format(new Date()) + " " + line;
+   181	            if (logFile.length() > 1048576) {
+   182	                try (RandomAccessFile file = new RandomAccessFile(logFile, "rw")) { long start = file.length() - 524288; file.seek(start); file.readLine(); start = file.getFilePointer(); byte[] tail = new byte[(int)(file.length() - start)]; file.readFully(tail); file.seek(0); file.write(tail); file.setLength(tail.length); }
+   183	            }
+   184	            try (FileWriter out = new FileWriter(logFile, true)) { out.write(line + "\n"); }
+   185	        } catch (IOException ignored) { }
+   186	    }
+   187	}
+
+ succeeded in 0ms:
+     1	package com.example.tvagent;
+     2	
+     3	import java.util.*;
+     4	
+     5	final class Quota {
+     6	    static final String YT = "com.google.android.youtube.tv", NF = "com.netflix.ninja";
+     7	    static boolean ctl(String pkg) { return YT.equals(pkg) || NF.equals(pkg); }
+     8	    long balance, lastSeq = -1, usedTotal, usedToday, usedTodayYt, usedTodayNf, qWall, qEl, bootCount = -1, cap = 3600;
+     9	    String dbId, today = "", fgPkg = "";
+    10	    boolean ytFg, scrOn, warned, enforce, capped;
+    11	    static final class Ev {
+    12	        final long wallMs; final int type; final String pkg;
+    13	        Ev(long wallMs, int type, String pkg) { this.wallMs = wallMs; this.type = type; this.pkg = pkg; }
+    14	    }
+    15	    static final class Usage {
+    16	        long seconds, ytS, nfS; boolean ytFg, scrOn; String fgPkg;
+    17	        Usage(long seconds, boolean ytFg, boolean scrOn) { this(seconds, 0, 0, ytFg, "", scrOn); }
+    18	        Usage(long seconds, long ytS, long nfS, boolean ytFg, String fgPkg, boolean scrOn) {
+    19	            this.seconds = seconds; this.ytS = ytS; this.nfS = nfS; this.ytFg = ytFg;
+    20	            this.fgPkg = fgPkg == null ? "" : fgPkg; this.scrOn = scrOn;
+    21	        }
+    22	    }
+    23	    static final class Grant {
+    24	        final long seq, seconds; final String kind;
+    25	        Grant(long seq, String kind, long seconds) { this.seq = seq; this.kind = kind; this.seconds = seconds; }
+    26	    }
+    27	    static Quota load(Properties p) {
+    28	        try {
+    29	            Quota q = new Quota();
+    30	            q.balance = number(p, "balance_s"); q.usedTotal = number(p, "used_total_s"); q.usedToday = number(p, "used_today_s");
+    31	            q.qWall = number(p, "q_wall"); q.qEl = number(p, "q_el"); q.bootCount = Long.parseLong(required(p, "boot_count"));
+    32	            q.cap = number(p, "cap_s"); String seq = required(p, "last_seq"); q.lastSeq = seq.isEmpty() ? -1 : Long.parseLong(seq);
+    33	            q.dbId = required(p, "db_id"); if (q.dbId.isEmpty()) q.dbId = null;
+    34	            q.today = required(p, "today"); q.ytFg = bool(p, "yt_fg"); q.scrOn = bool(p, "scr_on");
+    35	            q.usedTodayYt = optNumber(p, "used_today_yt_s"); q.usedTodayNf = optNumber(p, "used_today_nf_s");
+    36	            String fp = p.getProperty("fg_pkg"); q.fgPkg = (YT.equals(fp) || NF.equals(fp)) ? fp : "";
+    37	            q.warned = bool(p, "warned"); q.enforce = bool(p, "enforce"); q.capped = bool(p, "capped");
+    38	            if (q.lastSeq < -1 || q.bootCount < -1 || q.balance > 86400) throw new IllegalArgumentException();
+    39	            return q;
+    40	        } catch (RuntimeException e) { return new Quota(); }
+    41	    }
+    42	    private static String required(Properties p, String k) { String v = p.getProperty(k); if (v == null) throw new IllegalArgumentException(); return v; }
+    43	    private static long number(Properties p, String k) { long n = Long.parseLong(required(p, k)); if (n < 0) throw new IllegalArgumentException(); return n; }
+    44	    private static boolean bool(Properties p, String k) { String v = required(p, k); if (!v.equals("true") && !v.equals("false")) throw new IllegalArgumentException(); return Boolean.parseBoolean(v); }
+    45	    // WO-U1：三個新鍵寬鬆讀取（缺少或格式錯→預設值，絕不丟例外）
+    46	    private static long optNumber(Properties p, String k) {
+    47	        try { String v = p.getProperty(k); if (v == null) return 0; long n = Long.parseLong(v); return n < 0 ? 0 : n; }
+    48	        catch (RuntimeException e) { return 0; }
+    49	    }
+    50	    Properties save() {
+    51	        Properties p = new Properties();
+    52	        p.setProperty("balance_s", "" + balance); p.setProperty("last_seq", lastSeq < 0 ? "" : "" + lastSeq);
+    53	        p.setProperty("db_id", dbId == null ? "" : dbId); p.setProperty("used_total_s", "" + usedTotal); p.setProperty("today", today);
+    54	        p.setProperty("used_today_s", "" + usedToday); p.setProperty("used_today_yt_s", "" + usedTodayYt); p.setProperty("used_today_nf_s", "" + usedTodayNf);
+    55	        p.setProperty("fg_pkg", fgPkg == null ? "" : fgPkg); p.setProperty("q_wall", "" + qWall); p.setProperty("q_el", "" + qEl);
+    56	        p.setProperty("boot_count", "" + bootCount); p.setProperty("yt_fg", "" + ytFg); p.setProperty("scr_on", "" + scrOn);
+    57	        p.setProperty("warned", "" + warned); p.setProperty("enforce", "" + enforce); p.setProperty("cap_s", "" + cap); p.setProperty("capped", "" + capped);
+    58	        return p;
+    59	    }
+    60	    static Usage usage(List<Ev> events, long from, long to, boolean fg, boolean screen) {
+    61	        return usage(events, from, to, fg, "", screen);
+    62	    }
+    63	    static Usage usage(List<Ev> events, long from, long to, boolean fg, String fgPkg, boolean screen) {
+    64	        List<Ev> sorted = new ArrayList<>(events); Collections.sort(sorted, new Comparator<Ev>() { public int compare(Ev a, Ev b) { return Long.compare(a.wallMs, b.wallMs); } });
+    65	        long cursor = from, total = 0, yt = 0, nf = 0;
+    66	        String pkg = fgPkg == null ? "" : fgPkg;
+    67	        for (Ev e : sorted) {
+    68	            if (e.wallMs < from || e.wallMs > to) continue;
+    69	            if (fg && screen) { long d = e.wallMs - cursor; total += d; if (YT.equals(pkg)) yt += d; else if (NF.equals(pkg)) nf += d; }
+    70	            cursor = e.wallMs;
+    71	            switch (e.type) {
+    72	                case 1: if (ctl(e.pkg)) { fg = true; pkg = e.pkg; } else { fg = false; pkg = ""; } break;
+    73	                case 2: if (ctl(e.pkg)) { fg = false; pkg = ""; } break; // STOPPED(23) 會晚於新 App 的 RESUMED，不處理
+    74	                case 15: screen = true; break;
+    75	                case 16: screen = false; break;
+    76	                case 26: fg = false; screen = false; pkg = ""; break;
+    77	                case 27: fg = false; screen = true; pkg = ""; break;
+    78	            }
+    79	        }
+    80	        if (fg && screen && to > cursor) { long d = to - cursor; total += d; if (YT.equals(pkg)) yt += d; else if (NF.equals(pkg)) nf += d; }
+    81	        return new Usage(total / 1000, yt / 1000, nf / 1000, fg, pkg, screen);
+    82	    }
+    83	    static boolean clockJump(long oldWall, long wall, long oldEl, long el, long oldBoot, long boot) {
+    84	        return oldBoot >= 0 && oldBoot == boot && Math.abs((wall - oldWall) - (el - oldEl)) > 60000;
+    85	    }
+    86	    void consume(long seconds, String date) {
+    87	        if (!today.equals(date)) { today = date; usedToday = 0; usedTodayYt = 0; usedTodayNf = 0; }
+    88	        long n = Math.min(balance, Math.max(0, seconds)); balance -= n; usedTotal += n; usedToday += n;
+    89	    }
+    90	    void applySync(List<Grant> grants, long maxSeq, String id, long capS, boolean enforceValue) {
+    91	        cap = capS; enforce = enforceValue; capped = false;
+    92	        List<Grant> sorted = new ArrayList<>(grants); Collections.sort(sorted, new Comparator<Grant>() { public int compare(Grant a, Grant b) { return Long.compare(a.seq, b.seq); } });
+    93	        boolean changedDb = !Objects.equals(dbId, id);
+    94	        for (Grant g : sorted) {
+    95	            if (!changedDb && g.seq <= lastSeq) continue;
+    96	            if (g.kind.equals("set")) balance = g.seconds;
+    97	            else if (g.kind.equals("add")) { long sum = balance + g.seconds; if (sum > cap) capped = true; balance = Math.max(balance, Math.min(sum, cap)); }
+    98	            lastSeq = g.seq;
+    99	        }
+   100	        if (changedDb) { lastSeq = maxSeq; dbId = id; }
+   101	    }
+   102	    enum Action { NONE, LOCK, UNLOCK, WARN, END }
+   103	    Action decide(String yt, boolean fg, boolean screen) { return decide(yt, false, fg, screen); }
+   104	    // mixed：兩個受控套件只停用一個（yt 此時回報 enabled）
+   105	    Action decide(String yt, boolean mixed, boolean fg, boolean screen) {
+   106	        if (balance > 300) warned = false;
+   107	        if (yt.equals("unknown")) return Action.NONE;
+   108	        if (balance > 0 && (yt.equals("disabled") || mixed)) return Action.UNLOCK;
+   109	        if (balance == 0 && (yt.equals("enabled") || mixed)) return fg && screen ? Action.END : Action.LOCK;
+   110	        if (balance > 0 && balance <= 300 && fg && screen && !warned) { warned = true; return Action.WARN; }
+   111	        return Action.NONE;
+   112	    }
+   113	    long nextAlarmMs(boolean fgAndScreen) {
+   114	        if (!fgAndScreen || balance == 0) return 60000; // 0 額度：END／LOCK 這一跳已試過（影子模式只 dry-end），不必每 5 秒重試
+   115	        if (balance < 60) return Math.max(balance, 5) * 1000;
+   116	        if (balance > 300) return Math.max(5, Math.min(60, balance - 300)) * 1000;
+   117	        return 60000;
+   118	    }
+   119	}
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+mcp: mem/get_profile started
+hook: PermissionRequest
+hook: PermissionRequest Completed
+mcp: mem/get_profile (failed)
+MCP tool call requires approval, but approval policy is never
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat -n cfquota/schema.sql' in /Users/example-owner/TV
+ succeeded in 0ms:
+     1	CREATE TABLE IF NOT EXISTS grants(seq INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL CHECK(kind IN ('add','set')), seconds INTEGER NOT NULL CHECK(seconds BETWEEN 0 AND 86400), by TEXT NOT NULL, req_id TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
+     2	CREATE TABLE IF NOT EXISTS tv(id INTEGER PRIMARY KEY CHECK(id=1), last_seen INTEGER NOT NULL, report TEXT NOT NULL, acked_seq INTEGER, adb_bad INTEGER NOT NULL DEFAULT 0);
+     3	CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
+     4	INSERT OR IGNORE INTO meta VALUES ('db_id', lower(hex(randomblob(16)))), ('cap_s','3600'), ('enforce','false');
+     5	CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, who TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT);
+     6	CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
+     7	CREATE TABLE IF NOT EXISTS usage_daily(date TEXT NOT NULL, app TEXT NOT NULL CHECK(app IN ('youtube','netflix')), seconds INTEGER NOT NULL CHECK(seconds>=0), PRIMARY KEY(date,app));
+
+exec
+/bin/zsh -lc "sed -n '1,180p' cfquota/lib.test.mjs | cat -n" in /Users/example-owner/TV
+hook: PostToolUse
+ succeeded in 0ms:
+     1	import { test } from 'node:test';
+     2	import assert from 'node:assert/strict';
+     3	import { DatabaseSync } from 'node:sqlite';
+     4	import { readFileSync } from 'node:fs';
+     5	import { handle, eventText } from './lib.mjs';
+     6	
+     7	const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+     8	const keys = await Promise.all([1,2,3].map(async n => {
+     9	  const pair = await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'}, true, ['sign','verify']);
+    10	  return { ...pair, jwk:{...await crypto.subtle.exportKey('jwk', pair.publicKey),kid:`key${n}`} };
+    11	}));
+    12	const enc = v => Buffer.from(typeof v === 'string' ? v : JSON.stringify(v)).toString('base64url');
+    13	let serial = 0;
+    14	function setup() {
+    15	  const sql = new DatabaseSync(':memory:'); sql.exec(schema);
+    16	  const DB = { prepare(query) { return { bind(...args) { const s=sql.prepare(query); return { async run(){return s.run(...args)}, async first(){return s.get(...args) ?? null}, async all(){return {results:s.all(...args)}} }; } }; }, async batch(stmts) { sql.exec('BEGIN'); try { const results=[]; for(const s of stmts) results.push(await s.run()); sql.exec('COMMIT'); return results; } catch(e) { sql.exec('ROLLBACK'); throw e; } } };
+    17	  let now=1800000000000, available=[keys[0].jwk], calls=0;
+    18	  const env={DB,ACCESS_TEAM:`test${++serial}`,ACCESS_AUD:'audience',PARENTS:JSON.stringify({'parent@example.test':'爸爸'}),TV_CLIENT_ID:'tv-client',OFFLINE_MIN:'30'};
+    19	  globalThis.fetch=async url=>{ assert.equal(url,`https://${env.ACCESS_TEAM}.cloudflareaccess.com/cdn-cgi/access/certs`); calls++; return Response.json({keys:available}); };
+    20	  async function token(role='parent', options={}) {
+    21	    const key=options.key ?? keys[0], header={alg:options.alg ?? 'RS256',kid:options.kid ?? key.jwk.kid};
+    22	    const claims={iss:`https://${env.ACCESS_TEAM}.cloudflareaccess.com`,aud:'audience',exp:Math.floor(now/1000)+3600,...(role==='parent'?{email:'parent@example.test'}:role==='tv'?{common_name:'tv-client'}:{email:'other@example.test'}),...options.claims};
+    23	    const input=enc(header)+'.'+enc(claims), signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key.privateKey,new TextEncoder().encode(input));
+    24	    return input+'.'+Buffer.from(signature).toString('base64url');
+    25	  }
+    26	  async function call(path, {method='GET',role='parent',jwt,body,origin='https://tv-demo.example.net'}={}) {
+    27	    const headers={}; if(jwt !== null) headers['Cf-Access-Jwt-Assertion']=jwt ?? await token(role); if(origin !== null) headers.Origin=origin;
+    28	    return handle(new Request(`https://tv-demo.example.net${path}`,{method,headers,...(body !== undefined?{body:typeof body==='string'?body:JSON.stringify(body)}:{})}),env,now);
+    29	  }
+    30	  return {sql,env,token,call,get calls(){return calls},set available(v){available=v},advance(ms){now+=ms},get now(){return now}};
+    31	}
+    32	const report = overrides => ({v:1,last_seq:0,db_id:null,balance_s:0,capped:false,used_today_s:0,used_total_s:0,yt:'enabled',fg_yt:true,screen:'on',adb:'ok',enforce:false,boot_count:1,uptime_s:100,gap_s:0,wl:'keep',app_ver:2,...overrides});
+    33	const sync = (c, r) => c.call('/tv/api/sync',{method:'POST',role:'tv',body:r});
+    34	const grant = (c, body) => c.call('/tv/api/grant',{method:'POST',body});
+    35	const state = async c => (await c.call('/tv/api/state')).json();
+    36	
+    37	test('1 驗證、憑證快取與身分', async () => {
+    38	  const c=setup();
+    39	  assert.equal((await c.call('/tv/',{jwt:null})).status,401);
+    40	  for(const options of [{key:keys[1],kid:'key1'},{alg:'HS256'},{claims:{aud:'wrong'}},{claims:{iss:'wrong'}},{claims:{exp:1}}]) assert.equal((await c.call('/tv/',{jwt:await c.token('parent',options)})).status,401);
+    41	  assert.equal((await c.call('/tv/')).status,200); assert.equal((await c.call('/tv/')).status,200); assert.equal(c.calls,1);
+    42	  c.available=[keys[0].jwk,keys[1].jwk]; assert.equal((await c.call('/tv/',{jwt:await c.token('parent',{key:keys[1]})})).status,200); assert.equal(c.calls,2);
+    43	  assert.equal((await c.call('/tv/',{jwt:await c.token('parent',{key:keys[2]})})).status,401); assert.equal(c.calls,2);
+    44	  c.advance(60000); assert.equal((await c.call('/tv/',{jwt:await c.token('parent',{key:keys[2]})})).status,401); assert.equal(c.calls,3);
+    45	  assert.equal((await c.call('/tv/api/sync',{method:'POST',role:'parent'})).status,403);
+    46	  assert.equal((await c.call('/tv/api/state',{role:'tv'})).status,403); assert.equal((await c.call('/tv/',{role:'other'})).status,403);
+    47	  for(const p of ['/','/foo','/tvx']) assert.equal((await c.call(p,{jwt:null})).status,404);
+    48	});
+    49	
+    50	test('2 加值、冪等、驗證與上限', async () => {
+    51	  const c=setup(), body={kind:'add',minutes:30,req_id:'a'};
+    52	  assert.equal((await (await grant(c,body)).json()).seq,1);
+    53	  assert.deepEqual({...c.sql.prepare('SELECT seconds,by FROM grants').get()},{seconds:1800,by:'爸爸'});
+    54	  assert.equal((await (await grant(c,body)).json()).seq,1); assert.equal(c.sql.prepare('SELECT count(*) n FROM grants').get().n,1);
+    55	  for(const bad of [{kind:'add',minutes:7,req_id:'b'},'{',{kind:'add',minutes:15}]) assert.equal((await grant(c,bad)).status,400);
+    56	  for(const origin of [null,'https://evil.test']) assert.equal((await c.call('/tv/api/grant',{method:'POST',origin,body})).status,403);
+    57	  await grant(c,{kind:'zero',req_id:'zero'}); assert.deepEqual({...c.sql.prepare('SELECT kind,seconds FROM grants WHERE req_id=?').get('zero')},{kind:'set',seconds:0});
+    58	  await sync(c,report({balance_s:3000,last_seq:2})); assert.equal((await (await grant(c,{kind:'add',minutes:15,req_id:'c'})).json()).would_cap,true);
+    59	});
+    60	
+    61	test('電視同步不需要 Origin', async () => {
+    62	  const c=setup();
+    63	  assert.equal((await c.call('/tv/api/sync',{method:'POST',role:'tv',origin:null,body:report()})).status,200);
+    64	});
+    65	
+    66	test('3 同步、重新安裝、資料庫重建與輸入驗證', async () => {
+    67	  const c=setup(); await grant(c,{kind:'add',minutes:15,req_id:'a'}); await grant(c,{kind:'add',minutes:30,req_id:'b'});
+    68	  assert.deepEqual((await (await sync(c,report({last_seq:null}))).json()).grants,[]);
+    69	  let result=await (await sync(c,report())).json(); assert.deepEqual(result.grants.map(x=>x.seq),[1,2]); assert.equal(result.cap_s,3600); assert.equal(result.enforce,false); assert.ok(result.db_id);
+    70	  result=await (await sync(c,report({last_seq:1,db_id:result.db_id}))).json(); assert.deepEqual(result.grants.map(x=>x.seq),[2]); assert.deepEqual((await state(c)).pending.map(x=>x.seq),[2]);
+    71	  await sync(c,report({last_seq:0})); assert.equal(c.sql.prepare('SELECT acked_seq FROM tv').get().acked_seq,1);
+    72	  await sync(c,report({last_seq:2})); await grant(c,{kind:'add',minutes:60,req_id:'c'}); result=await (await sync(c,report({last_seq:null}))).json(); assert.deepEqual(result.grants.map(x=>x.seq),[3]); assert.equal(c.sql.prepare("SELECT count(*) n FROM events WHERE kind='reinstall'").get().n,1);
+    73	  result=await (await sync(c,report({db_id:'wrong'}))).json(); assert.deepEqual(result.grants,[]); assert.equal(c.sql.prepare("SELECT count(*) n FROM events WHERE kind='db-reset'").get().n,1);
+    74	  c.sql.exec("UPDATE meta SET v='7200' WHERE k='cap_s'; UPDATE meta SET v='true' WHERE k='enforce'"); result=await (await sync(c,report())).json(); assert.equal(result.cap_s,7200); assert.equal(result.enforce,true);
+    75	  const before=JSON.stringify(c.sql.prepare('SELECT * FROM tv').get());
+    76	  for(const bad of [{...report(),v:undefined},report({fg_yt:'yes'}),report({used_total_s:-1}),report({balance_s:86401}),report({adb:'a'.repeat(65)})]) { assert.equal((await sync(c,bad)).status,400); assert.equal(JSON.stringify(c.sql.prepare('SELECT * FROM tv').get()),before); }
+    77	});
+    78	
+    79	test('4 異常、事件與恢復', async () => {
+    80	  const c=setup(); await sync(c,report()); c.advance(31*60000);
+    81	  assert.ok((await state(c)).alerts.some(a=>a.level==='red' && a.text.includes('31')));
+    82	  c.sql.prepare('UPDATE tv SET report=?').run(JSON.stringify(report({screen:'off'})));
+    83	  let alerts=(await state(c)).alerts; assert.ok(alerts.some(a=>a.level==='yellow' && a.text.includes('31'))); assert.ok(!alerts.some(a=>a.level==='red')); assert.ok(alerts.some(a=>a.text.includes('影子模式')));
+    84	  await sync(c,report()); assert.ok(!(await state(c)).alerts.some(a=>a.level==='red')); assert.match(c.sql.prepare("SELECT detail FROM events WHERE kind='online'").get().detail,/31/);
+    85	  for(let i=0;i<4;i++) await sync(c,report({adb:'io'})); assert.ok((await state(c)).alerts.some(a=>a.level==='red' && a.text.includes('adb'))); assert.equal(c.sql.prepare("SELECT count(*) n FROM events WHERE kind='adb-bad'").get().n,1);
+    86	  await sync(c,report({yt:'disabled',gap_s:400})); await sync(c,report({yt:'enabled'})); alerts=(await state(c)).alerts; assert.ok(!alerts.some(a=>a.level==='red'));
+    87	  for(const kind of ['adb-ok','lock','unlock','gap']) assert.equal(c.sql.prepare('SELECT count(*) n FROM events WHERE kind=?').get(kind).n,1);
+    88	});
+    89	
+    90	test('5 家長頁', async () => {
+    91	  const c=setup(), res=await c.call('/tv/'), html=await res.text(); assert.equal(res.status,200); assert.match(res.headers.get('content-type'),/text\/html/); assert.equal(res.headers.get('cache-control'),'no-store');
+    92	  for(const word of ['+15','+30','+60','歸零']) assert.ok(html.includes(word)); assert.ok(!html.includes(c.env.TV_CLIENT_ID));
+    93	});
+    94	
+    95	test('U2-① 舊回報（無新欄位）sync 照舊 200 且不寫 usage_daily', async () => {
+    96	  const c = setup();
+    97	  await grant(c, { kind: 'add', minutes: 15, req_id: 'u2old' });
+    98	  const res = await sync(c, report());
+    99	  assert.equal(res.status, 200);
+   100	  assert.deepEqual((await res.json()).grants.map(x => x.seq), [1]);
+   101	  assert.equal(c.sql.prepare('SELECT count(*) n FROM usage_daily').get().n, 0);
+   102	});
+   103	
+   104	test('U2-①b usage_daily 不存在時新回報 sync 仍 200 且 grants 正常', async () => {
+   105	  const c = setup();
+   106	  await grant(c, { kind: 'add', minutes: 30, req_id: 'u2new' });
+   107	  c.sql.exec('DROP TABLE usage_daily');
+   108	  let logged = '';
+   109	  const orig = console.error; console.error = (...a) => { logged += a.join(' '); };
+   110	  try {
+   111	    const res = await sync(c, report({ today: '2028-01-15', used_today_yt_s: 60, used_today_nf_s: 30 }));
+   112	    assert.equal(res.status, 200);
+   113	    assert.deepEqual((await res.json()).grants.map(x => x.seq), [1]);
+   114	    assert.deepEqual((await state(c)).usage.today, { youtube_s: 0, netflix_s: 0 });
+   115	  } finally { console.error = orig; }
+   116	  assert.match(logged, /usage_daily/);
+   117	});
+   118	
+   119	test('U2-② 新回報 upsert：較小秒數不覆蓋較大者', async () => {
+   120	  const c = setup();
+   121	  const sec = Math.floor(c.now / 1000);
+   122	  const today = new Date((sec + 8 * 3600) * 1000).toISOString().slice(0, 10);
+   123	  assert.equal((await sync(c, report({ today, used_today_yt_s: 300, used_today_nf_s: 50 }))).status, 200);
+   124	  assert.equal((await sync(c, report({ today, used_today_yt_s: 100, used_today_nf_s: 200 }))).status, 200);
+   125	  const seconds = app => c.sql.prepare('SELECT seconds FROM usage_daily WHERE date=? AND app=?').get(today, app).seconds;
+   126	  assert.equal(seconds('youtube'), 300);
+   127	  assert.equal(seconds('netflix'), 200);
+   128	});
+   129	
+   130	test('U2-③ 只給部分新欄位 → 400', async () => {
+   131	  const c = setup();
+   132	  const full = { today: '2028-01-15', used_today_yt_s: 60, used_today_nf_s: 30 };
+   133	  const bads = [
+   134	    { today: full.today },
+   135	    { today: full.today, used_today_yt_s: 60 },
+   136	    { used_today_yt_s: 60, used_today_nf_s: 30 },
+   137	    { ...full, today: '15/01/2028' },
+   138	    { ...full, today: '2028-1-5' },
+   139	    { ...full, used_today_yt_s: 86401 },
+   140	    { ...full, used_today_nf_s: -1 },
+   141	    { ...full, used_today_yt_s: 1.5 },
+   142	    { ...full, used_today_yt_s: '60' },
+   143	  ];
+   144	  for (const b of bads) assert.equal((await sync(c, report(b))).status, 400, JSON.stringify(b));
+   145	  assert.equal((await sync(c, report(full))).status, 200);
+   146	});
+   147	
+   148	test('U2-④ state usage today/week/month 跨週跨月加總', async () => {
+   149	  const c = setup();
+   150	  const sec = Math.floor(c.now / 1000);
+   151	  const today = new Date((sec + 8 * 3600) * 1000).toISOString().slice(0, 10);
+   152	  const add = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+   153	  const sinceMonday = (new Date((sec + 8 * 3600) * 1000).getUTCDay() + 6) % 7;
+   154	  const weekStart = add(today, -sinceMonday), monthStart = today.slice(0, 8) + '01';
+   155	  const plan = new Map();
+   156	  plan.set(add(today, -8), [120, 120]);
+   157	  plan.set(add(monthStart, -1), [6000, 6000]);
+   158	  plan.set(add(today, -1), [60, 30]);
+   159	  if (!plan.has(monthStart) && monthStart !== today) plan.set(monthStart, [30, 30]);
+   160	  const inserted = [];
+   161	  for (const [date, [yt, nf]] of plan) {
+   162	    c.sql.prepare(`INSERT INTO usage_daily(date,app,seconds) VALUES(?,'youtube',?)`).run(date, yt);
+   163	    c.sql.prepare(`INSERT INTO usage_daily(date,app,seconds) VALUES(?,'netflix',?)`).run(date, nf);
+   164	    inserted.push({ date, youtube_s: yt, netflix_s: nf });
+   165	  }
+   166	  assert.equal((await sync(c, report({ today, used_today_yt_s: 600, used_today_nf_s: 300 }))).status, 200);
+   167	  inserted.push({ date: today, youtube_s: 600, netflix_s: 300 });
+   168	  const u = (await state(c)).usage;
+   169	  assert.deepEqual(u.today, { youtube_s: 600, netflix_s: 300 });
+   170	  const inRange = (d, from) => d >= from && d <= today;
+   171	  const sum = from => inserted.filter(r => inRange(r.date, from))
+   172	    .reduce((a, r) => ({ youtube_s: a.youtube_s + r.youtube_s, netflix_s: a.netflix_s + r.netflix_s }), { youtube_s: 0, netflix_s: 0 });
+   173	  assert.deepEqual(u.week, sum(weekStart));
+   174	  assert.deepEqual(u.month, sum(monthStart));
+   175	  assert.deepEqual(u.days, inserted.filter(r => inRange(r.date, monthStart)).sort((a, b) => (a.date < b.date ? 1 : -1)));
+   176	  assert.ok(u.week.youtube_s >= 600 && u.week.netflix_s >= 300);
+   177	  assert.ok(u.month.youtube_s >= 600 && u.month.netflix_s >= 300);
+   178	  assert.ok(!u.days.some(d => d.date === add(monthStart, -1)));
+   179	});
+   180	
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+FRIDAY 記憶工具因目前的核准政策無法讀取；我會繼續依指定檔案審查。接下來重點核對計畫中的扣額公式與實際心跳、同步順序。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat -n cfquota/lib.mjs' in /Users/example-owner/TV
+exec
+/bin/zsh -lc 'cat -n tvagent/test/QuotaTest.java' in /Users/example-owner/TV
+exec
+/bin/zsh -lc 'cat -n tvagent/src/com/example/tvagent/AgentService.java' in /Users/example-owner/TV
+ succeeded in 0ms:
+     1	const certCache = new Map();
+     2	const decode = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+     3	const jsonPart = s => JSON.parse(new TextDecoder().decode(decode(s)));
+     4	
+     5	async function identity(req, env, now) {
+     6	  try {
+     7	    const [h, p, s, ...extra] = (req.headers.get('Cf-Access-Jwt-Assertion') || '').split('.');
+     8	    if (!h || !p || !s || extra.length) return null;
+     9	    const header = jsonPart(h), claims = jsonPart(p);
+    10	    if (header.alg !== 'RS256' || typeof header.kid !== 'string') return null;
+    11	    const issuer = `https://${env.ACCESS_TEAM}.cloudflareaccess.com`;
+    12	    if (claims.iss !== issuer || !Number.isFinite(claims.exp) || claims.exp <= now / 1000 || !(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(env.ACCESS_AUD)) return null;
+    13	    let cache = certCache.get(issuer);
+    14	    if (!cache || now - cache.at >= 3600000) {
+    15	      const response = await fetch(`${issuer}/cdn-cgi/access/certs`);
+    16	      if (!response.ok) return null;
+    17	      cache = { keys: (await response.json()).keys, at: now, unknownAt: -Infinity };
+    18	      certCache.set(issuer, cache);
+    19	    }
+    20	    let jwk = cache.keys.find(k => k.kid === header.kid);
+    21	    if (!jwk && now - cache.unknownAt >= 60000) {
+    22	      cache.unknownAt = now;
+    23	      const response = await fetch(`${issuer}/cdn-cgi/access/certs`);
+    24	      if (!response.ok) return null;
+    25	      cache.keys = (await response.json()).keys;
+    26	      cache.at = now;
+    27	      jwk = cache.keys.find(k => k.kid === header.kid);
+    28	    }
+    29	    if (!jwk) return null;
+    30	    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    31	    if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(s), new TextEncoder().encode(`${h}.${p}`))) return null;
+    32	    const parents = JSON.parse(env.PARENTS);
+    33	    if (typeof claims.email === 'string' && Object.hasOwn(parents, claims.email)) return { role: 'parent', name: parents[claims.email] };
+    34	    if (typeof claims.common_name === 'string' && claims.common_name === env.TV_CLIENT_ID) return { role: 'tv', name: '電視' };
+    35	    return { role: 'other' };
+    36	  } catch { return null; }
+    37	}
+    38	
+    39	const response = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+    40	const error = status => response({ error: status }, status);
+    41	const stmt = (db, sql, ...args) => db.prepare(sql).bind(...args);
+    42	const all = async (db, sql, ...args) => (await stmt(db, sql, ...args).all()).results;
+    43	const first = (db, sql, ...args) => stmt(db, sql, ...args).first();
+    44	const event = (db, ts, who, kind, detail = null) => stmt(db, 'INSERT INTO events(ts,who,kind,detail) VALUES(?,?,?,?)', ts, who, kind, detail);
+    45	const integer = n => Number.isSafeInteger(n) && n >= 0;
+    46	const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    47	function validUsageFields(r) {
+    48	  const keys = ['today', 'used_today_yt_s', 'used_today_nf_s'].filter(k => r[k] !== undefined);
+    49	  if (!keys.length) return true;
+    50	  if (keys.length !== 3) return false;
+    51	  if (typeof r.today !== 'string' || !DATE_RE.test(r.today)) return false;
+    52	  return ['used_today_yt_s', 'used_today_nf_s'].every(k => integer(r[k]) && r[k] <= 86400);
+    53	}
+    54	function validReport(r) {
+    55	  return r && typeof r === 'object' && !Array.isArray(r) && r.v === 1 &&
+    56	    (r.last_seq === null || integer(r.last_seq)) && (r.db_id === null || typeof r.db_id === 'string') &&
+    57	    integer(r.balance_s) && r.balance_s <= 86400 && typeof r.capped === 'boolean' &&
+    58	    integer(r.used_today_s) && integer(r.used_total_s) && ['enabled','disabled','unknown'].includes(r.yt) &&
+    59	    (r.fg_yt === null || typeof r.fg_yt === 'boolean') && ['on','off','unknown'].includes(r.screen) &&
+    60	    typeof r.adb === 'string' && r.adb.length <= 64 && typeof r.enforce === 'boolean' &&
+    61	    integer(r.boot_count) && integer(r.uptime_s) && integer(r.gap_s) &&
+    62	    typeof r.wl === 'string' && r.wl.length <= 64 && integer(r.app_ver) && validUsageFields(r);
+    63	}
+    64	async function meta(db) {
+    65	  return Object.fromEntries((await all(db, 'SELECT k,v FROM meta')).map(x => [x.k, x.v]));
+    66	}
+    67	async function sync(db, r, now, offline) {
+    68	  const m = await meta(db), old = await first(db, 'SELECT * FROM tv WHERE id=1');
+    69	  const prev = old && JSON.parse(old.report), ack = old?.acked_seq ?? 0;
+    70	  const max = (await first(db, 'SELECT COALESCE(MAX(seq),0) AS n FROM grants')).n;
+    71	  const reset = r.db_id !== null && r.db_id !== m.db_id;
+    72	  const grants = reset || (r.last_seq === null && !old) ? [] : await all(db, 'SELECT seq,kind,seconds FROM grants WHERE seq>? ORDER BY seq', r.last_seq === null ? ack : r.last_seq);
+    73	  const actions = [];
+    74	  if (reset) actions.push(event(db, now, '電視', 'db-reset'));
+    75	  else if (r.last_seq === null && old) actions.push(event(db, now, '電視', 'reinstall'));
+    76	  if (r.last_seq !== null && r.last_seq > ack) actions.push(event(db, now, '電視', 'received', String(r.last_seq)));
+    77	  if (prev && r.yt !== prev.yt && (r.yt === 'disabled' || r.yt === 'enabled')) actions.push(event(db, now, '電視', r.yt === 'disabled' ? 'lock' : 'unlock'));
+    78	  if (old && now - old.last_seen >= offline * 60) actions.push(event(db, now, '電視', 'online', `中斷 ${Math.floor((now - old.last_seen) / 60)} 分`));
+    79	  if (r.gap_s > 300) actions.push(event(db, now, '電視', 'gap', String(r.gap_s)));
+    80	  if (r.adb !== 'ok' && (old?.adb_bad ?? 0) === 2) actions.push(event(db, now, '電視', 'adb-bad', r.adb));
+    81	  if (r.adb === 'ok' && (old?.adb_bad ?? 0) >= 3) actions.push(event(db, now, '電視', 'adb-ok'));
+    82	  actions.push(stmt(db, `INSERT INTO tv(id,last_seen,report,acked_seq,adb_bad) VALUES(1,?,?,?,CASE WHEN ?='ok' THEN 0 ELSE 1 END)
+    83	    ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen, report=excluded.report,
+    84	    acked_seq=MAX(COALESCE(tv.acked_seq,0),COALESCE(excluded.acked_seq,0)), adb_bad=CASE WHEN ?='ok' THEN 0 ELSE tv.adb_bad+1 END`, now, JSON.stringify(r), r.last_seq, r.adb, r.adb));
+    85	  actions.push(stmt(db, 'DELETE FROM events WHERE ts < ?', now - 90 * 86400));
+    86	  await db.batch(actions);
+    87	  if (r.today !== undefined) {
+    88	    try {
+    89	      await db.batch([
+    90	        stmt(db, `INSERT INTO usage_daily(date,app,seconds) VALUES(?,?,?) ON CONFLICT(date,app) DO UPDATE SET seconds=MAX(seconds,excluded.seconds)`, r.today, 'youtube', r.used_today_yt_s),
+    91	        stmt(db, `INSERT INTO usage_daily(date,app,seconds) VALUES(?,?,?) ON CONFLICT(date,app) DO UPDATE SET seconds=MAX(seconds,excluded.seconds)`, r.today, 'netflix', r.used_today_nf_s),
+    92	      ]);
+    93	    } catch (e) { console.error('usage_daily upsert failed', e); }
+    94	  }
+    95	  return { grants, max_seq: max, db_id: m.db_id, cap_s: Number(m.cap_s), enforce: m.enforce === 'true' };
+    96	}
+    97	export function eventText(kind, detail = null) {
+    98	  if (kind && typeof kind === 'object' && !Array.isArray(kind)) { detail = kind.detail ?? null; kind = kind.kind; }
+    99	  const mins = s => Math.floor(Number(s) / 60);
+   100	  switch (kind) {
+   101	    case 'grant': { const n = mins(detail); return Number.isFinite(n) ? `加 ${n} 分` : '加值'; }
+   102	    case 'zero': return '歸零';
+   103	    case 'received': return '電視收到加值';
+   104	    case 'lock': return '已鎖 YouTube／Netflix';
+   105	    case 'unlock': return '已開放 YouTube／Netflix';
+   106	    case 'online': return detail == null || detail === '' ? '恢復連線' : `恢復連線（${detail}）`;
+   107	    case 'gap': { const n = mins(detail); return Number.isFinite(n) ? `回報中斷 ${n} 分` : '回報中斷'; }
+   108	    case 'adb-bad': return detail == null || detail === '' ? '無法控制' : `無法控制（${detail}）`;
+   109	    case 'adb-ok': return '恢復控制';
+   110	    case 'reinstall': return '電視 App 重新安裝';
+   111	    case 'db-reset': return '資料庫重建';
+   112	    default: return detail == null || detail === '' ? String(kind) : `${kind} ${detail}`;
+   113	  }
+   114	}
+   115	const taipeiToday = seconds => new Date((seconds + 8 * 3600) * 1000).toISOString().slice(0, 10);
+   116	const addDays = (date, n) => new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+   117	const emptyUsage = () => ({ today: { youtube_s: 0, netflix_s: 0 }, week: { youtube_s: 0, netflix_s: 0 }, month: { youtube_s: 0, netflix_s: 0 }, days: [] });
+   118	async function usage(db, seconds) {
+   119	  try {
+   120	    const today = taipeiToday(seconds);
+   121	    const sinceMonday = (new Date((seconds + 8 * 3600) * 1000).getUTCDay() + 6) % 7;
+   122	    const weekStart = addDays(today, -sinceMonday), monthStart = today.slice(0, 8) + '01';
+   123	    const queryStart = weekStart < monthStart ? weekStart : monthStart;
+   124	    const rows = await all(db, 'SELECT date,app,seconds FROM usage_daily WHERE date>=? AND date<=?', queryStart, today);
+   125	    const byDate = new Map();
+   126	    for (const r of rows) {
+   127	      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, youtube_s: 0, netflix_s: 0 });
+   128	      const d = byDate.get(r.date);
+   129	      if (r.app === 'youtube') d.youtube_s = r.seconds; else if (r.app === 'netflix') d.netflix_s = r.seconds;
+   130	    }
+   131	    const days = [...byDate.values()].filter(d => d.date >= monthStart).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+   132	    const sum = from => { let youtube_s = 0, netflix_s = 0; for (const d of byDate.values()) if (d.date >= from && d.date <= today) { youtube_s += d.youtube_s; netflix_s += d.netflix_s; } return { youtube_s, netflix_s }; };
+   133	    const at = date => { const d = byDate.get(date); return d ? { youtube_s: d.youtube_s, netflix_s: d.netflix_s } : { youtube_s: 0, netflix_s: 0 }; };
+   134	    return { today: at(today), week: sum(weekStart), month: sum(monthStart), days };
+   135	  } catch { return emptyUsage(); }
+   136	}
+   137	async function state(db, name, now, offline) {
+   138	  const m = await meta(db), row = await first(db, 'SELECT * FROM tv WHERE id=1');
+   139	  const report = row && JSON.parse(row.report), alerts = [];
+   140	  if (row && now - row.last_seen >= offline * 60) {
+   141	    const min = Math.floor((now - row.last_seen) / 60);
+   142	    alerts.push(report.screen === 'on' ? { level:'red', text:`電視 App 已 ${min} 分沒回報（最後螢幕開著）` } : { level:'yellow', text:`電視 ${min} 分前回報（之後待機或關機）` });
+   143	  }
+   144	  if (row?.adb_bad >= 3) alerts.push({ level:'red', text:`電視 App 無法控制 YouTube／Netflix（adb：${report.adb}）` });
+   145	  if (await first(db, "SELECT id FROM events WHERE ts>=? AND kind IN ('reinstall','db-reset') LIMIT 1", now - 86400)) alerts.push({ level:'yellow', text:'近期電視重新安裝或資料庫重建' });
+   146	  if (m.enforce !== 'true') alerts.push({ level:'yellow', text:'影子模式：此頁不控制電視' });
+   147	  const tv = row ? { last_seen:row.last_seen, balance_s:report.balance_s, capped:report.capped, used_today_s:report.used_today_s, yt:report.yt, fg_yt:report.fg_yt, screen:report.screen, adb:report.adb, adb_bad:row.adb_bad, wl:report.wl, app_ver:report.app_ver } : null;
+   148	  const eventRows = await all(db, 'SELECT ts,who,kind,detail FROM events ORDER BY id DESC LIMIT 30');
+   149	  const events = eventRows.map(e => ({ ...e, text: eventText(e.kind, e.detail) }));
+   150	  return { me:name, cap_s:Number(m.cap_s), enforce:m.enforce === 'true', tv, alerts,
+   151	    usage:await usage(db, now),
+   152	    pending:await all(db, 'SELECT seq,kind,seconds,by,created_at FROM grants WHERE seq>? ORDER BY seq', row?.acked_seq ?? 0),
+   153	    events };
+   154	}
+   155	async function grant(db, data, who, now) {
+   156	  if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.req_id !== 'string' || !data.req_id.length || data.req_id.length > 64 || !((data.kind === 'add' && [15,30,60].includes(data.minutes)) || (data.kind === 'zero' && !Object.hasOwn(data, 'minutes')))) return null;
+   157	  const kind = data.kind === 'zero' ? 'set' : 'add', seconds = kind === 'set' ? 0 : data.minutes * 60;
+   158	  await db.batch([
+   159	    stmt(db, 'INSERT OR IGNORE INTO grants(kind,seconds,by,req_id,created_at) VALUES(?,?,?,?,?)', kind, seconds, who, data.req_id, now),
+   160	    stmt(db, 'INSERT INTO events(ts,who,kind,detail) SELECT ?,?,?,? WHERE changes()>0', now, who, data.kind === 'zero' ? 'zero' : 'grant', String(seconds))
+   161	  ]);
+   162	  const saved = await first(db, 'SELECT seq FROM grants WHERE req_id=?', data.req_id);
+   163	  const m = await meta(db), row = await first(db, 'SELECT * FROM tv WHERE id=1');
+   164	  const pending = await first(db, "SELECT COALESCE(SUM(seconds),0) AS n FROM grants WHERE seq>? AND kind='add'", row?.acked_seq ?? 0);
+   165	  return { seq:saved.seq, would_cap:(row ? JSON.parse(row.report).balance_s : 0) + pending.n > Number(m.cap_s) };
+   166	}
+   167	const page = `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>看電視時間</title><style>body{font:18px system-ui;margin:1em;max-width:36em}button{font:inherit;padding:1em;margin:.2em} .red{color:#a00}.yellow{color:#865500}li{margin:.4em 0}</style><h1>看電視時間</h1><div id="alerts"></div><p id="status"></p><div id="buttons"><button data-min="15">+15</button><button data-min="30">+30</button><button data-min="60">+60</button><button data-min="0">歸零</button></div><p id="used"></p><h2>使用時間</h2><div id="usage"></div><h2>紀錄</h2><ul id="events"></ul><p id="me"></p><script>
+   168	const $=id=>document.getElementById(id);let cap=0;
+   169	async function refresh(){const r=await fetch('/tv/api/state');if(!r.ok){$('status').textContent='無法取得狀態';return}const s=await r.json();cap=s.cap_s;$('alerts').replaceChildren(...s.alerts.map(a=>{let p=document.createElement('p');p.className=a.level;p.textContent=a.text;return p}));const t=s.tv,pending=s.pending.filter(x=>x.kind==='add').reduce((n,x)=>n+x.seconds,0);$('status').textContent=t?'剩餘 '+Math.floor(t.balance_s/60)+' 分（電視 '+new Date(t.last_seen*1000).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})+' 回報）'+(t.capped?'，已封頂（上限 '+Math.floor(cap/60)+' 分）':'')+'；待電視接收 '+Math.floor(pending/60)+' 分；YouTube／Netflix '+({enabled:'開放中',disabled:'已鎖',unknown:'未知'}[t.yt])+'；'+(Date.now()/1000-t.last_seen<120?'電視在線':Math.floor((Date.now()/1000-t.last_seen)/60)+' 分前回報'):'尚無電視回報；待電視接收 '+Math.floor(pending/60)+' 分';$('used').textContent=t?'今天 YouTube／Netflix 用了 '+Math.floor(t.used_today_s/60)+' 分':'';var u=s.usage,fl=function(n){return Math.floor(n/60)},urow=function(label,v){var p=document.createElement('p');p.textContent=label+'：YouTube '+fl(v.youtube_s)+' 分、Netflix '+fl(v.netflix_s)+' 分、合計 '+fl(v.youtube_s+v.netflix_s)+' 分';return p};$('usage').replaceChildren(urow('今天',u.today),urow('本週',u.week),urow('本月',u.month),...u.days.map(function(d){var p=document.createElement('p');p.textContent=d.date+'：YouTube '+fl(d.youtube_s)+' 分、Netflix '+fl(d.netflix_s)+' 分';return p}));$('events').replaceChildren(...s.events.map(e=>{let li=document.createElement('li');li.textContent=new Date(e.ts*1000).toLocaleString('zh-TW')+' '+e.who+' '+e.text;return li}));$('me').textContent='目前登入：'+s.me}
+   170	$('buttons').addEventListener('click',async e=>{if(!e.target.matches('button'))return;const buttons=[...$('buttons').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{let n=Number(e.target.dataset.min),body=n?{kind:'add',minutes:n,req_id:crypto.randomUUID()}:{kind:'zero',req_id:crypto.randomUUID()};let r=await fetch('/tv/api/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw Error();let data=await r.json();if(data.would_cap)alert('會封頂在 '+Math.floor(cap/60)+' 分');await refresh()}catch{alert('送出失敗，請重新整理確認')}finally{buttons.forEach(b=>b.disabled=false)}});refresh();setInterval(refresh,15000);
+   171	</script></html>`;
+   172	export async function handle(req, env, now) {
+   173	  const path = new URL(req.url).pathname;
+   174	  if (!path.startsWith('/tv/')) return error(404);
+   175	  const user = await identity(req, env, now);
+   176	  if (!user) return error(401);
+   177	  if (req.method === 'POST' && path === '/tv/api/grant' && req.headers.get('Origin') !== 'https://tv-demo.example.net') return error(403);
+   178	  const role = path === '/tv/api/sync' ? 'tv' : 'parent';
+   179	  if (user.role !== role) return error(403);
+   180	  if (req.method === 'GET' && path === '/tv/') return new Response(page, { headers: { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store' } });
+   181	  const offline = Number(env.OFFLINE_MIN) > 0 ? Number(env.OFFLINE_MIN) : 30, seconds = Math.floor(now / 1000);
+   182	  if (req.method === 'GET' && path === '/tv/api/state') return response(await state(env.DB, user.name, seconds, offline));
+   183	  if (req.method === 'POST' && (path === '/tv/api/sync' || path === '/tv/api/grant')) {
+   184	    let body; try { body = await req.json(); } catch { return error(400); }
+   185	    if (path === '/tv/api/sync') return validReport(body) ? response(await sync(env.DB, body, seconds, offline)) : error(400);
+   186	    const result = await grant(env.DB, body, user.name, seconds);
+   187	    return result ? response(result) : error(400);
+   188	  }
+   189	  return error(404);
+   190	}
+
+ succeeded in 0ms:
+     1	package com.example.tvagent;
+     2	import java.util.*;
+     3	public class QuotaTest {
+     4	    static void check(boolean b, String name) { if (!b) throw new AssertionError(name); System.out.println("PASS " + name); }
+     5	    static Quota.Ev e(long sec, int type, String pkg) { return new Quota.Ev(sec * 1000, type, pkg); }
+     6	    static Quota.Usage usage(Quota.Ev... e) { return Quota.usage(Arrays.asList(e), 0, 100000, false, true); }
+     7	    static Quota.Grant g(long n, String kind, long sec) { return new Quota.Grant(n, kind, sec); }
+     8	    public static void main(String[] args) {
+     9	        String y = Quota.YT;
+    10	        Quota.Usage u = usage(e(10,1,y), e(70,2,y)); check(u.seconds == 60 && !u.ytFg && u.scrOn, "usage 60 and end state");
+    11	        u = usage(e(10,1,y),e(30,16,null),e(50,15,null),e(70,2,y)); check(u.seconds == 40, "usage screen off");
+    12	        check(usage(e(10,1,y),e(30,1,"other")).seconds == 20, "usage other resumed");
+    13	        check(Quota.usage(Collections.emptyList(), 0, 100000, true, true).seconds == 100, "usage initial");
+    14	        u = usage(e(10,1,y),e(30,26,null),e(40,27,null)); check(u.seconds == 20 && !u.ytFg && u.scrOn, "usage shutdown startup");
+    15	        u = usage(e(-1,1,y),e(10,1,y),e(101,2,y)); check(u.seconds == 90 && u.ytFg && u.seconds <= 100, "usage bounds");
+    16	        String n = Quota.NF;
+    17	        u = usage(e(10,1,n), e(70,2,n)); check(u.seconds == 60 && !u.ytFg, "netflix foreground consumes quota");
+    18	        u = usage(e(10,1,y), e(40,2,y), e(40,1,n), e(70,23,y), e(100,2,n)); check(u.seconds == 90 && !u.ytFg, "youtube to netflix switch uninterrupted");
+    19	        u = Quota.usage(Arrays.asList(e(40,2,y), e(40,1,n)), 0, 50000, true, true); check(u.ytFg && u.seconds == 50, "youtube to netflix batch 1");
+    20	        u = Quota.usage(Arrays.asList(e(60,23,y)), 50000, 100000, u.ytFg, u.scrOn); check(u.ytFg && u.seconds == 50, "netflix fg survives later youtube STOPPED");
+    21	        u = usage(e(10,1,n), e(40,2,n), e(40,1,"launcher"), e(100,23,n)); check(u.seconds == 30 && !u.ytFg, "netflix to launcher stops");
+    22	        u = Quota.usage(Arrays.asList(e(10,23,y)), 0, 100000, true, true); check(u.ytFg && u.seconds == 100, "STOPPED does not clear fg");
+    23	        check(Quota.clockJump(1000,3602000,1000,2000,1,1), "clock jump");
+    24	        check(!Quota.clockJump(1000,32000,1000,2000,1,1) && !Quota.clockJump(1000,3602000,1000,2000,1,2), "clock tolerance boot");
+    25	        Quota q = new Quota(); q.balance = 30; q.consume(60,"2026-10-30"); check(q.balance == 0 && q.usedTotal == 30 && q.usedToday == 30, "consume limited");
+    26	        q.balance = 50; q.consume(10,"2026-10-31"); check(q.usedToday == 10 && q.usedTotal == 40, "consume new date");
+    27	        q = new Quota(); q.dbId = "db"; q.lastSeq = 3;
+    28	        List<Quota.Grant> gs = Arrays.asList(g(6,"add",900),g(3,"add",300),g(5,"set",0),g(4,"add",1800));
+    29	        q.applySync(gs,6,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6 && q.enforce, "sync sorted and dedup");
+    30	        q.applySync(gs,6,"db",3600,true); q.applySync(Collections.emptyList(),20,"db",3600,true); check(q.balance == 900 && q.lastSeq == 6, "sync repeated empty");
+    31	        q.applySync(Arrays.asList(g(1,"add",100)),8,"new",3600,false); check(q.balance == 1000 && q.lastSeq == 8 && q.dbId.equals("new") && !q.enforce, "sync reset");
+    32	        Quota fresh = new Quota(); fresh.applySync(Arrays.asList(g(1,"add",100)),4,"db",3600,false); check(fresh.balance == 100 && fresh.lastSeq == 4, "sync initial");
+    33	        q.balance = 3500; q.applySync(Arrays.asList(g(9,"add",500)),9,"new",3600,true); check(q.balance == 3600 && q.capped, "sync capped");
+    34	        q.balance = 3000; q.applySync(Arrays.asList(g(10,"add",500)),10,"new",1800,false); check(q.balance == 3000 && q.cap == 1800 && q.capped && !q.enforce, "sync cap decrease");
+    35	        q = new Quota(); check(q.decide("unknown",true,true) == Quota.Action.NONE, "decide unknown");
+    36	        q.balance = 1; check(q.decide("disabled",false,true) == Quota.Action.UNLOCK, "decide unlock");
+    37	        q.balance = 0; check(q.decide("enabled",true,true) == Quota.Action.END && q.decide("enabled",false,true) == Quota.Action.LOCK, "decide end lock");
+    38	        q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",true,true) == Quota.Action.NONE, "decide warn once");
+    39	        q.balance = 301; q.decide("enabled",true,true); q.balance = 200; check(q.decide("enabled",true,true) == Quota.Action.WARN && q.decide("enabled",false,true) == Quota.Action.NONE, "decide warn reset");
+    40	        q = new Quota(); q.balance = 1; check(q.decide("enabled",true,false,true) == Quota.Action.UNLOCK && q.decide("enabled",false,false,true) == Quota.Action.NONE, "decide mixed positive unlocks");
+    41	        q.balance = 0; check(q.decide("enabled",true,false,true) == Quota.Action.LOCK && q.decide("enabled",true,true,true) == Quota.Action.END, "decide mixed zero locks");
+    42	        check(q.decide("unknown",true,true,true) == Quota.Action.NONE, "decide mixed unknown");
+    43	        q.balance = 90; u = Quota.usage(Arrays.asList(e(0,1,y), e(60,2,y), e(60,1,n)), 0, 120000, false, true); q.consume(u.seconds,"2026-10-31");
+    44	        check(u.seconds == 120 && u.ytFg && q.balance == 0 && q.decide("enabled",u.ytFg,true) == Quota.Action.END, "youtube then netflix share quota to END");
+    45	        long[] balances = {20,2,0,330,302,3000}; long[] alarms = {20000,5000,60000,30000,5000,60000}; for (int i=0;i<balances.length;i++) { q.balance=balances[i]; check(q.nextAlarmMs(true)==alarms[i], "alarm " + balances[i]); } check(q.nextAlarmMs(false)==60000,"alarm background");
+    46	        Properties saved = q.save(); Quota copy = Quota.load(saved); check(copy.save().equals(saved), "save load");
+    47	        check(Quota.load(new Properties()).balance == 0 && Quota.load(new Properties()).lastSeq == -1 && !Quota.load(new Properties()).enforce, "load garbage");
+    48	        saved.setProperty("balance_s", "bad"); check(Quota.load(saved).lastSeq == -1 && !Quota.load(saved).enforce, "load bad number");
+    49	        q = new Quota(); q.dbId="db"; q.lastSeq=3; Properties before=q.save(); q.applySync(gs,6,"db",3600,false); q=Quota.load(before); q.applySync(gs,6,"db",3600,false); check(q.balance==900 && q.lastSeq==6, "retry after unsaved sync");
+    50	        check(Quota.usage(Arrays.asList(e(10,1,y), e(70,2,y)), 0, 100000, false, true).seconds == 60, "usage compat overload");
+    51	        Quota.Usage v = Quota.usage(Arrays.asList(e(10,1,y), e(70,2,y), e(70,1,n), e(100,2,n)), 0, 100000, false, "", true);
+    52	        check(v.seconds == 90 && v.ytS == 60 && v.nfS == 30, "usage per-app yt60 nf30");
+    53	        Quota.Usage v1 = Quota.usage(Arrays.asList(e(40,2,y), e(40,1,n)), 0, 50000, true, y, true);
+    54	        check(v1.seconds == 50 && v1.ytS == 40 && v1.nfS == 10 && v1.fgPkg.equals(n), "usage switch split with fgPkg");
+    55	        Quota.Usage v2 = Quota.usage(Arrays.asList(e(60,23,y)), 50000, 100000, v1.ytFg, v1.fgPkg, v1.scrOn);
+    56	        check(v2.seconds == 50 && v2.ytS == 0 && v2.nfS == 50, "usage switch chain keeps app");
+    57	        Quota.Usage v3 = Quota.usage(Collections.emptyList(), 0, 100000, true, "", true);
+    58	        check(v3.seconds == 100 && v3.ytS == 0 && v3.nfS == 0, "usage unknown pkg");
+    59	        Quota.Usage v3b = Quota.usage(Collections.emptyList(), 0, 100000, true, null, true);
+    60	        check(v3b.seconds == 100 && v3b.ytS == 0 && v3b.nfS == 0, "usage null pkg");
+    61	        Quota w = new Quota(); w.balance = 1000; w.today = "2026-10-30"; w.usedToday = 100; w.usedTodayYt = 60; w.usedTodayNf = 30;
+    62	        w.consume(10, "2026-10-30"); check(w.usedToday == 110 && w.usedTodayYt == 60 && w.usedTodayNf == 30, "consume same day keeps per-app");
+    63	        w.consume(10, "2026-10-31"); check(w.usedToday == 10 && w.usedTodayYt == 0 && w.usedTodayNf == 0, "consume rollover resets per-app");
+    64	        Quota o = new Quota(); o.balance = 500; o.lastSeq = 7; o.enforce = true; o.dbId = "db"; o.usedTodayYt = 12; o.usedTodayNf = 34; o.fgPkg = n;
+    65	        Properties op = o.save(); op.remove("used_today_yt_s"); op.remove("used_today_nf_s"); op.remove("fg_pkg");
+    66	        Quota oc = Quota.load(op); check(oc.balance == 500 && oc.lastSeq == 7 && oc.enforce && oc.usedTodayYt == 0 && oc.usedTodayNf == 0 && oc.fgPkg.equals(""), "load old state");
+    67	        Properties bp = o.save(); bp.setProperty("used_today_yt_s", "abc"); bp.setProperty("used_today_nf_s", "-5"); bp.setProperty("fg_pkg", "com.evil.app");
+    68	        Quota bc = Quota.load(bp); check(bc.balance == 500 && bc.lastSeq == 7 && bc.enforce && bc.usedTodayYt == 0 && bc.usedTodayNf == 0 && bc.fgPkg.equals(""), "load bad new keys");
+    69	        Quota ro = Quota.load(o.save()); check(ro.usedTodayYt == 12 && ro.usedTodayNf == 34 && ro.fgPkg.equals(n) && ro.save().equals(o.save()), "save load new keys");
+    70	        Quota.Usage r = Quota.usage(Collections.emptyList(), 0, 91000, false, "", true);
+    71	        check(r.seconds == 0 && r.nfS == 0 && r.ytS == 0 && !r.ytFg, "reboot events lost cleared fg counts zero");
+    72	        Quota.Usage b = Quota.usage(Collections.emptyList(), 0, 91000, true, n, true);
+    73	        check(b.seconds == 91 && b.nfS == 91 && b.ytFg, "stale fg netflix overcounts 91s");
+    74	        System.out.println("ALL PASS");
+    75	    }
+    76	}
+
+ succeeded in 0ms:
+     1	package com.example.tvagent;
+     2	
+     3	import android.app.*;
+     4	import android.app.usage.UsageEvents;
+     5	import android.app.usage.UsageStatsManager;
+     6	import android.content.*;
+     7	import android.os.*;
+     8	import android.provider.Settings;
+     9	import org.json.*;
+    10	import java.io.*;
+    11	import java.net.*;
+    12	import java.text.SimpleDateFormat;
+    13	import java.util.*;
+    14	import java.util.concurrent.*;
+    15	import javax.net.ssl.HttpsURLConnection;
+    16	
+    17	public class AgentService extends Service {
+    18	    static final String EXTRA_REASON = "reason", HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
+    19	    static final String DISABLE = "pm disable-user --user 0 " + Quota.YT + "; pm disable-user --user 0 " + Quota.NF;
+    20	    static final String ENABLE = "pm enable --user 0 " + Quota.YT + "; pm enable --user 0 " + Quota.NF;
+    21	    static final String LIST = "pm list packages -d";
+    22	    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
+    23	    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+    24	            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+    25	            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
+    26	            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+    27	    private ExecutorService exec;
+    28	    private File keyFile, stateFile, logFile;
+    29	    private boolean configured;
+    30	
+    31	    @Override public void onCreate() {
+    32	        super.onCreate(); keyFile = new File(getFilesDir(), "adbkey"); stateFile = new File(getFilesDir(), "state.properties"); logFile = new File(getFilesDir(), "agent.log");
+    33	        exec = Executors.newSingleThreadExecutor(); startAsForeground();
+    34	    }
+    35	    static void scheduleNextAlarm(Context context, long delay) {
+    36	        AlarmManager am = (AlarmManager) context.getSystemService(ALARM_SERVICE);
+    37	        if (am != null) am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + delay,
+    38	                PendingIntent.getBroadcast(context, 1, new Intent(context, AlarmReceiver.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+    39	    }
+    40	    private void startAsForeground() {
+    41	        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+    42	        if (nm != null) nm.createNotificationChannel(new NotificationChannel("tvagent", "看電視時間", NotificationManager.IMPORTANCE_LOW));
+    43	        startForeground(1, new Notification.Builder(this, "tvagent").setContentTitle("看電視時間").setContentText("額度服務執行中").setSmallIcon(android.R.drawable.stat_notify_sync).build());
+    44	    }
+    45	    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    46	        startAsForeground(); // 每次 startForegroundService 都必須回應 startForeground，否則 5 秒規則會當掉
+    47	        String reason = intent != null ? intent.getStringExtra(EXTRA_REASON) : null;
+    48	        if (!"boot".equals(reason) && !"kick".equals(reason)) reason = "alarm";
+    49	        final String src = reason;
+    50	        scheduleNextAlarm(this, 60000);
+    51	        exec.execute(new Runnable() { public void run() { heartbeat(src); } });
+    52	        return START_STICKY;
+    53	    }
+    54	    @Override public IBinder onBind(Intent intent) { return null; }
+    55	    @Override public void onDestroy() { exec.shutdown(); super.onDestroy(); }
+    56	    private String adb(String command) throws AdbClient.AdbException {
+    57	        try { AdbClient c = AdbClient.withKeyFile("127.0.0.1", 5555, keyFile); c.setAuthTimeoutMs(60000); c.setIoTimeoutMs(10000); return c.shell(command); }
+    58	        catch (AdbClient.AdbException e) { throw e; }
+    59	        catch (Exception e) { throw new AdbClient.AdbException(AdbClient.IO, "key error"); }
+    60	    }
+    61	    private Quota load() {
+    62	        try (FileInputStream in = new FileInputStream(stateFile)) { Properties p = new Properties(); p.load(in); return Quota.load(p); }
+    63	        catch (Exception e) { return new Quota(); }
+    64	    }
+    65	    private void save(Quota q) throws IOException {
+    66	        File tmp = new File(getFilesDir(), "state.properties.tmp");
+    67	        try (FileOutputStream out = new FileOutputStream(tmp)) { q.save().store(out, null); out.getFD().sync(); }
+    68	        if (!tmp.renameTo(stateFile)) throw new IOException("rename");
+    69	    }
+    70	    private static final class Status { String yt = "unknown", screen = "unknown", adb = "ok", wl = "skip", fgPkg; Boolean fg; boolean mixed; }
+    71	    private Status status() {
+    72	        Status s = new Status();
+    73	        try {
+    74	            if (!configured) {
+    75	                String setup = adb("for c in 'cmd appops set com.example.tvagent APP_AUTO_START allow' 'cmd appops set com.example.tvagent APP_ASSOC_START allow' 'cmd appops set com.example.tvagent GET_USAGE_STATS allow' 'am set-standby-bucket com.example.tvagent active' 'dumpsys deviceidle whitelist +com.example.tvagent'; do sh -c \"$c\" >/dev/null 2>&1 && printf 1 || printf 0; done; echo");
+    76	                configured = setup.trim().equals("11111");
+    77	                // Setup result is included in the heartbeat log without command output.
+    78	                setupResult = setup.trim().matches("[01]{5}") ? setup.trim() : "failed";
+    79	            }
+    80	            String out = adb("echo __POWER__; dumpsys power || echo __FAIL__; echo __DISABLED__; pm list packages -d || echo __FAIL__; echo __ACTIVITY__; if [ \"$(pm list packages -d | grep -cx -e package:com.google.android.youtube.tv -e package:com.netflix.ninja)\" = 2 ]; then echo __SKIP__; else dumpsys activity activities || echo __FAIL__; fi; echo __END__");
+    81	            int p = out.indexOf("__POWER__"), d = out.indexOf("__DISABLED__"), a = out.indexOf("__ACTIVITY__"), e = out.indexOf("__END__");
+    82	            if (out.contains("__FAIL__") || p < 0 || d <= p || a <= d || e <= a) throw new AdbClient.AdbException(AdbClient.IO, "status");
+    83	            String power = out.substring(p, d), disabled = out.substring(d, a), activity = out.substring(a, e);
+    84	            if (!power.contains("mWakefulness=")) throw new AdbClient.AdbException(AdbClient.IO, "power");
+    85	            s.screen = power.contains("mWakefulness=Awake") ? "on" : "off";
+    86	            List<String> off = Arrays.asList(disabled.split("\\r?\\n"));
+    87	            boolean ytOff = off.contains("package:" + Quota.YT), nfOff = off.contains("package:" + Quota.NF);
+    88	            s.yt = ytOff && nfOff ? "disabled" : "enabled"; s.mixed = ytOff != nfOff;
+    89	            if (!(ytOff && nfOff)) { if (!activity.contains("mResumedActivity")) throw new AdbClient.AdbException(AdbClient.IO, "activity"); s.fg = false; s.fgPkg = null; for (String line : activity.split("\\r?\\n")) if (line.contains("mResumedActivity") && (line.contains(Quota.YT) || line.contains(Quota.NF))) { s.fg = true; s.fgPkg = line.contains(Quota.YT) ? Quota.YT : Quota.NF; } }
+    90	            s.wl = Whitelist.wlStatus(adb(CMD_WHITELIST));
+    91	        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.screen = "unknown"; s.fg = null; s.mixed = false; }
+    92	        return s;
+    93	    }
+    94	    private String setupResult = "pending";
+    95	    private String act(Quota q, Status s) {
+    96	        Quota.Action action = q.decide(s.yt, s.mixed, Boolean.TRUE.equals(s.fg), s.screen.equals("on"));
+    97	        String name = action.name().toLowerCase(Locale.US);
+    98	        if (action == Quota.Action.NONE) return name;
+    99	        if (!q.enforce) return "dry-" + name;
+   100	        try {
+   101	            if (action == Quota.Action.WARN || action == Quota.Action.END) adb("am start -n com.example.tvagent/.NoticeActivity --es kind " + (action == Quota.Action.WARN ? "warn" : "end"));
+   102	            if (action == Quota.Action.END) Thread.sleep(10000);
+   103	            if (action == Quota.Action.END || action == Quota.Action.LOCK) {
+   104	                adb("am force-stop " + Quota.YT + "; am force-stop " + Quota.NF + "; " + DISABLE);
+   105	                List<String> off = Arrays.asList(adb(LIST).split("\\r?\\n"));
+   106	                if (!off.contains("package:" + Quota.YT) || !off.contains("package:" + Quota.NF)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
+   107	                s.yt = "disabled"; s.fg = null; s.mixed = false; q.ytFg = false; q.fgPkg = "";
+   108	            } else if (action == Quota.Action.UNLOCK) {
+   109	                adb(ENABLE);
+   110	                List<String> off = Arrays.asList(adb(LIST).split("\\r?\\n"));
+   111	                if (off.contains("package:" + Quota.YT) || off.contains("package:" + Quota.NF)) throw new AdbClient.AdbException(AdbClient.IO, "verify");
+   112	                s.yt = "enabled"; if (!s.mixed) s.fg = false; s.mixed = false; // mixed 時保持探測到的前景值
+   113	            }
+   114	        } catch (AdbClient.AdbException ex) { s.adb = ex.kind; s.yt = "unknown"; s.fg = null; s.mixed = false; }
+   115	        catch (InterruptedException ex) { Thread.currentThread().interrupt(); s.adb = "io"; s.yt = "unknown"; s.fg = null; s.mixed = false; }
+   116	        return name;
+   117	    }
+   118	    private void heartbeat(String src) {
+   119	        Quota q = load(); long wall = System.currentTimeMillis(), el = SystemClock.elapsedRealtime();
+   120	        long boot = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+   121	        long gap = q.qEl > 0 && q.bootCount == boot ? Math.max(0, (el - q.qEl) / 1000) : 0;
+   122	        boolean jump = q.qWall > 0 && Quota.clockJump(q.qWall, wall, q.qEl, el, q.bootCount, boot);
+   123	        Quota.Usage usage = new Quota.Usage(0, 0, 0, q.ytFg, q.fgPkg, q.scrOn);
+   124	        if (q.qWall > 0 && wall >= q.qWall) {
+   125	            UsageStatsManager manager = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+   126	            List<Quota.Ev> events = new ArrayList<>(); UsageEvents results = manager.queryEvents(q.qWall, wall); UsageEvents.Event event = new UsageEvents.Event();
+   127	            while (results.hasNextEvent()) { results.getNextEvent(event); events.add(new Quota.Ev(event.getTimeStamp(), event.getEventType(), event.getPackageName())); }
+   128	            usage = Quota.usage(events, q.qWall, wall, q.ytFg, q.fgPkg, q.scrOn);
+   129	        }
+   130	        Status s = status();
+   131	        long seconds = jump ? (Boolean.TRUE.equals(s.fg) && s.screen.equals("on") ? Math.max(0, (el - q.qEl) / 1000) : 0) : usage.seconds;
+   132	        long ytS = usage.ytS, nfS = usage.nfS;
+   133	        if (jump) { ytS = 0; nfS = 0; if (seconds > 0) { if (Quota.YT.equals(s.fgPkg)) ytS = seconds; else if (Quota.NF.equals(s.fgPkg)) nfS = seconds; } }
+   134	        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.US); format.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
+   135	        String today = format.format(new Date(wall));
+   136	        q.consume(seconds, today); q.usedTodayYt += ytS; q.usedTodayNf += nfS;
+   137	        q.qWall = wall; q.qEl = el; q.bootCount = boot; q.ytFg = usage.ytFg; q.fgPkg = usage.fgPkg; q.scrOn = usage.scrOn;
+   138	        if (!s.yt.equals("unknown")) { q.ytFg = Boolean.TRUE.equals(s.fg); q.fgPkg = s.fgPkg == null ? "" : s.fgPkg; q.scrOn = s.screen.equals("on"); }
+   139	        String action = act(q, s), sync = "skip";
+   140	        try {
+   141	            save(q);
+   142	            long balBefore = q.balance;
+   143	            boolean enforceBefore = q.enforce;
+   144	            sync = sync(q, s, gap, boot, el, today);
+   145	            if (sync.equals("ok")) { if (q.balance != balBefore || q.enforce != enforceBefore) action += "," + act(q, s); save(q); }
+   146	        }
+   147	        catch (Exception ex) { sync = "io"; }
+   148	        scheduleNextAlarm(this, q.nextAlarmMs(Boolean.TRUE.equals(s.fg) && s.screen.equals("on")));
+   149	        log("uptime=" + el / 1000 + " pid=" + android.os.Process.myPid() + " src=" + src + " bal=" + q.balance + " used_today=" + q.usedToday + " yt_s=" + q.usedTodayYt + " nf_s=" + q.usedTodayNf + " fg=" + s.fg + " yt=" + s.yt + " screen=" + s.screen + " act=" + action + " sync=" + sync + " adb=" + s.adb + " wl=" + s.wl + " setup=" + setupResult + (gap > 300 ? " gap=" + gap : "") + (jump ? " clock=jump" : ""));
+   150	    }
+   151	    private String sync(Quota q, Status s, long gap, long boot, long el, String today) throws Exception {
+   152	        Properties config = new Properties();
+   153	        try (FileInputStream in = new FileInputStream(new File(getFilesDir(), "config.properties"))) { config.load(in); }
+   154	        catch (FileNotFoundException e) { return "skip"; }
+   155	        String url = config.getProperty("url"), id = config.getProperty("client_id"), secret = config.getProperty("client_secret");
+   156	        if (url == null || id == null || secret == null || id.isEmpty() || secret.isEmpty()) return "config";
+   157	        JSONObject request = new JSONObject();
+   158	        request.put("v", 1); request.put("last_seq", q.lastSeq < 0 ? JSONObject.NULL : q.lastSeq); request.put("db_id", q.dbId == null ? JSONObject.NULL : q.dbId);
+   159	        request.put("balance_s", q.balance); request.put("capped", q.capped); request.put("used_today_s", q.usedToday); request.put("used_total_s", q.usedTotal);
+   160	        request.put("today", today); request.put("used_today_yt_s", q.usedTodayYt); request.put("used_today_nf_s", q.usedTodayNf);
+   161	        request.put("yt", s.yt); request.put("fg_yt", s.fg == null ? JSONObject.NULL : s.fg); request.put("screen", s.screen); request.put("adb", s.adb); request.put("enforce", q.enforce);
+   162	        request.put("boot_count", boot); request.put("uptime_s", el / 1000); request.put("gap_s", gap); request.put("wl", s.wl); request.put("app_ver", 3);
+   163	        HttpsURLConnection c = (HttpsURLConnection) new URL(url).openConnection();
+   164	        try {
+   165	            c.setConnectTimeout(10000); c.setReadTimeout(10000); c.setRequestMethod("POST"); c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("CF-Access-Client-Id", id); c.setRequestProperty("CF-Access-Client-Secret", secret);
+   166	            try (OutputStream out = c.getOutputStream()) { out.write(request.toString().getBytes("UTF-8")); }
+   167	            int code = c.getResponseCode(); if (code != 200) return "http:" + code;
+   168	            ByteArrayOutputStream bytes = new ByteArrayOutputStream(); try (InputStream in = c.getInputStream()) { byte[] buf = new byte[4096]; int n; while ((n = in.read(buf)) != -1) { bytes.write(buf, 0, n); if (bytes.size() > 1048576) throw new IOException("response too large"); } }
+   169	            JSONObject data = new JSONObject(bytes.toString("UTF-8")); JSONArray array = data.getJSONArray("grants"); List<Quota.Grant> grants = new ArrayList<>();
+   170	            long max = data.getLong("max_seq"), cap = data.getLong("cap_s"); String db = data.getString("db_id"); boolean enforce = data.getBoolean("enforce");
+   171	            if (max < 0 || cap < 0 || db.isEmpty()) throw new IOException("response");
+   172	            for (int i = 0; i < array.length(); i++) { JSONObject g = array.getJSONObject(i); long seq = g.getLong("seq"), seconds = g.getLong("seconds"); String kind = g.getString("kind"); if (seq < 0 || seq > max || seconds < 0 || seconds > 86400 || (!kind.equals("add") && !kind.equals("set"))) throw new IOException("grant"); grants.add(new Quota.Grant(seq, kind, seconds)); }
+   173	            q.applySync(grants, max, db, cap, enforce); return "ok";
+   174	        } finally { c.disconnect(); }
+   175	    }
+   176	    private void log(String line) {
+   177	        try {
+   178	            SimpleDateFormat ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+   179	            ts.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
+   180	            line = ts.format(new Date()) + " " + line;
+   181	            if (logFile.length() > 1048576) {
+   182	                try (RandomAccessFile file = new RandomAccessFile(logFile, "rw")) { long start = file.length() - 524288; file.seek(start); file.readLine(); start = file.getFilePointer(); byte[] tail = new byte[(int)(file.length() - start)]; file.readFully(tail); file.seek(0); file.write(tail); file.setLength(tail.length); }
+   183	            }
+   184	            try (FileWriter out = new FileWriter(logFile, true)) { out.write(line + "\n"); }
+   185	        } catch (IOException ignored) { }
+   186	    }
+   187	}
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+1. **高｜扣額公式混淆「經過時間」與「觀看時間」**：計畫把整個心跳區間與爸媽時段的重疊秒數，直接從觀看秒數扣掉。例：60 秒心跳中，前 30 秒是爸媽時段但沒看電視，後 30 秒才觀看；公式得到 `30−30＝0`，小孩時段完全沒扣額度。**建議**：按實際前景與螢幕事件切分觀看區間，只排除落在爸媽時段內的觀看秒數；測試觀看分別落在邊界前、後及跨邊界的情況。[計畫第 25 行](/Users/example-owner/TV/research/PLAN_adult.md:25)、[AgentService.java 第 123 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:123)
+
+2. **高｜手機關閉後拔網路，可保留整段免費時間**：電視會離線沿用已取得的 `adultEnd`；例如早上已收到到 16:00 的時段，家長按關閉後，小孩拔網路就可繼續看至 16:00。計畫的「一分鐘內停用」只在連線正常且同步成功時成立。**建議**：明定離線授權最長有效期，定期成功 sync 才續期；加入「關閉前後斷網」驗收。這會取捨長時間斷網時爸媽能否繼續看，應寫清楚。[計畫第 23、58 行](/Users/example-owner/TV/research/PLAN_adult.md:23)
+
+3. **高｜同步後才計算舊區間，可能把免費時間扣成額度或反過來**：計畫只保存結束時間，沒有保存電視何時開始知道該時段，也沒定義關閉後如何結算上一個心跳區間。同步前先扣、同步後覆寫截止時間的現有順序，以及同步延遲或時段被關閉，都會影響邊界。**建議**：明確保存本機已確認的有效起訖區間，在套用新回應前先依舊區間結算；測試開始、到期、關閉及延遲回應的交界。[AgentService.java 第 131 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:131)
+
+4. **高｜重開機判斷依賴可能失效的 `boot_count`**：現有程式讀取失敗時回傳 `-1`；若重開機前後都是 `-1`，僅比較是否不同無法辨識重開機，舊的 `elapsedRealtime` 截止值可能被重新當作未過期，甚至延長免費時間。**建議**：`boot_count` 不可取得或不可信時，清除離線爸媽授權；也檢查本次 elapsed 是否倒退。加入未知 boot count 與重開機測試。[AgentService.java 第 119 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:119)、[計畫第 48 行](/Users/example-owner/TV/research/PLAN_adult.md:48)
+
+5. **高｜只在有效額度跨門檻時重新 `act()`，會漏掉加值後應重排的警告**：例如原有餘額 100 秒，加值 60 秒後仍在 `1–300`，門檻沒變，但原本已提示過的狀態及下一次鬧鐘必須按新餘額正確處理；更直接的是原本 `balance` 改變時會再執行 `act()`，計畫改成只看門檻，可能改掉既有行為。**建議**：保留原本 `balance/enforce` 變更觸發條件，再加上爸媽時段相關變化，並測試同步加值、歸零、解鎖與警告狀態。[AgentService.java 第 142 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:142)、[計畫第 49 行](/Users/example-owner/TV/research/PLAN_adult.md:49)
+
+6. **中｜每台 App 的使用時間會被錯誤歸屬**：按 YouTube 優先截斷，不能判斷哪個 App 在爸媽時段內。例：免費時段看 YouTube 30 秒，之後扣額時段看 Netflix 30 秒，計畫會記成 YouTube 30 秒。**建議**：與第 1 點一起按實際事件及時段交界切分，再分別累加兩個 App；測試跨邊界切換 App。[計畫第 26 行](/Users/example-owner/TV/research/PLAN_adult.md:26)
+
+7. **中｜關閉請求的去重方案不可執行或不具冪等性**：`events` 沒有 `req_id` 欄位或唯一約束；而「meta 值相同」無法防止舊請求在取消關閉或跨時段後重送、再次改變狀態。**建議**：使用可原子去重的持久化請求 ID，連同狀態變更及事件在同一批次處理；測試重送、交錯 off/resume 與跨時段重送。[schema.sql 第 5 行](/Users/example-owner/TV/cfquota/schema.sql:5)、[計畫第 35 行](/Users/example-owner/TV/research/PLAN_adult.md:35)
+
+8. **中｜只展開昨天、今天、明天不足以完整合併下一段**：例如週一晚間目前位於跨午夜時段，若要提供週二 22:00 的下一段，其結束時間需要週三 00:00–06:00 才能合併；只展開到週二會錯報結束時間，也可能影響「下一段不要」。**建議**：展開到足以確定目前與下一段的完整起訖，測試晚間目前時段、下一晚跨午夜及週末交界。[計畫第 32 行](/Users/example-owner/TV/research/PLAN_adult.md:32)
+
+9. **中｜假日操作的對象不夠明確**：「關閉這一段」若前一晚操作，會關掉當晚至隔天 06:00，而非假日白天；週末白天本來沒有時段，「下一段不要」會關掉當晚至隔晨。頁面只顯示 `HH:MM`，跨日容易誤判。**建議**：顯示具體日期、星期與完整起訖，按鈕明確標示將關閉哪一段，並驗收平日假日前晚、假日早上與週末白天操作。[計畫第 20、21、37 行](/Users/example-owner/TV/research/PLAN_adult.md:20)
+
+10. **中｜實機回歸與回滾無法證明不破壞既有額度**：驗收要求把真實 `bal` 設為 0 後「還原」，但沒定義測試期間加值、扣額、待處理 grant 與回報如何對帳；直接寫回舊值可能覆蓋真實變動。另外「前一版覆蓋」是否允許降版未驗證。**建議**：先在隔離環境測完歸零及邊界；實機確認維護窗口、記錄餘額與 grant 序號，禁止測試期間加值，事先驗證可行的降版命令與狀態保留方式，並把每一步的通過條件寫清楚。[計畫第 54 行](/Users/example-owner/TV/research/PLAN_adult.md:54)
+
+11. **中｜測試清單缺少時鐘修改與同步耗時驗收**：`el` 在心跳開始時取得，實際同步前還要查狀態及執行控制；計畫卻寫成「收到時的 `el`」，若沿用舊值會提早到期。現有 `clockJump` 又走不同觀看估算路徑，不能僅測一般情況。**建議**：明確規定採樣時間、網路延遲的安全側處理，測試電視時間前撥、後撥、慢同步及跨時段邊界；把「最晚 60 秒」改成附帶正常連線與排程成功條件的可量測標準。[AgentService.java 第 119 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:119)、[計畫第 27 行](/Users/example-owner/TV/research/PLAN_adult.md:27)
+
+未執行測試或實機操作；FRIDAY 記憶工具因目前核准政策無法讀取。審查僅依指定檔案，未確認其他部署設定。
+
+總評：需修改後施工。
+hook: Stop
+hook: Stop Completed
+tokens used
+49,973
+1. **高｜扣額公式混淆「經過時間」與「觀看時間」**：計畫把整個心跳區間與爸媽時段的重疊秒數，直接從觀看秒數扣掉。例：60 秒心跳中，前 30 秒是爸媽時段但沒看電視，後 30 秒才觀看；公式得到 `30−30＝0`，小孩時段完全沒扣額度。**建議**：按實際前景與螢幕事件切分觀看區間，只排除落在爸媽時段內的觀看秒數；測試觀看分別落在邊界前、後及跨邊界的情況。[計畫第 25 行](/Users/example-owner/TV/research/PLAN_adult.md:25)、[AgentService.java 第 123 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:123)
+
+2. **高｜手機關閉後拔網路，可保留整段免費時間**：電視會離線沿用已取得的 `adultEnd`；例如早上已收到到 16:00 的時段，家長按關閉後，小孩拔網路就可繼續看至 16:00。計畫的「一分鐘內停用」只在連線正常且同步成功時成立。**建議**：明定離線授權最長有效期，定期成功 sync 才續期；加入「關閉前後斷網」驗收。這會取捨長時間斷網時爸媽能否繼續看，應寫清楚。[計畫第 23、58 行](/Users/example-owner/TV/research/PLAN_adult.md:23)
+
+3. **高｜同步後才計算舊區間，可能把免費時間扣成額度或反過來**：計畫只保存結束時間，沒有保存電視何時開始知道該時段，也沒定義關閉後如何結算上一個心跳區間。同步前先扣、同步後覆寫截止時間的現有順序，以及同步延遲或時段被關閉，都會影響邊界。**建議**：明確保存本機已確認的有效起訖區間，在套用新回應前先依舊區間結算；測試開始、到期、關閉及延遲回應的交界。[AgentService.java 第 131 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:131)
+
+4. **高｜重開機判斷依賴可能失效的 `boot_count`**：現有程式讀取失敗時回傳 `-1`；若重開機前後都是 `-1`，僅比較是否不同無法辨識重開機，舊的 `elapsedRealtime` 截止值可能被重新當作未過期，甚至延長免費時間。**建議**：`boot_count` 不可取得或不可信時，清除離線爸媽授權；也檢查本次 elapsed 是否倒退。加入未知 boot count 與重開機測試。[AgentService.java 第 119 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:119)、[計畫第 48 行](/Users/example-owner/TV/research/PLAN_adult.md:48)
+
+5. **高｜只在有效額度跨門檻時重新 `act()`，會漏掉加值後應重排的警告**：例如原有餘額 100 秒，加值 60 秒後仍在 `1–300`，門檻沒變，但原本已提示過的狀態及下一次鬧鐘必須按新餘額正確處理；更直接的是原本 `balance` 改變時會再執行 `act()`，計畫改成只看門檻，可能改掉既有行為。**建議**：保留原本 `balance/enforce` 變更觸發條件，再加上爸媽時段相關變化，並測試同步加值、歸零、解鎖與警告狀態。[AgentService.java 第 142 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:142)、[計畫第 49 行](/Users/example-owner/TV/research/PLAN_adult.md:49)
+
+6. **中｜每台 App 的使用時間會被錯誤歸屬**：按 YouTube 優先截斷，不能判斷哪個 App 在爸媽時段內。例：免費時段看 YouTube 30 秒，之後扣額時段看 Netflix 30 秒，計畫會記成 YouTube 30 秒。**建議**：與第 1 點一起按實際事件及時段交界切分，再分別累加兩個 App；測試跨邊界切換 App。[計畫第 26 行](/Users/example-owner/TV/research/PLAN_adult.md:26)
+
+7. **中｜關閉請求的去重方案不可執行或不具冪等性**：`events` 沒有 `req_id` 欄位或唯一約束；而「meta 值相同」無法防止舊請求在取消關閉或跨時段後重送、再次改變狀態。**建議**：使用可原子去重的持久化請求 ID，連同狀態變更及事件在同一批次處理；測試重送、交錯 off/resume 與跨時段重送。[schema.sql 第 5 行](/Users/example-owner/TV/cfquota/schema.sql:5)、[計畫第 35 行](/Users/example-owner/TV/research/PLAN_adult.md:35)
+
+8. **中｜只展開昨天、今天、明天不足以完整合併下一段**：例如週一晚間目前位於跨午夜時段，若要提供週二 22:00 的下一段，其結束時間需要週三 00:00–06:00 才能合併；只展開到週二會錯報結束時間，也可能影響「下一段不要」。**建議**：展開到足以確定目前與下一段的完整起訖，測試晚間目前時段、下一晚跨午夜及週末交界。[計畫第 32 行](/Users/example-owner/TV/research/PLAN_adult.md:32)
+
+9. **中｜假日操作的對象不夠明確**：「關閉這一段」若前一晚操作，會關掉當晚至隔天 06:00，而非假日白天；週末白天本來沒有時段，「下一段不要」會關掉當晚至隔晨。頁面只顯示 `HH:MM`，跨日容易誤判。**建議**：顯示具體日期、星期與完整起訖，按鈕明確標示將關閉哪一段，並驗收平日假日前晚、假日早上與週末白天操作。[計畫第 20、21、37 行](/Users/example-owner/TV/research/PLAN_adult.md:20)
+
+10. **中｜實機回歸與回滾無法證明不破壞既有額度**：驗收要求把真實 `bal` 設為 0 後「還原」，但沒定義測試期間加值、扣額、待處理 grant 與回報如何對帳；直接寫回舊值可能覆蓋真實變動。另外「前一版覆蓋」是否允許降版未驗證。**建議**：先在隔離環境測完歸零及邊界；實機確認維護窗口、記錄餘額與 grant 序號，禁止測試期間加值，事先驗證可行的降版命令與狀態保留方式，並把每一步的通過條件寫清楚。[計畫第 54 行](/Users/example-owner/TV/research/PLAN_adult.md:54)
+
+11. **中｜測試清單缺少時鐘修改與同步耗時驗收**：`el` 在心跳開始時取得，實際同步前還要查狀態及執行控制；計畫卻寫成「收到時的 `el`」，若沿用舊值會提早到期。現有 `clockJump` 又走不同觀看估算路徑，不能僅測一般情況。**建議**：明確規定採樣時間、網路延遲的安全側處理，測試電視時間前撥、後撥、慢同步及跨時段邊界；把「最晚 60 秒」改成附帶正常連線與排程成功條件的可量測標準。[AgentService.java 第 119 行](/Users/example-owner/TV/tvagent/src/com/example/tvagent/AgentService.java:119)、[計畫第 27 行](/Users/example-owner/TV/research/PLAN_adult.md:27)
+
+未執行測試或實機操作；FRIDAY 記憶工具因目前核准政策無法讀取。審查僅依指定檔案，未確認其他部署設定。
+
+總評：需修改後施工。

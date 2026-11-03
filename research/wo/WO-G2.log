@@ -1,0 +1,2114 @@
+Reading additional input from stdin...
+OpenAI Codex v0.163.0
+--------
+workdir: /Users/example-owner/TV-wt-tvagent-wl
+model: openai/gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 00000000021-0000-4000-8000-000000000000
+--------
+user
+你是 Android 工程師。在 git worktree /Users/example-owner/TV-wt-tvagent-wl（分支 tvagent-wl）修改 tvagent，讓它自動把 TCL TGuard 的保護名單設回去。只改這個 worktree，不要 commit、不要 push、不要執行 adb、不要碰電視。
+
+## 背景
+- tvagent（tvagent/）是電視上的前景服務，透過自己實作的 AdbClient 連 127.0.0.1:5555 的 adbd，以 shell uid 執行指令。心跳由 AlarmManager 每 60 秒叫醒一次：`AgentService.heartbeat(src)` 執行 `echo ok`，寫一行 log 到 files/agent.log。先讀 tvagent/README.md 與 tvagent/src/com/example/tvagent/AgentService.java。
+- TCL 內建的 TGuard（com.tcl.guard）會砍背景 App。它的保護名單 mKillWhiteList 可以用 shell 指令整份取代（已經在實機驗證過）：
+  `dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList '<逗號分隔的套件清單>'`
+  讀取：`dumpsys activity service com.tcl.guard/.memorymanager.TGuardService` 的輸出裡，每個成員各一行，格式是 `    KillWhiteList:          com.xxx`。
+- 這份名單只存在 TGuard 的記憶體裡，TGuard 重啟或電視重開機就會變回預設的 11 個（不含 tvagent）。
+
+## 要做的事
+1. 在 AgentService 加常數，存 Owner 選定的名單（共 9 個，順序照抄）：
+   `com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent`
+2. 每次心跳（src=start 與 src=alarm 都要）在 `echo ok` 之後，用**同一個 runAdb 呼叫、一條 shell 指令**做「檢查→必要時設定→再驗證」，輸出一個字：
+   - 名單已經有 `com.example.tvagent` → `keep`
+   - 沒有 → 執行設定，再讀一次；有了 → `set`，還是沒有 → `fail`
+   建議形式（自行確認引號正確）：
+   `S=com.tcl.guard/.memorymanager.TGuardService; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo keep || { dumpsys activity service $S mKillWhiteList '<名單>' >/dev/null 2>&1; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo set || echo fail; }`
+3. 心跳 log 行尾加 ` wl=<keep|set|fail|錯誤類別>`，例如 `... src=alarm adb=ok wl=keep`。echo 失敗（adb 不通）時不做名單檢查，記 `wl=skip`。名單指令丟例外時，用跟 adb= 一樣的格式記錯誤類別，例如 `wl=io:...`。心跳本身不能因為名單步驟失敗而中斷或少寫 log。
+4. 判斷結果的程式寫成一個可以離線測試的 static 方法（例如 `static String wlStatus(String shellOutput)`：trim 後是 keep/set/fail 就原樣回傳，其他回 `unexpected`）。在 test/ 加測試（沿用 AdbClientTest 的風格，或另寫一個極小的 main 測試，由 test.sh 一起跑），涵蓋 keep、set、fail、空字串、亂碼。注意 test.sh 只用純 Java 編譯，不能 import android.*；如果 AgentService 不能被 javac 單獨編譯，就把這個方法放到不依賴 android.* 的小類別（例如 Whitelist.java），AgentService 呼叫它。
+5. 更新 tvagent/README.md：說明保護名單常數、wl= 欄位意思、「名單只在 TGuard 記憶體、由心跳每分鐘自動補回」、手動還原原名單的指令（原 11 個：`com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV`）。README 原本寫的「程式裡沒有其他套件名」要改成正確描述。
+6. 執行 `sh tvagent/test.sh`（最後一行要是 ALL PASS），再執行 `sh tvagent/build.sh` 產生新的 tvagent/tvagent.apk（用 repo 內的 debug.keystore，不要產生新 keystore；簽章換了，電視上就沒辦法覆蓋安裝）。
+
+## 禁止事項
+- 不改 tvagent/testdata/、不改 debug.keystore、不改 AdbClient.java 的協定行為。
+- 不改心跳間隔、鬧鐘機制、selftest 流程。
+- 不加新權限、不加新的 Android 元件。
+- 除了 tvagent/ 底下的檔案，什麼都不改。
+
+## 完成標準（Opus 會照這些驗收）
+- `cd /Users/example-owner/TV-wt-tvagent-wl && sh tvagent/test.sh` 最後一行 ALL PASS，且包含新測試的輸出。
+- `sh tvagent/build.sh` 成功，tvagent/tvagent.apk 的 mtime 更新。
+- `git -C /Users/example-owner/TV-wt-tvagent-wl diff --stat` 只動到 tvagent/ 底下的檔案，testdata/ 沒有變動。
+- `grep -n "wl=" tvagent/src/com/example/tvagent/AgentService.java` 有結果；名單常數和上面完全一致。
+
+做完在 /Users/example-owner/TV/research/wo/WO-G2_done.md 寫：改了哪些檔、test.sh 最後 5 行輸出、build 結果、任何疑慮。
+hook: SessionStart
+hook: SessionStart
+hook: SessionStart Completed
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+我會先讀取指定的工作規範、tvagent 文件與心跳實作，再以最小修改完成名單維護、離線測試和建置，最後寫入指定的驗收報告。我會套用 ponytail 的程式修改流程。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat tvagent/README.md tvagent/src/com/example/tvagent/AgentService.java' in /Users/example-owner/TV-wt-tvagent-wl
+exec
+/bin/zsh -lc 'cat /Users/example-owner/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail/SKILL.md' in /Users/example-owner/TV-wt-tvagent-wl
+exec
+/bin/zsh -lc 'cat ~/.agents/MODELS.md ~/.agents/CLI-GUIDE.md' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+# tvagent 實驗 App（PLAN v5 WO-A1）
+
+目的：驗證「電視上的 App 不靠 Mac，能不能自己連本機 adbd、通過 RSA 認證，
+停用／啟用 App」。只做實驗，不碰額度、不碰 Cloudflare、不取代 v4。
+
+- 套件：`com.example.tvagent`，無桌面圖示，minSdk 26、targetSdk 30。
+- 只准停用／啟用 `com.example.tkey`；程式裡沒有其他套件名。
+
+## 檔案
+
+- `AndroidManifest.xml`：INTERNET、RECEIVE_BOOT_COMPLETED、FOREGROUND_SERVICE；
+  BootReceiver（exported）、TestReceiver（exported）、AgentService。
+- `build.sh`：Docker 映像 `cleanyourtv-android-build-amd64` 編譯，
+  產出 `tvagent.apk`（`debug.keystore` 不存在就產生，alias `tvagent`）。
+- `src/com/example/tvagent/AdbClient.java`：純 Java adb 連線端
+  （CNXN／AUTH／OPEN／OKAY／WRTE／CLSE），不依賴 android.*。
+  附 `main` 供 Docker 單獨執行（電視上不用）。
+- `src/.../AgentService.java`：前景服務。所有 adb 動作在同一個單執行緒
+  序列化；心跳由鬧鐘驅動（每 60 秒 `echo ok`），寫 `files/agent.log`。
+- `src/.../BootReceiver.java`、`TestReceiver.java`：只負責啟動服務。
+- `src/.../AlarmReceiver.java`：鬧鐘廣播入口（exported=false），
+  只負責用 action `HEARTBEAT` 把服務叫起來；見「TCL 凍結機制與鬧鐘心跳」。
+- `test/AdbClientTest.java`＋`test.sh`：離線協定測試（假 adbd＋測試向量）。
+
+## 安裝
+
+```sh
+sh tvagent/build.sh
+# 用現有 adb 把 tvagent.apk 裝到電視（不代勞，只記指令形狀）
+```
+
+## 讀紀錄
+
+```sh
+adb shell run-as com.example.tvagent cat files/agent.log
+```
+
+心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息>`；
+服務啟動記 `start reason=<boot|test|other>`。`adb=ok` 表示輸出 trim 後等於 `ok`。
+pid 變化＝程序曾被系統砍掉重啟。
+
+## TCL 凍結機制與鬧鐘心跳
+
+實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結，
+前景服務也一樣；`ScheduledExecutorService` 的週期心跳因此停擺。
+收到廣播時系統會立即解凍該程序，所以心跳改由 `AlarmManager` 驅動：
+
+- 服務啟動（boot／test／other）與每次心跳後，都用
+  `setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, now+60秒)` 排下一次
+  精確鬧鐘（API 26～30 不需要 `SCHEDULE_EXACT_ALARM` 權限，故不新增權限；
+  不用 `setRepeating`，每次觸發後重新排）。
+- 鬧鐘送明確廣播給 `AlarmReceiver`（`exported=false`，無 intent-filter）。
+- `AlarmReceiver` 收到後用 `startForegroundService` 送 action `HEARTBEAT` 給
+  `AgentService`（服務若曾被殺也會因此重建）；服務把一次心跳排進原本的
+  單執行緒 executor，並排下一次鬧鐘。executor 只留單次工作佇列，
+  沒有 `scheduleAtFixedRate` 週期任務。
+- `PendingIntent` 用固定 requestCode＋`FLAG_UPDATE_CURRENT`（另加
+  `FLAG_IMMUTABLE`），同一時間只有一個待發鬧鐘。
+- 心跳 `src=alarm` 表示鬧鐘觸發，`src=start` 表示服務啟動時先做的一次。
+  心跳執行期間若被凍結，解凍時可能補跑：距上次心跳（`elapsedRealtime`）
+  `< 30 秒` 就略過，同一分鐘內不重複寫兩次。
+
+## 自我測試
+
+```sh
+adb shell am broadcast -n com.example.tvagent/.TestReceiver \
+  -a com.example.tvagent.SELFTEST
+```
+
+服務在背景執行緒依序：停用 tkey → 查停用清單有 tkey → 啟用 tkey →
+查停用清單無 tkey，最後寫 `selftest PASS`（或 `selftest FAIL <步驟>`）。
+開始前若 tkey 已在停用清單，記 `selftest SKIP tkey-disabled` 不動作；
+無論中途哪步失敗都會再嘗試 `pm enable` 恢復。
+
+## 移除
+
+```sh
+adb uninstall com.example.tvagent
+```
+
+收尾只做 uninstall，不撤銷電視的 USB 偵錯授權（殘留公鑰對應的私鑰
+已隨 App 刪除，無法再被使用）。
+package com.example.tvagent;
+
+import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import android.os.IBinder;
+import android.os.Process;
+import android.os.SystemClock;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * 前景服務：所有 adb 動作都在同一個單執行緒上序列化。
+ * 心跳由 AlarmManager 精確鬧鐘驅動，每 60 秒一次（見 AlarmReceiver）：
+ * 連本機 adbd 跑 echo ok，寫進 files/agent.log。
+ * TCL 的 FreezeManager 會凍結閒置程序（含前景服務），
+ * ScheduledExecutorService 的週期心跳因此停擺；改用鬧鐘＋廣播喚醒
+ * （收到廣播時系統會解凍該程序）。executor 只留單次工作佇列。
+ * SELFTEST 也排進同一條執行緒，不和心跳並行。
+ *
+ * 電視上可觸發的只有固定的心跳與 SELFTEST；沒有任何從 Intent extra
+ * 或檔案讀入指令的路徑。
+ */
+public class AgentService extends Service {
+
+    static final String EXTRA_REASON = "reason";
+    static final String EXTRA_SELFTEST = "selftest";
+    static final String SELFTEST_ACTION = "com.example.tvagent.SELFTEST";
+    static final String HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
+
+    static final long HEARTBEAT_MS = 60 * 1000;
+    static final long DEDUP_MS = 30 * 1000;
+    static final int ALARM_REQ = 1;
+
+    static final String TARGET = "com.example.tkey";
+    static final String CMD_ECHO = "echo ok";
+    static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+    static final String CMD_LIST_DISABLED = "pm list packages -d";
+    static final String CMD_ENABLE = "pm enable com.example.tkey";
+
+    static final String HOST = "127.0.0.1";
+    static final int PORT = 5555;
+    static final long AUTH_TIMEOUT_MS = 60000;
+    static final long IO_TIMEOUT_MS = 10000;
+
+    private ExecutorService exec;
+    private File logFile;
+    private File keyFile;
+    // 上次實際寫下心跳的 elapsedRealtime（毫秒）；凍結後補跑導致
+    // 密集重複時，距上次 < DEDUP_MS 就略過，避免同一分鐘寫兩次。
+    private volatile long lastHeartbeatElapsed = 0;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        startAsForeground();
+        logFile = new File(getFilesDir(), "agent.log");
+        keyFile = new File(getFilesDir(), "adbkey");
+        // 單次工作佇列：心跳與 SELFTEST 都排進這裡序列化，不再做週期排程。
+        exec = Executors.newSingleThreadExecutor();
+    }
+
+    /**
+     * 排下一次鬧鐘（精確鬧鐘，每次觸發後由服務重新排下一次）。
+     * PendingIntent 用固定 requestCode＋FLAG_UPDATE_CURRENT，
+     * 同一時間只會有一個待發鬧鐘。API 26～30 用
+     * setExactAndAllowWhileIdle，不需要 SCHEDULE_EXACT_ALARM 權限。
+     */
+    static void scheduleNextAlarm(Context ctx) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) {
+            return;
+        }
+        Intent i = new Intent(ctx, AlarmReceiver.class);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, ALARM_REQ, i, flags);
+        long next = SystemClock.elapsedRealtime() + HEARTBEAT_MS;
+        am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, next, pi);
+    }
+
+    private void startAsForeground() {
+        String ch = "tvagent";
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel nc = new NotificationChannel(
+                    ch, "tvagent 實驗", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.createNotificationChannel(nc);
+            }
+        }
+        Notification n;
+        if (Build.VERSION.SDK_INT >= 26) {
+            n = new Notification.Builder(this, ch)
+                    .setContentTitle("tvagent 實驗")
+                    .setContentText("adb 心跳執行中")
+                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .build();
+        } else {
+            n = new Notification.Builder(this)
+                    .setContentTitle("tvagent 實驗")
+                    .setContentText("adb 心跳執行中")
+                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .build();
+        }
+        startForeground(1, n);
+    }
+
+    @Override
+    public int onStartCommand(final Intent intent, int flags, int startId) {
+        // 立刻確保前景狀態（若系統重建服務時 intent 為 null 也要能撐住）。
+        try {
+            startAsForeground();
+        } catch (Exception ignored) {
+            // 已經是前景時重複呼叫無害
+        }
+        // 鬧鐘心跳：排一次心跳進單執行緒，並排下一次鬧鐘；
+        // 服務若曾被殺，這裡的 startForegroundService 會把它重建。
+        if (intent != null && HEARTBEAT_ACTION.equals(intent.getAction())) {
+            if (exec != null) {
+                exec.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        heartbeat("alarm");
+                    }
+                });
+            }
+            scheduleNextAlarm(this);
+            return START_STICKY;
+        }
+        String reason = "other";
+        boolean wantSelftest = false;
+        if (intent != null) {
+            String r = intent.getStringExtra(EXTRA_REASON);
+            if ("boot".equals(r) || "test".equals(r)) {
+                reason = r;
+            }
+            wantSelftest = intent.getBooleanExtra(EXTRA_SELFTEST, false);
+        }
+        final String logReason = reason;
+        // start 行由主執行緒直接寫，避免和背景工作搶順序造成混淆。
+        logLine("start reason=" + logReason);
+        // 服務啟動（boot／test／other，含系統重建時的 null intent）
+        // 都要確保下一次鬧鐘已排好，並先做一次心跳（src=start）。
+        scheduleNextAlarm(this);
+        if (exec != null) {
+            exec.execute(new Runnable() {
+                @Override
+                public void run() {
+                    heartbeat("start");
+                }
+            });
+            if (wantSelftest) {
+                exec.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        runSelftest();
+                    }
+                });
+            }
+        }
+        return START_STICKY;
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (exec != null) {
+            exec.shutdownNow();
+            exec = null;
+        }
+        super.onDestroy();
+    }
+
+    private String runAdb(String cmd) throws AdbClient.AdbException {
+        try {
+            AdbClient c = AdbClient.withKeyFile(HOST, PORT, keyFile);
+            c.setAuthTimeoutMs(AUTH_TIMEOUT_MS);
+            c.setIoTimeoutMs(IO_TIMEOUT_MS);
+            return c.shell(cmd);
+        } catch (AdbClient.AdbException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AdbClient.AdbException(AdbClient.IO, "key error: " + e.getMessage());
+        }
+    }
+
+    private void heartbeat(String src) {
+        // 凍結期間被略過的心跳可能在解凍時補跑：距上次 < 30 秒就略過，
+        // 同一分鐘內不重複寫兩次。心跳都在單執行緒上跑，不會有並行問題。
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastHeartbeatElapsed < DEDUP_MS) {
+            return;
+        }
+        lastHeartbeatElapsed = now;
+        String status;
+        try {
+            String output = runAdb(CMD_ECHO);
+            status = output.trim().equals("ok") ? "ok" : "io:unexpected-output";
+        } catch (AdbClient.AdbException e) {
+            status = e.kind + ":" + oneLine(e.getMessage());
+        } catch (Exception e) {
+            status = AdbClient.IO + ":" + oneLine(e.getMessage());
+        }
+        long uptime = SystemClock.elapsedRealtime() / 1000;
+        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status);
+    }
+
+    private void runSelftest() {
+        // 0. 先確認有授權（必要時等授權）；沒有就結束。
+        try {
+            String echo = runAdb(CMD_ECHO);
+            if (!echo.trim().equals("ok")) {
+                logLine("selftest FAIL auth");
+                return;
+            }
+        } catch (AdbClient.AdbException e) {
+            logLine("selftest FAIL auth");
+            return;
+        }
+        // 開始前檢查：tkey 已停用就不動。
+        try {
+            if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+                logLine("selftest SKIP tkey-disabled");
+                return;
+            }
+        } catch (AdbClient.AdbException e) {
+            logLine("selftest FAIL 0");
+            tryEnable();
+            return;
+        }
+        int fail = -1;
+        // 1. 停用
+        try {
+            runAdb(CMD_DISABLE);
+        } catch (AdbClient.AdbException e) {
+            fail = 1;
+        }
+        // 2. 確認出現在停用清單
+        if (fail < 0) {
+            try {
+                if (!runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+                    fail = 2;
+                }
+            } catch (AdbClient.AdbException e) {
+                fail = 2;
+            }
+        }
+        // 3. 啟用
+        if (fail < 0) {
+            try {
+                runAdb(CMD_ENABLE);
+            } catch (AdbClient.AdbException e) {
+                fail = 3;
+            }
+        }
+        // 4. 確認已不在停用清單
+        if (fail < 0) {
+            try {
+                if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+                    fail = 4;
+                }
+            } catch (AdbClient.AdbException e) {
+                fail = 4;
+            }
+        }
+        // 無論成敗都要嘗試恢復啟用。
+        tryEnable();
+        if (fail < 0) {
+            logLine("selftest PASS");
+        } else {
+            logLine("selftest FAIL " + fail);
+        }
+    }
+
+    private void tryEnable() {
+        try {
+            runAdb(CMD_ENABLE);
+        } catch (Exception ignored) {
+            // 恢復盡力而為
+        }
+    }
+
+    private static String oneLine(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace('\n', ' ').replace('\r', ' ').trim();
+    }
+
+    synchronized void logLine(String msg) {
+        String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(new Date());
+        FileWriter w = null;
+        try {
+            w = new FileWriter(logFile, true);
+            w.write(ts + " " + msg + "\n");
+        } catch (IOException ignored) {
+            // 寫 log 失敗不影響主流程
+        } finally {
+            if (w != null) {
+                try {
+                    w.close();
+                } catch (IOException ignored) {
+                    // 忽略
+                }
+            }
+        }
+    }
+}
+
+ succeeded in 0ms:
+---
+name: ponytail
+description: >
+  Lazy senior dev mode: the smallest change that fully solves the task, and a
+  reply a busy human understands in one read. Use on any coding task (writing,
+  fixing, refactoring, reviewing, choosing dependencies) and when the user says
+  "ponytail", "be lazy", "simplest solution", "yagni", or complains about
+  over-engineering or bloat. Levels: lite, full (default), ultra.
+argument-hint: "[lite|full|ultra|off]"
+license: MIT
+---
+
+# Ponytail
+
+You are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.
+
+Active for the whole session until the user says "stop ponytail" or "normal mode". Switch level: `/ponytail lite|full|ultra`.
+
+## Before you write
+
+Read the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.
+
+## The smallest complete change
+
+Take the first option that fully works:
+
+1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request ("build me X") gets the smallest version that does the core job.
+2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.
+3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.
+4. An installed dependency? Use it. Never add a dependency for a few lines.
+5. Can it be one line a reader gets at a glance? One line.
+6. Otherwise: the minimum code that works.
+
+- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.
+- No abstraction, wrapper, type conversion, option, config, boilerplate or "for later" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.
+- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.
+- Comment only the why the code cannot show, in one line.
+- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.
+- Code you move or merge keeps its error handling and validation.
+- Between options of equal size, take the one that is correct on edge cases.
+- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.
+- A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.
+
+Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
+
+## Levels
+
+| Level | Behavior |
+|-------|----------|
+| **lite** | Build what was asked. Name the smaller option in one line and let the user pick. |
+| **full** | The rules above. Default. |
+| **ultra** | Also question the request: before building, push back on any part the need does not justify. |
+
+ succeeded in 0ms:
+# AI 訂閱／HARNESS-MODEL 使用規範（所有 harness 開工前必讀）
+
+> **總綱要＝本檔**。所有 harness（Claude Code、Codex、pi、OpenCode、AGY）啟動後、做任何實質工作前先讀本檔；各 harness 的 context 檔只放一行指向這裡，不重複內容。Claude Code 例外：開場不自動載入，由 `/team-dev` 指令載入並設定本 session 分工（2026-10-28 Owner 定案）。
+> 要更新規範：只改本檔（改完更新下方「最後查證」日期）；各 CLI 的設定檔是機器開關，依本檔去調整，怎麼調見 `~/.agents/CLI-GUIDE.md`。
+> 要從一個 harness 呼叫別的 CLI（派工、問意見），先看 `~/.agents/CLI-GUIDE.md`「必看的坑」一節，避免 timeout／卡死／沒有輸出。
+> 單一真相來源。工作單、派工、對話一律用「暱稱」，實際 ID 查本表。
+
+## 訂閱線（有哪些錢包、各准用什麼）
+
+| 訂閱線 | 進入的 harness | 准用模型 |
+|---|---|---|
+| Anthropic 訂閱 | Claude Code | OPUS、SONNET、HAIKU |
+| OpenAI 訂閱（ChatGPT 帳號） | Codex（經 opencodex，`gpt-*`） | SOL、TERRA、LUNA、ASTRA（被指定才用） |
+| OpenCode-Go 訂閱 | pi、OpenCode、Codex（`OC-*`） | 白名單：DEEPSEEK FLASH、MUSE SPARK、MIMO FLASH；＋免費模型 |
+| Google AI Pro | AGY（只有 AGY） | GEMINI FLASH |
+| DeepSeek 官方 API（按量計費） | DSCC（`~/.zshrc` 的 `ds-cc-flash`／`ds-cc-flash-high`）、pi 的 `deepseek` provider | 只用 DEEPSEEK FLASH（`deepseek-v4-flash`）。**DEEPSEEK PRO 停用**（2026-10-18 Owner 定案；`cc-ds`／`ds-cc`／`ds-cc-high` 已註解；pi 內建清單仍列得到 PRO，但不准用） |
+| TypeSafe／Cloudflare（按量計費） | 不進 harness，只給程式呼叫 | JEV（見下方） |
+
+## 鐵律
+
+- **R1** GEMINI 只走 AGY，不接到其他 harness。`GEMINI_API_KEY` 留在電腦上給程式開發用，pi 不接。
+- **R2** AGY 只用 Google AI Pro 內建模型，不外掛 API（2026-10-18 查過：agy 設定裡沒有任何外部 key，現況符合）。
+- **R3** OpenCode-Go 只用白名單＋免費模型。白名單只有 Owner 能改；免費模型由 `~/.agents/bin/ocgo-free-sync.py` 每 2 天自動檢查一次（launchd `com.example.ocgo-free-sync`：自動新增／移除免費模型，並把 OpenCode 裡非白名單、非免費的模型關掉；log 在 `~/.agents/logs/ocgo-free-sync.log`）（models.dev 標價 0 而且上游 /v1/models 有列出，兩個來源都同意才收；有疑慮就從 pi／OpenCode 清單移除）。
+- **R4** 本檔沒列的模型不准自己選；指定的模型失敗就回報，不准默默換別的。
+- 已定案不做（不要重提）：API 探針驗證；在 OpenCode Console 找 model 開關（那裡管不到 Go 訂閱線）。詳見 QMem #316。
+
+---
+
+# 模型清單
+> 本檔與其他任何檔案（AGENTS.md、skill、舊工單）的 model ID 衝突時，以本檔為準。
+> 最後查證：2026-09-30（opencodex 2.73.0 / Codex CLI 0.159.2 / App 內建 0.158；16 項實測含工具呼叫全 PASS）；2026-10-13 增列 AGY 欄、GEMINI 4 ARGON（waiting list）、OpenCode-Go 白名單；2026-10-27 pi 的 DEEPSEEK FLASH ID 改為 `opencode-go/deepseek-v4.1-flash`（舊 ID 上游回 ModelDeprecated；Owner 同意）；2026-10-28 移除 GEMINI 4 ARGON、新增 TERRA（`openai/gpt-6.1-terra` 實測可用）與 HAIKU、MIMO FLASH 擴為基礎工作、加 Codex 速度規則（Owner 定案）。
+
+## 暱稱 → 用途
+
+| 暱稱 | 家族 | 用途 |
+|---|---|---|
+| SOL | OpenAI | 高階：規劃、架構；同一工人 3 次未過時的接手者 |
+| TERRA | OpenAI | 高階：challenger |
+| LUNA | OpenAI | 中階：施工、review |
+| ASTRA | OpenAI | 高階；太貴，被指定才用 |
+| OPUS | Anthropic | 高階：大腦（規劃、審定）（Claude Code，主力） |
+| SONNET | Anthropic | 中階：施工、review（Claude Code） |
+| HAIKU | Anthropic | 初階：基礎工作（查詢、整理）（Claude Code） |
+| MUSE SPARK | OpenCode-Go | 中階：施工、review |
+| DEEPSEEK FLASH | OpenCode-Go | 中階：施工、review |
+| MIMO FLASH | OpenCode-Go | 初階：基礎工作（查詢、整理）、看圖 |
+| GEMINI FLASH | Google | 中階：施工、review（AGY） |
+| JEV | TypeSafe | 判斷專用（System One：只回選項＋機率，不生成文字）：記憶分類／去重／取代判斷。試用中，其他用途視情形再加 |
+
+OPENCODE（API／model，非 CLI）只走 OpenCode-Go。OpenCode-Go 採**白名單**，目前納入：MUSE SPARK／MIMO FLASH／DEEPSEEK FLASH／FREE MODEL。OpenCode CLI 與 pi CLI 都讀這份白名單；白名單外的 API 由 Owner 自行接。
+
+不在本表的 model：不要自己挑。要用請先問 Owner。
+高階不做中階工作，除非被指定（如 Rescuer）。高階額度不足時：留一個高階做 Planner，DEEPSEEK FLASH＋MUSE SPARK 各用最高 effort 平行做 Challenger。
+派工角色規則以 QMem 必讀 **#425** 為準（#310 → #424 → #425；2026-10-28 改為預設分工版），本 session 實際分工由 `/team-dev` 設定。
+
+**Codex 速度**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。
+
+## 暱稱 → 各 CLI 實際寫法
+
+| 暱稱 | Claude Code | Codex（App 選單／`-m`，經 opencodex） | OpenCode | pi | AGY |
+|---|---|---|---|---|---|
+| SOL | —（改 CLI 派工） | `gpt-6.1-sol` | —（未開放） | — | — |
+| TERRA | —（改 CLI 派工） | `openai/gpt-6.1-terra` | — | — | — |
+| LUNA | —（改 CLI 派工） | `gpt-6-luna` | —（已停用） | — | — |
+| ASTRA | —（改 CLI 派工） | `gpt-6-astra` | — | — | — |
+| OPUS | `opus`（別名，自動跟最新） | — | — | — | — |
+| SONNET | `sonnet`（別名，自動跟最新） | — | — | — | — |
+| HAIKU | `haiku`（Agent 工具 model 參數） | — | — | — | — |
+| MUSE SPARK | — | `OC-muse-spark` | `opencode-go/muse-spark-1.3-contributor` | `opencode-go/muse-spark-1.3-contributor` | — |
+| DEEPSEEK FLASH | —（改 CLI 派工） | `OC-deepseek-flash`（或不經 proxy：`-p oc_ds_flash`） | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash`（舊 ID `opencode-go/deepseek-flash` 已於 2026-10-27 被上游停用） | — |
+| MIMO FLASH | — | `OC-mimo-flash` | `opencode-go/mimo-v2.6-flash` | `--provider opencode-go --model mimo-v2.6-flash` | — |
+| GEMINI FLASH | — | — | — | `google-gemini/gemini-2.5-flash`（免費，備援） | `gemini-3.8-flash-high`（另 medium／low） |
+
+Codex 的 `OC-*` 是 opencodex 別名，**名稱不帶版本、永遠不變**；上游改版只改別名背後的 target（見 CLI-GUIDE.md「Codex」）。
+
+JEV 不是聊天模型，CLI 叫不到；三條管道（2026-10-01 查證，價格皆為輸入 $0.042／1M token、輸出免費）：
+- **Cloudflare Workers AI**（主力）：`env.AI.run('typesafe/jev', …)`；官方標示 zero data retention。第三方模型**不在免費額度內**：未儲值會回 402 `Insufficient balance`；不儲值。
+- **TypeSafe 官方 API**（**QMem Worker 正式用這條**，Owner 2026-10-01 裁決）：`POST /v1/systemone`，model `jev-1.13.0`（別名 `jev-latest`）；金鑰 `~/.secrets/example-home/JEV.env`。
+- **OpenCode Zen**（Owner 有 USD $5 初始額度）：`jev-1.13`、限時免費 `jev-1.13-free`（免費版資料政策未查證，只餵模擬資料）。**不在 opencode-go 訂閱內**；`opencode.json` 的 policy 目前擋掉 Zen，要用請直接打 API，改設定先問 Owner。
+
+**AGY**（`/Users/example-owner/.local/bin/agy`）：GEMINI 家族一律走 AGY，`--model gemini-3.8-flash-high`（另有 medium／low）；`agy models` 可列當期清單。GEMINI 4 ARGON 2026-10-28 移出清單（一直沒排入使用名單）。
+
+**Claude Code 不再用 `ocx-*` subagent 呼叫外部模型**（2026-10-13 Owner 定案）：之後一律改 CLI 派工。舊紀錄若見 `ocx-gpt-6-1-sol`、`ocx-gpt-6-luna`、`ocx-gpt-6-astra`、`ocx-oc-deepseek-flash` 等名稱，只作歷史查照，不再使用。
+
+## 推理強度（effort）寫法
+
+| CLI | 寫法 |
+|---|---|
+| Claude Code | `/model` 選單調整 |
+| Codex | `-c model_reasoning_effort="xhigh"`（low / medium / high / xhigh） |
+| OpenCode | `-m provider/model#variant` |
+| pi | `--model id:max` 或 `--thinking max`（off … high / xhigh / max） |
+
+## 找不到 model 時（白名單失效）
+
+1. 不要猜新 ID、不要自己換成別的 model。
+2. 跑該 CLI 的列清單指令，找同家族最新版：
+   - Codex：`python3 -c "import json;[print(m['slug']) for m in json.load(open('$HOME/.codex/opencodex-catalog.json'))['models']]"`
+   - Codex 清單沒有新 GPT model → 不必等 opencodex 發版：`ocx models add openai/<新ID>` 手動註冊即可進選單。
+   - OpenCode：`opencode models | grep opencode-go/`
+   - pi：`pi --list-models <關鍵字>`
+   - AGY：`agy models`
+3. 回報 Owner：「暱稱 X 的 ID 從 A 變成 B，要更新 MODELS.md 嗎？」由 Owner 拍板後才改本檔與 CLI 設定。
+# Coding CLI 使用手冊（團隊合作前先讀）
+
+> 所有 CLI 共用。模型 ID 一律查 `~/.agents/MODELS.md`，本檔只講機制、注意事項、指令。
+> 最後查證：2026-10-28 加 HAIKU、ocx-* 標停用、Codex 速度規則；2026-10-27 pi DEEPSEEK FLASH 範例改新 ID；2026-10-18 增「必看的坑」一節；2026-09-30（codex-cli 0.159.2 / opencodex 2.73.0 / opencode v2.0.10 / pi 0.87.1）
+
+## 共通規則
+
+- 派工、報告一律寫模型暱稱（SOL、LUNA、DEEPSEEK FLASH…），並附實際 ID 與 effort。
+- 不得默默換 model。指定的 model 失敗 → 回報，不要自己找替代。
+- 派別的 CLI 當 worker / reviewer 時：非同步背景跑，不要 blocking 等；超過 5 分鐘是正常的。
+- Reviewer 一律唯讀（Codex 加 `--sandbox read-only`）。
+- Owner 非技術背景：回報先講白話「這是什麼、為什麼」，再講技術細節。
+- **等待背景工作（2026-10-08 Owner 同意；起因：`pgrep -f` 比對到等待腳本自己，空等 25 分鐘，且常發生）**：
+  1. 盯 PID，不按名字找：啟動時記 `$!`（寫進 `.pid` 檔），等待只用 `kill -0 <PID>`。
+  2. 或用完成標記檔：`<指令> > log 2>&1; echo $? > done.flag`，等待只看 `done.flag`，順便拿到結束碼。
+  3. 每個等待迴圈都設上限（預估時間約 2 倍），逾時就停下回報，不無限期空等。
+  4. 不得不按名字找時要排除自己：`pgrep -f "[n]ode --test"`；只當退路。
+  5. 等待超過預估 1.5 倍，主動查狀態並回報 Owner，不等 Owner 來問。
+
+## 從一個 harness 呼叫另一個 CLI：必看的坑（2026-10-18 彙整）
+
+> 任何 harness 要用 Bash 派工／叫別的 CLI 前先看這張表。來源：QMem #43、#108、#278 與實測。
+
+**通用（所有 CLI 都適用）**
+- 背景執行一律加 `< /dev/null`，不加可能卡在等 stdin（Codex 必卡；pi MUSE SPARK 曾卡 9.5 小時）。
+- 一律設時間上限。macOS **沒有 `timeout` 指令**，改用：`perl -e 'alarm shift; exec @ARGV' <秒數> <指令…>`。
+- 不要用 `| tail`／`| head` 接長時間任務：pipe 會等指令結束才吐輸出，看起來像卡住。判斷進度看工作目錄檔案 mtime 或 `git status -s`。
+- 背景派工用工具的背景執行（Claude Code `run_in_background`），**不要用 `( … ) &`**：pi 這樣啟動會被砍且輸出 0 bytes。
+- 驗證模型身分不要叫模型自報（常答錯），看 CLI 印的 session header＋派一個可驗證的小任務。
+
+| CLI | 正確寫法 | 坑 |
+|---|---|---|
+| **AGY** | `agy --model gemini-3.8-flash-high --print-timeout 20m -p "<prompt>" < /dev/null` | ① `-p` 會把**下一個字**當 prompt：寫成 `-p --model …` 會報錯或吃錯參數，**`-p "<prompt>"` 放最後**。② 非互動預設 **5 分鐘就中斷**，審查／長任務一定加 `--print-timeout 20m`（或更長）。③ `--model` 要用 slug（`gemini-3.8-flash-high`），不要用顯示名稱（如「Gemini 3.6 Flash (High)」），否則會回「模型不可用」或走慢速預設而逾時。④ 實測 reviewer 品質不如 pi DEEPSEEK FLASH，AGY 的「全部沒問題」不可直接當結論。 |
+| **pi** | `pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>" < /dev/null` | ① `pi -p` **整個任務做完才一次輸出**，執行中 log 一直是 0 bytes，這是正常的；判斷活著看檔案 mtime／`git status -s`。② MIMO 用 `--provider opencode-go --model mimo-v2.6-flash`（把 provider 寫進 `--model` 曾無聲退出）。③ MUSE SPARK 要寫完整 ID `muse-spark-1.3-contributor`。④ 要確認 pi 可用：跑一句「原樣回覆 OK」的小測試。⑤ 不要用 `pi install` 試裝擴充，它會改全域 `settings.json`；臨時要用就 `-e` 載入。 |
+| **Codex** | `codex exec -m <id> --cd <dir> "<prompt>" < /dev/null` | ① 不加 `< /dev/null` 必卡（process 活著但不做事）。② 全域是 `danger-full-access`，要降權必須明確加 `--sandbox`。③ `--sandbox read-only` 的 reviewer 跑不了測試、寫不了暫存檔，要實測的驗收改派 pi 或 Opus。④ 收結果用 `-o <file>`／`--json`。 |
+| **OpenCode** | `opencode run --auto -m opencode-go/deepseek-v4.1-flash "<prompt>" < /dev/null` | ① 讀工作目錄外的檔（例如 `~/.agents/`）會被 `external_directory` 擋下並中斷，非互動要加 `--auto`。② 背景 service 卡住時加 `--standalone`。③ MIMO FLASH 偶爾工具呼叫格式出錯，換 DEEPSEEK FLASH。 |
+| **Claude Code** | `echo "<prompt>" \| claude -p --model sonnet` | 只能用 OPUS／SONNET／HAIKU（Claude Code 內派工直接用 Agent 工具的 `model` 參數較省事）；prompt 有特殊字元要正確跳脫，避免被 shell 執行。 |
+
+## Claude Code
+
+**機制**
+- 只用 Anthropic 官方模型（OPUS / SONNET / HAIKU）。`opus`、`sonnet`、`haiku` 是別名，會自動跟到最新版，不會有白名單失效問題。
+- `ocx-*` subagent **已停用**（2026-10-13 Owner 定案）：Agent 清單裡看得到，但不要用；呼叫別家模型一律改 CLI 派工。
+- 全域指令：`~/.claude/CLAUDE.md`（支援 `@路徑` 匯入別的檔案）。
+
+**指令**
+- 非互動：`claude -p "<prompt>"`
+- 切模型：`/model`
+
+## Codex（經 opencodex）
+
+**機制**
+- `~/.codex/config.toml` 的 `openai_base_url` 被 opencodex 指到本機 proxy `http://127.0.0.1:10100/v1`，再分流：
+  - `gpt-*` → ChatGPT 帳號（OpenAI 訂閱）
+  - `OC-*` → OpenCode-Go（opencodex 的 combo 別名）
+- **Codex App 的選單也來自 opencodex**（`~/.codex/opencodex-catalog.json`）。沒有 opencodex，App 選單只剩 GPT，OC-* 全部消失（2026-09-30 實測）。
+- 不經 proxy 的備援：`-p oc_ds_flash`（原生 `opencode_go` provider，只支援 DeepSeek；Muse、Mimo 原生不行）。team-dev relay 用這條。
+- **速度規則**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。全域 `~/.codex/config.toml` 的 `service_tier = "fast"` 已註解掉（預設一般速度，Codex App 也一樣）；派 LUNA 時加 `-c service_tier='"fast"'`（2026-10-28 實測可跑）。
+- TERRA 是用 `ocx models add` 手動註冊的，`-m` 要寫 `openai/gpt-6.1-terra`（2026-10-28 實測可用）。
+
+**Owner 的清單怎麼維持（不必每次更新）**
+- OpenCode-Go：選單只放三個**不帶版號**的別名 `OC-deepseek-flash`、`OC-muse-spark`、`OC-mimo-flash`。上游出新模型不會自動冒出來（`liveModels=false`）。上游改名或下架時，只改 target，別名不動：
+  `ocx combo set OC-mimo-flash --targets opencode-go/<新ID> --alias OC-mimo-flash`
+- OpenAI：新 GPT model 內建在 opencodex 版本裡。**不想等發版** → `ocx models add openai/<新ID>` 手動註冊；不要的用 `disabledModels` 藏起來（黑名單，新 model 預設會出現）。
+- 升級 opencodex：`ocx update`（會自動重套 compat shim）。**不是必要的**，只有想要新功能，或不想手動 add 新 model 時才升。
+
+**常用 ocx 指令**
+- 狀態：`ocx status`；修復：`ocx ensure`；看別名：`ocx combo list`
+- 暫停 proxy、還原原生 Codex：`ocx restore`（`ocx restore back` 接回去）。**不要用 `ocx uninstall`**：它會刪掉 config，而且 App 選單的 OC-* 會消失。
+- 改了 `~/.opencodex/config.json`（金鑰、combo）要重開 proxy 才生效：`launchctl kickstart -k gui/$(id -u)/com.opencodex.proxy`（不要用 `ocx stop`，它會順便還原原生 Codex）。`ocx combo set` 會把該 combo 的 `defaultEffort` 清成 null，改完要手動補回。
+- `OC-*` 回 `No available targets for combo` 時，先直接打 proxy 看真正錯誤（2026-10-27 是 OpenCode-Go 金鑰過期 401）：opencodex 的 `providers.opencode-go(-responses).apiKey` 要跟 `~/.secrets/example-home/opencode.env` 同一把。
+
+**沙盒（sandbox）白話版**
+
+Sandbox = 限制 Codex 能碰什麼。三種模式：
+
+| 模式 | 能讀 | 能寫 | 網路 | 用在 |
+|---|---|---|---|---|
+| `read-only` | 全部 | 不能 | 不能 | reviewer |
+| `workspace-write` | 全部 | 只有工作目錄（`--add-dir` 可加） | 預設關 | 一般施工 |
+| `danger-full-access` | 全部 | 全部 | 開 | Owner 本機全域預設 |
+
+- Owner 全域設定是 `danger-full-access` ＋ `approval_policy = "never"`（等於不設限、不問）。
+- 「怪怪的」通常是 `workspace-write`：`npm install`、`git push`、寫工作目錄外的檔案會失敗，因為網路預設關、寫入範圍受限。不是 bug。
+- 全域 AGENTS.md：`~/.codex/AGENTS.md`（不支援匯入，要寫「先讀某檔」）。
+
+**指令**
+- 非互動：`codex exec -m <id> -c model_reasoning_effort="high" --cd <dir> "<prompt>" < /dev/null`（背景執行一定要 `< /dev/null`，否則會卡在等 stdin）
+- DeepSeek：`codex exec -p oc_ds_flash --cd <dir> "<prompt>" < /dev/null`
+- prompt 從 stdin：結尾放 `-`，例如 `codex exec ... - < prompt.txt`
+- Reviewer：`codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" --sandbox read-only --cd <dir> -`
+- 只要最後回覆：`-o <file>`；JSON 事件流：`--json`
+- 列模型：見 MODELS.md「找不到 model 時」
+
+## OpenCode
+
+**機制**
+- 設定：`~/.config/opencode/opencode.json`。
+- 模型用**黑名單**（`"disabled": true`）：上游新增的 model 會自動出現，要手動再關掉；舊 model 下架不會壞設定。
+- `experimental.policies` 擋掉 `openrouter`、`deepseek`、`opencode`（付費 Zen 線）三個 provider，只走 `opencode-go` 訂閱線。
+- 原生支援 MCP（已接 FRIDAY `mem`）。
+- `instructions` 陣列列出的檔案每次 session 自動載入。
+- `opencode run` 預設連背景 service；service 卡住時加 `--standalone`。
+
+**指令**
+- 非互動：`opencode run -m opencode-go/deepseek-v4.1-flash "<prompt>"`
+- 自動核准權限：`--auto`；JSON 輸出：`--format json`
+- 列模型：`opencode models | grep opencode-go/`
+
+## pi
+
+**機制**
+- 設定：`~/.pi/agent/settings.json`（`enabledModels` = 白名單，Ctrl+P 切換用）、`~/.pi/agent/models.json`（自訂 model 定義）。
+- 白名單項目在上游消失時只會警告 `No models match pattern`，不會擋啟動。
+- **內建 MCP**（2026-10-09 查證，pi 1.0.4）：直接讀 `~/.pi/agent/mcp.json`（已接 QMem 本機 `qmem`）。**不要再載 `pi-mcp-adapter`**：它會自動在 `settings.json` 寫入 `"-builtin:mcp"` 關掉內建 MCP。
+- `pi -p` 跑完才一次輸出 stdout；背景派工判斷是否還活著，看 worktree 檔案 mtime 或 `git status -s`，不要看 log 大小。
+- 全域記憶：`~/.pi/agent/AGENTS.md`（`--no-context-files` 可關）。
+
+**指令**
+- 非互動：`pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>"`
+- mimo 用 provider 寫法較保險：`pi -p --provider opencode-go --model mimo-v2.6-flash "<prompt>"`
+- 隔離執行：`--no-session --no-extensions --no-context-files --tools read,bash`（`--no-extensions` 連內建 MCP 一起關，要用 QMem 就拿掉）
+- 列模型：`pi --list-models <關鍵字>`
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "git status --short && rg --files -g AGENTS.md -g 'tvagent/**' | head -100" in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+tvagent/src/com/example/tvagent/TestReceiver.java
+tvagent/src/com/example/tvagent/AgentService.java
+tvagent/src/com/example/tvagent/BootReceiver.java
+tvagent/src/com/example/tvagent/AlarmReceiver.java
+tvagent/src/com/example/tvagent/AdbClient.java
+tvagent/test.sh
+tvagent/tvagent.apk
+tvagent/debug.keystore
+tvagent/build.sh
+tvagent/README.md
+tvagent/AndroidManifest.xml
+tvagent/test/AdbClientTest.java
+tvagent/testdata/adbkey
+tvagent/testdata/README.txt
+tvagent/testdata/adbkey.pub
+tvagent/testdata/token.bin
+tvagent/testdata/token.sig
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat tvagent/test.sh tvagent/build.sh tvagent/test/AdbClientTest.java' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+#!/bin/sh
+# 離線協定測試：在 Docker 內用純 Java 編譯並執行 AdbClient + AdbClientTest。
+# 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+rm -rf testout && mkdir -p testout
+javac -d testout src/com/example/tvagent/AdbClient.java test/AdbClientTest.java
+java -cp testout com.example.tvagent.AdbClientTest testdata
+rm -rf testout'
+#!/bin/sh
+# 用 Docker 映像 cleanyourtv-android-build-amd64 編譯，輸出 tvagent.apk。在 Mac 上執行：sh build.sh
+cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+BT=/opt/android-sdk/build-tools/34.0.0; JAR=/opt/android-sdk/platforms/android-34/android.jar
+rm -rf out && mkdir -p out/classes
+[ -f debug.keystore ] || keytool -genkeypair -keystore debug.keystore -storepass android -keypass android -alias tvagent -keyalg RSA -validity 36500 -dname CN=tvagent
+$BT/aapt2 link -o out/base.apk -I $JAR --manifest AndroidManifest.xml
+javac -source 8 -target 8 -bootclasspath $JAR -d out/classes src/com/example/tvagent/*.java
+$BT/d8 --min-api 26 --lib $JAR --output out out/classes/com/example/tvagent/*.class
+(cd out && jar uf base.apk classes.dex)
+$BT/zipalign -f 4 out/base.apk out/aligned.apk
+$BT/apksigner sign --ks debug.keystore --ks-pass pass:android --out tvagent.apk out/aligned.apk
+rm -rf out tvagent.apk.idsig'
+package com.example.tvagent;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.spec.RSAPublicKeySpec;
+import java.util.Arrays;
+import java.util.Base64;
+
+/**
+ * 離線協定測試（純 Java）：內建假 adbd（ServerSocket 127.0.0.1）。
+ * 用法：java com.example.tvagent.AdbClientTest &lt;testdata 目錄&gt;
+ * 最後一行印 ALL PASS；任一失敗以非 0 結束。
+ */
+public class AdbClientTest {
+
+    static int failures = 0;
+
+    static void check(boolean cond, String name, String detail) {
+        if (cond) {
+            System.out.println("PASS " + name);
+        } else {
+            System.out.println("FAIL " + name + " :: " + detail);
+            failures++;
+        }
+    }
+
+    // ---------- 小工具 ----------
+
+    static byte[] readFile(File f) throws Exception {
+        FileInputStream fis = new FileInputStream(f);
+        try {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            byte[] tmp = new byte[8192];
+            int n;
+            while ((n = fis.read(tmp)) >= 0) {
+                b.write(tmp, 0, n);
+            }
+            return b.toByteArray();
+        } finally {
+            fis.close();
+        }
+    }
+
+    static int freePort() throws Exception {
+        ServerSocket s = new ServerSocket(0);
+        try {
+            return s.getLocalPort();
+        } finally {
+            s.close();
+        }
+    }
+
+    static String runClient(int port, PrivateKey priv, PublicKey pub, String cmd,
+            long authMs, long ioMs) throws AdbClient.AdbException {
+        AdbClient c = new AdbClient("127.0.0.1", port, priv, pub);
+        c.setAuthTimeoutMs(authMs);
+        c.setIoTimeoutMs(ioMs);
+        return c.shell(cmd);
+    }
+
+    // ---------- 獨立驗算（不經過 AdbClient 的金鑰程式碼） ----------
+
+    static final class ParsedKey {
+        BigInteger n;
+        BigInteger e;
+    }
+
+    static ParsedKey parseMincrypt(byte[] raw) throws Exception {
+        if (raw.length != 524) {
+            throw new Exception("pubkey raw length " + raw.length + " != 524");
+        }
+        ByteBuffer b = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+        int len = b.getInt();
+        if (len != 64) {
+            throw new Exception("len field " + len + " != 64");
+        }
+        long n0inv = b.getInt() & 0xffffffffL;
+        byte[] nLe = new byte[256];
+        byte[] rrLe = new byte[256];
+        b.get(nLe);
+        b.get(rrLe);
+        int e = b.getInt();
+        byte[] nBe = new byte[256];
+        byte[] rrBe = new byte[256];
+        for (int i = 0; i < 256; i++) {
+            nBe[i] = nLe[255 - i];
+            rrBe[i] = rrLe[255 - i];
+        }
+        BigInteger n = new BigInteger(1, nBe);
+        BigInteger rr = new BigInteger(1, rrBe);
+        BigInteger two32 = BigInteger.ONE.shiftLeft(32);
+        if (!n.multiply(BigInteger.valueOf(n0inv)).mod(two32).equals(two32.subtract(BigInteger.ONE))) {
+            throw new Exception("n0inv mismatch");
+        }
+        if (!BigInteger.ONE.shiftLeft(4096).mod(n).equals(rr)) {
+            throw new Exception("rr mismatch");
+        }
+        ParsedKey k = new ParsedKey();
+        k.n = n;
+        k.e = BigInteger.valueOf(e & 0xffffffffL);
+        return k;
+    }
+
+    static void verifySignature(byte[] sig, byte[] token, ParsedKey k) throws Exception {
+        if (sig.length != 256) {
+            throw new Exception("sig length " + sig.length);
+        }
+        BigInteger m = new BigInteger(1, sig).modPow(k.e, k.n);
+        byte[] be = m.toByteArray();
+        byte[] em = new byte[256];
+        int copyFrom = Math.max(0, be.length - 256);
+        int copyLen = Math.min(be.length, 256);
+        System.arraycopy(be, copyFrom, em, 256 - copyLen, copyLen);
+        byte[] prefix = {
+            (byte) 0x30, (byte) 0x21, (byte) 0x30, (byte) 0x09,
+            (byte) 0x06, (byte) 0x05, (byte) 0x2b, (byte) 0x0e,
+            (byte) 0x03, (byte) 0x02, (byte) 0x1a, (byte) 0x05,
+            (byte) 0x00, (byte) 0x04, (byte) 0x14,
+        };
+        int diLen = prefix.length + token.length;
+        byte[] expect = new byte[256];
+        expect[0] = 0x00;
+        expect[1] = 0x01;
+        Arrays.fill(expect, 2, 256 - diLen - 1, (byte) 0xff);
+        expect[256 - diLen - 1] = 0x00;
+        System.arraycopy(prefix, 0, expect, 256 - diLen, prefix.length);
+        System.arraycopy(token, 0, expect, 256 - token.length, token.length);
+        if (!Arrays.equals(em, expect)) {
+            throw new Exception("sig^e mod n != PKCS#1 v1.5(SHA-1 DigestInfo || token)");
+        }
+    }
+
+    // ---------- 假 adbd ----------
+
+    static final class Fake {
+        enum Auth {
+            REJECT_FIRST, ACCEPT_FIRST, SILENT, CLOSE_AFTER_TOKEN, STLS,
+            BAD_MAGIC, BAD_CHECKSUM, GARBAGE_CMD
+        }
+
+        enum Shell {
+            ECHO_OK, BIG, TRUNCATED, NONE
+        }
+
+        final Auth auth;
+        final Shell shell;
+        final int version;
+        final int maxdata;
+        ParsedKey knownKey; // ACCEPT_FIRST 用：上一輪記下的公鑰
+        byte[] bigOutput;
+
+        ServerSocket ss;
+        Thread thread;
+        volatile String failure;
+        volatile boolean sawPubkey;
+        volatile ParsedKey capturedKey;
+        volatile byte[] capturedSig1;
+        volatile byte[] capturedToken1;
+
+        Fake(Auth auth, Shell shell, int version, int maxdata) {
+            this.auth = auth;
+            this.shell = shell;
+            this.version = version;
+            this.maxdata = maxdata;
+        }
+
+        int start() throws Exception {
+            ss = new ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"));
+            thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Socket s = ss.accept();
+                        try {
+                            handle(s);
+                        } finally {
+                            try {
+                                s.close();
+                            } catch (Exception ignored) {
+                                // 關閉失敗不影響判定
+                            }
+                        }
+                    } catch (Exception e) {
+                        note("accept/handler: " + e);
+                    }
+                }
+            });
+            thread.setDaemon(true);
+            thread.start();
+            return ss.getLocalPort();
+        }
+
+        void awaitDone(long timeoutMs) throws Exception {
+            thread.join(timeoutMs);
+            try {
+                ss.close();
+            } catch (Exception ignored) {
+                // 關閉失敗不影響判定
+            }
+        }
+
+        void note(String f) {
+            if (failure == null) {
+                failure = f;
+            }
+        }
+
+        void expect(boolean cond, String what) {
+            if (!cond) {
+                note(what);
+                throw new RuntimeException(what);
+            }
+        }
+
+        void checkCap(AdbClient.Msg m, String what) {
+            expect(m.payload.length <= maxdata,
+                    what + " payload " + m.payload.length + " exceeds maxdata " + maxdata);
+        }
+
+        static void writeRawHeader(OutputStream out, int cmd, int a0, int a1,
+                int len, int cksum, int magic) throws Exception {
+            ByteBuffer h = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+            h.putInt(cmd);
+            h.putInt(a0);
+            h.putInt(a1);
+            h.putInt(len);
+            h.putInt(cksum);
+            h.putInt(magic);
+            out.write(h.array());
+            out.flush();
+        }
+
+        void handle(Socket s) throws Exception {
+            s.setSoTimeout(10000);
+            DataInputStream in = new DataInputStream(s.getInputStream());
+            OutputStream out = s.getOutputStream();
+
+            AdbClient.Msg hello;
+            try {
+                hello = AdbClient.readMessage(in, -1);
+            } catch (Exception e) {
+                note("reading client CNXN: " + e);
+                return;
+            }
+            try {
+                expect(hello.cmd == AdbClient.CMD_CNXN, "first must be CNXN");
+                checkCap(hello, "client CNXN");
+            } catch (RuntimeException e) {
+                return;
+            }
+
+            byte[] devId = "device::\0".getBytes(StandardCharsets.UTF_8);
+            if (auth == Auth.BAD_MAGIC) {
+                writeRawHeader(out, AdbClient.CMD_CNXN, version, maxdata, 0, 0, 0x12345678);
+                return;
+            }
+            if (auth == Auth.BAD_CHECKSUM) {
+                ByteBuffer h = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+                h.putInt(AdbClient.CMD_CNXN);
+                h.putInt(version);
+                h.putInt(maxdata);
+                h.putInt(devId.length);
+                h.putInt(AdbClient.checksum(devId, devId.length) + 1); // 故意寫錯
+                h.putInt(AdbClient.CMD_CNXN ^ 0xffffffff);
+                out.write(h.array());
+                out.write(devId);
+                out.flush();
+                return;
+            }
+            if (auth == Auth.STLS) {
+                AdbClient.writeMessage(out, AdbClient.CMD_STLS, 0, 0, AdbClient.EMPTY);
+                return;
+            }
+            if (auth == Auth.GARBAGE_CMD) {
+                AdbClient.writeMessage(out, AdbClient.CMD_OKAY, 1, 2, AdbClient.EMPTY);
+                return;
+            }
+            if (auth == Auth.SILENT) {
+                // 真 adbd 未授權時只回 AUTH TOKEN（不會先回 CNXN）；沉默即一個都不回。
+                try {
+                    AdbClient.readMessage(in, 0x01000000L); // 等客戶端自己放棄並斷線
+                } catch (Exception ignored) {
+                    // 客戶端斷線是預期行為
+                }
+                return;
+            }
+
+            byte[] token1 = new byte[20];
+            for (int i = 0; i < 20; i++) {
+                token1[i] = (byte) (i + 1);
+            }
+            byte[] token2 = new byte[20];
+            for (int i = 0; i < 20; i++) {
+                token2[i] = (byte) (0x51 + i);
+            }
+            AdbClient.writeMessage(out, AdbClient.CMD_AUTH, AdbClient.AUTH_TOKEN, 0, token1);
+            if (auth == Auth.CLOSE_AFTER_TOKEN) {
+                s.close();
+                return;
+            }
+
+            AdbClient.Msg sig1;
+            try {
+                sig1 = AdbClient.readMessage(in, version);
+                expect(sig1.cmd == AdbClient.CMD_AUTH && sig1.arg0 == AdbClient.AUTH_SIGNATURE,
+                        "expect SIGNATURE, got " + AdbClient.cmdName(sig1.cmd));
+                checkCap(sig1, "client SIGNATURE");
+                expect(sig1.payload.length == 256, "sig length " + sig1.payload.length);
+            } catch (RuntimeException e) {
+                return;
+            }
+
+            if (auth == Auth.ACCEPT_FIRST) {
+                try {
+                    expect(knownKey != null, "no known key for round 2");
+                    verifySignature(sig1.payload, token1, knownKey);
+                    AdbClient.writeMessage(out, AdbClient.CMD_CNXN, version, maxdata, devId);
+                } catch (Exception e) {
+                    note("round2 verify: " + e.getMessage());
+                    return;
+                }
+            } else {
+                // 拒絕第一輪簽章，要求送公鑰
+                AdbClient.writeMessage(out, AdbClient.CMD_AUTH, AdbClient.AUTH_TOKEN, 0, token2);
+                AdbClient.Msg pub;
+                try {
+                    pub = AdbClient.readMessage(in, version);
+                    expect(pub.cmd == AdbClient.CMD_AUTH
+                            && pub.arg0 == AdbClient.AUTH_RSAPUBLICKEY,
+                            "expect RSAPUBLICKEY, got " + AdbClient.cmdName(pub.cmd));
+                    checkCap(pub, "client RSAPUBLICKEY");
+                    expect(pub.payload.length > 0
+                            && pub.payload[pub.payload.length - 1] == 0,
+                            "RSAPUBLICKEY must end with NUL");
+                    sawPubkey = true;
+                    byte[] raw = Base64.getDecoder().decode(new String(pub.payload, 0,
+                            pub.payload.length - 1, StandardCharsets.US_ASCII).split(" ")[0]);
+                    capturedKey = parseMincrypt(raw);
+                    capturedToken1 = token1;
+                    capturedSig1 = sig1.payload;
+                    verifySignature(sig1.payload, token1, capturedKey);
+                    AdbClient.writeMessage(out, AdbClient.CMD_CNXN, version, maxdata, devId);
+                } catch (RuntimeException e) {
+                    return;
+                } catch (Exception e) {
+                    note("pubkey/sig verify: " + e.getMessage());
+                    return;
+                }
+            }
+
+            // 認證完成，接 OPEN
+            AdbClient.Msg open;
+            try {
+                open = AdbClient.readMessage(in, version);
+                expect(open.cmd == AdbClient.CMD_OPEN, "expect OPEN");
+                checkCap(open, "client OPEN");
+            } catch (RuntimeException e) {
+                return;
+            }
+            int local = open.arg0;
+            int remote = 7;
+            String dest = new String(open.payload, 0,
+                    Math.max(0, open.payload.length - 1), StandardCharsets.UTF_8);
+            try {
+                if (shell == Shell.ECHO_OK) {
+                    expect(dest.equals("shell:echo ok"), "unexpected dest " + dest);
+                    byte[] ok = "ok\n".getBytes(StandardCharsets.UTF_8);
+                    AdbClient.writeMessage(out, AdbClient.CMD_OKAY, remote, local,
+                            AdbClient.EMPTY);
+                    AdbClient.writeMessage(out, AdbClient.CMD_WRTE, remote, local, ok);
+                    AdbClient.writeMessage(out, AdbClient.CMD_CLSE, remote, local,
+                            AdbClient.EMPTY);
+                    AdbClient.Msg a1 = AdbClient.readMessage(in, version);
+                    expect(a1.cmd == AdbClient.CMD_OKAY, "expect OKAY ack");
+                    AdbClient.Msg a2 = AdbClient.readMessage(in, version);
+                    expect(a2.cmd == AdbClient.CMD_CLSE, "expect CLSE reply");
+                } else if (shell == Shell.BIG) {
+                    AdbClient.writeMessage(out, AdbClient.CMD_OKAY, remote, local,
+                            AdbClient.EMPTY);
+                    int off = 0;
+                    int n = 0;
+                    while (off < bigOutput.length) {
+                        int len = Math.min(2000, bigOutput.length - off);
+                        byte[] chunk = Arrays.copyOfRange(bigOutput, off, off + len);
+                        if (n == 1) {
+                            // 其中一片故意 checksum 填 0（version>=1 視為合法）
+                            ByteBuffer h = ByteBuffer.allocate(24)
+                                    .order(ByteOrder.LITTLE_ENDIAN);
+                            h.putInt(AdbClient.CMD_WRTE);
+                            h.putInt(remote);
+                            h.putInt(local);
+                            h.putInt(chunk.length);
+                            h.putInt(0);
+                            h.putInt(AdbClient.CMD_WRTE ^ 0xffffffff);
+                            out.write(h.array());
+                            out.write(chunk);
+                            out.flush();
+                        } else {
+                            AdbClient.writeMessage(out, AdbClient.CMD_WRTE, remote, local, chunk);
+                        }
+                        off += len;
+                        n++;
+                    }
+                    AdbClient.writeMessage(out, AdbClient.CMD_CLSE, remote, local,
+                            AdbClient.EMPTY);
+                    for (int i = 0; i < n; i++) {
+                        AdbClient.Msg a = AdbClient.readMessage(in, version);
+                        expect(a.cmd == AdbClient.CMD_OKAY, "expect OKAY ack " + i);
+                    }
+                    AdbClient.Msg c = AdbClient.readMessage(in, version);
+                    expect(c.cmd == AdbClient.CMD_CLSE, "expect CLSE reply");
+                } else if (shell == Shell.TRUNCATED) {
+                    AdbClient.writeMessage(out, AdbClient.CMD_OKAY, remote, local,
+                            AdbClient.EMPTY);
+                    ByteBuffer h = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+                    h.putInt(AdbClient.CMD_WRTE);
+                    h.putInt(remote);
+                    h.putInt(local);
+                    h.putInt(100); // 宣稱 100，實際只送 10 就斷線
+                    h.putInt(0);
+                    h.putInt(AdbClient.CMD_WRTE ^ 0xffffffff);
+                    out.write(h.array());
+                    out.write(new byte[10]);
+                    out.flush();
+                    s.close();
+                }
+            } catch (RuntimeException e) {
+                return;
+            }
+        }
+    }
+
+    // ---------- 測試 ----------
+
+    static void testVectors(String td) throws Exception {
+        PrivateKey priv = AdbClient.loadPrivateKey(new File(td + "/adbkey"));
+        RSAPrivateCrtKey crt = (RSAPrivateCrtKey) priv;
+        PublicKey pub = KeyFactory.getInstance("RSA").generatePublic(
+                new RSAPublicKeySpec(crt.getModulus(), crt.getPublicExponent()));
+        String mine = AdbClient.adbPublicKeyString(pub).split(" ")[0];
+        String theirs = new String(readFile(new File(td + "/adbkey.pub")),
+                StandardCharsets.US_ASCII).split("\\s+")[0];
+        check(mine.equals(theirs), "vector-pubkey",
+                "pubkey base64 differs (len " + mine.length() + " vs " + theirs.length() + ")");
+        byte[] token = readFile(new File(td + "/token.bin"));
+        byte[] expectSig = readFile(new File(td + "/token.sig"));
+        byte[] sig = AdbClient.signToken(priv, token);
+        check(Arrays.equals(sig, expectSig), "vector-sig", "signature bytes differ");
+        byte[] wire = (AdbClient.adbPublicKeyString(pub) + "\0").getBytes(StandardCharsets.UTF_8);
+        check(wire[wire.length - 1] == 0, "vector-pubkey-nul", "wire pubkey must end with NUL");
+        // 已存在的金鑰檔（只有私鑰 PKCS#8）：loadOrGenerateKey 推導出的公鑰必須與向量一致
+        KeyPair fromFile = AdbClient.loadOrGenerateKey(new File(td + "/adbkey"));
+        check(Arrays.equals(fromFile.getPublic().getEncoded(), pub.getEncoded()),
+                "vector-loadOrGenerate-pubkey", "public key derived from key file differs");
+    }
+
+    static void testOpaquePrivateKey() throws Exception {
+        // 模擬 Conscrypt：金鑰物件不實作 RSAPrivateCrtKey。
+        // 舊程式碼在此直接 (RSAPrivateCrtKey) 轉型會丟 ClassCastException（實機 agent.log 的錯誤）。
+        KeyPair kp = freshKey();
+        final PrivateKey real = kp.getPrivate();
+        final byte[] enc = real.getEncoded();
+        PrivateKey opaque = new PrivateKey() {
+            @Override
+            public String getAlgorithm() {
+                return "RSA";
+            }
+
+            @Override
+            public String getFormat() {
+                return "PKCS#8";
+            }
+
+            @Override
+            public byte[] getEncoded() {
+                return enc.clone();
+            }
+        };
+        PublicKey derived = AdbClient.publicKeyFromPrivate(opaque);
+        check(Arrays.equals(derived.getEncoded(), kp.getPublic().getEncoded()),
+                "opaque-priv-pubkey", "public key derived from opaque private key differs");
+        PublicKey direct = AdbClient.publicKeyFromPrivate(real);
+        check(Arrays.equals(direct.getEncoded(), kp.getPublic().getEncoded()),
+                "direct-priv-pubkey", "public key derived from provider key differs");
+    }
+
+    static void testConscryptBrokenObjectStillLoadsFromFile(String td) throws Exception {
+        // 模擬實機 Conscrypt（電視 Android 11 agent.log）：
+        // KeyFactory.getKeySpec(priv, RSAPrivateCrtKeySpec.class) 回傳不含 CRT 參數的
+        // RSAPrivateKeySpec（舊程式碼隱式轉型即丟 ClassCastException），且金鑰物件的 getEncoded()
+        // 不含可用的 publicExponent。正式路徑一律從檔案 DER 解析，不碰金鑰物件。
+        final byte[] noExponent = new byte[] { 0x30, 0x03, 0x02, 0x01, 0x00 };
+        PrivateKey broken = new PrivateKey() {
+            @Override
+            public String getAlgorithm() {
+                return "RSA";
+            }
+
+            @Override
+            public String getFormat() {
+                return "PKCS#8";
+            }
+
+            @Override
+            public byte[] getEncoded() {
+                return noExponent.clone();
+            }
+        };
+        boolean threw = false;
+        String msg = "";
+        try {
+            AdbClient.publicKeyFromPrivate(broken);
+        } catch (Exception e) {
+            threw = true;
+            msg = String.valueOf(e.getMessage());
+        }
+        check(threw, "conscrypt-broken-object-throws",
+                "publicKeyFromPrivate should refuse key material without publicExponent");
+        check(msg.contains("publicExponent") || msg.contains("PKCS#8"),
+                "conscrypt-broken-error-specific",
+                "error must name the step/field, got [" + msg + "]");
+        // 關鍵斷言：同一個「壞物件」情境下，從 testdata/adbkey 檔載入仍與 adbkey.pub 逐 byte 相同
+        KeyPair fromFile = AdbClient.loadOrGenerateKey(new File(td + "/adbkey"));
+        String mine = AdbClient.adbPublicKeyString(fromFile.getPublic()).split(" ")[0];
+        String theirs = new String(readFile(new File(td + "/adbkey.pub")),
+                StandardCharsets.US_ASCII).split("\\s+")[0];
+        check(mine.equals(theirs), "conscrypt-file-pubkey-matches-pub",
+                "file-derived pubkey base64 differs (len " + mine.length()
+                        + " vs " + theirs.length() + ")");
+    }
+
+    static void testGenerateThenLoadSameKey() throws Exception {
+        // 產生與載入兩條路徑必須得到相同公鑰（寫系統暫存目錄，不污染 repo）
+        File tmp = File.createTempFile("tvagent-conscrypt-test", ".pem");
+        tmp.delete();
+        try {
+            KeyPair k1 = AdbClient.loadOrGenerateKey(tmp);
+            check(tmp.exists(), "generate-writes-file", "key file was not created");
+            KeyPair k2 = AdbClient.loadOrGenerateKey(tmp);
+            check(Arrays.equals(k1.getPublic().getEncoded(), k2.getPublic().getEncoded()),
+                    "generate-load-same-pubkey",
+                    "public key differs between generate and reload");
+        } finally {
+            tmp.delete();
+        }
+    }
+
+    static KeyPair freshKey() throws Exception {
+
+        KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
+        g.initialize(2048);
+        return g.generateKeyPair();
+    }
+
+    static void testAuthRoundTrip() throws Exception {
+        KeyPair kp = freshKey();
+        // 第一輪：簽章被拒 → 送公鑰 → 通過
+        Fake f1 = new Fake(Fake.Auth.REJECT_FIRST, Fake.Shell.ECHO_OK, 0x01000000, 2048);
+        int p1 = f1.start();
+        long t0 = System.currentTimeMillis();
+        String out = runClient(p1, kp.getPrivate(), kp.getPublic(), "echo ok", 10000, 5000);
+        long dt = System.currentTimeMillis() - t0;
+        f1.awaitDone(8000);
+        check(f1.failure == null, "round1-fake-clean",
+                f1.failure == null ? "" : f1.failure);
+        check(out.trim().equals("ok"), "round1-echo", "got [" + out.trim() + "]");
+        check(f1.sawPubkey, "round1-sent-pubkey", "client never sent RSAPUBLICKEY");
+        check(f1.capturedKey != null, "round1-key-parsed", "fake could not parse pubkey");
+        check(dt < 15000, "round1-time", "took " + dt + " ms");
+
+        // 第二輪：同一把金鑰簽章直接通過，不送公鑰
+        Fake f2 = new Fake(Fake.Auth.ACCEPT_FIRST, Fake.Shell.ECHO_OK, 0x01000000, 4096);
+        f2.knownKey = f1.capturedKey;
+        int p2 = f2.start();
+        String out2 = runClient(p2, kp.getPrivate(), kp.getPublic(), "echo ok", 10000, 5000);
+        f2.awaitDone(8000);
+        check(f2.failure == null, "round2-fake-clean",
+                f2.failure == null ? "" : f2.failure);
+        check(out2.trim().equals("ok"), "round2-echo", "got [" + out2.trim() + "]");
+        check(!f2.sawPubkey, "round2-no-pubkey", "client sent RSAPUBLICKEY again");
+    }
+
+    static void testBigOutput() throws Exception {
+        KeyPair kp = freshKey();
+        byte[] big = new byte[10000];
+        for (int i = 0; i < big.length; i++) {
+            big[i] = (byte) (0x20 + (i % 95)); // 純 ASCII，UTF-8 往返無損
+        }
+        Fake f = new Fake(Fake.Auth.REJECT_FIRST, Fake.Shell.BIG, 0x01000001, 4096);
+        f.bigOutput = big;
+        int p = f.start();
+        String out = runClient(p, kp.getPrivate(), kp.getPublic(), "echo big", 10000, 5000);
+        f.awaitDone(8000);
+        check(f.failure == null, "big-fake-clean", f.failure == null ? "" : f.failure);
+        byte[] gotRaw = out.getBytes(StandardCharsets.UTF_8);
+        check(Arrays.equals(gotRaw, big), "big-concat",
+                "got " + gotRaw.length + " bytes, want " + big.length);
+    }
+
+    static void testTruncated() throws Exception {
+        KeyPair kp = freshKey();
+        Fake f = new Fake(Fake.Auth.REJECT_FIRST, Fake.Shell.TRUNCATED, 0x01000000, 4096);
+        int p = f.start();
+        long t0 = System.currentTimeMillis();
+        boolean threw = false;
+        try {
+            runClient(p, kp.getPrivate(), kp.getPublic(), "echo x", 10000, 5000);
+        } catch (AdbClient.AdbException e) {
+            threw = true;
+        }
+        long dt = System.currentTimeMillis() - t0;
+        f.awaitDone(8000);
+        check(threw, "truncated-throws", "client did not report truncated packet");
+        check(dt < 15000, "truncated-time", "took " + dt + " ms");
+    }
+
+    static void expectKind(String name, Fake.Auth auth, String wantKind,
+            boolean kindOr, long authMs) throws Exception {
+        KeyPair kp = freshKey();
+        Fake f = new Fake(auth, Fake.Shell.NONE, 0x01000000, 4096);
+        int p = f.start();
+        long t0 = System.currentTimeMillis();
+        String kind = null;
+        try {
+            runClient(p, kp.getPrivate(), kp.getPublic(), "echo ok", authMs, 1000);
+        } catch (AdbClient.AdbException e) {
+            kind = e.kind;
+        }
+        long dt = System.currentTimeMillis() - t0;
+        f.awaitDone(8000);
+        boolean kindOk = wantKind.equals(kind) || (kindOr && AdbClient.IO.equals(kind));
+        check(kindOk, name + "-kind", "got kind " + kind + ", want " + wantKind
+                + (kindOr ? " (or io)" : ""));
+        check(dt < 15000, name + "-time", "took " + dt + " ms");
+    }
+
+    static void testErrors() throws Exception {
+        // 連不上
+        long t0 = System.currentTimeMillis();
+        String kind = null;
+        try {
+            KeyPair kp = freshKey();
+            runClient(freePort(), kp.getPrivate(), kp.getPublic(), "echo ok", 5000, 2000);
+        } catch (AdbClient.AdbException e) {
+            kind = e.kind;
+        }
+        long dt = System.currentTimeMillis() - t0;
+        check(AdbClient.CONNECT.equals(kind), "err-connect-kind", "got " + kind);
+        check(dt < 15000, "err-connect-time", "took " + dt + " ms");
+
+        // 授權逾時（短逾時）：伺服器送完 CNXN 就沉默
+        t0 = System.currentTimeMillis();
+        KeyPair kp2 = freshKey();
+        Fake fs = new Fake(Fake.Auth.SILENT, Fake.Shell.NONE, 0x01000000, 4096);
+        int ps = fs.start();
+        kind = null;
+        try {
+            runClient(ps, kp2.getPrivate(), kp2.getPublic(), "echo ok", 1500, 500);
+        } catch (AdbClient.AdbException e) {
+            kind = e.kind;
+        }
+        dt = System.currentTimeMillis() - t0;
+        fs.awaitDone(12000);
+        check(AdbClient.AUTH_TIMEOUT.equals(kind), "err-authtimeout-kind", "got " + kind);
+        check(dt >= 1200 && dt < 15000, "err-authtimeout-time", "took " + dt + " ms");
+
+        expectKind("err-disconnect", Fake.Auth.CLOSE_AFTER_TOKEN, AdbClient.AUTH_REJECTED, true,
+                8000);
+        expectKind("err-stls", Fake.Auth.STLS, AdbClient.TLS_REQUIRED, false, 8000);
+        expectKind("err-badmagic", Fake.Auth.BAD_MAGIC, AdbClient.PROTOCOL, false, 8000);
+        expectKind("err-badcksum", Fake.Auth.BAD_CHECKSUM, AdbClient.PROTOCOL, false, 8000);
+        expectKind("err-garbage", Fake.Auth.GARBAGE_CMD, AdbClient.PROTOCOL, false, 8000);
+    }
+
+    public static void main(String[] args) {
+        try {
+            String td = args.length > 0 ? args[0] : "testdata";
+            testVectors(td);
+            testOpaquePrivateKey();
+            testConscryptBrokenObjectStillLoadsFromFile(td);
+            testGenerateThenLoadSameKey();
+            testAuthRoundTrip();
+            testBigOutput();
+            testTruncated();
+            testErrors();
+        } catch (Exception e) {
+            System.out.println("FAIL harness :: " + e);
+            e.printStackTrace(System.out);
+            failures++;
+        }
+        if (failures == 0) {
+            System.out.println("ALL PASS");
+        } else {
+            System.out.println(failures + " FAILURES");
+            System.exit(1);
+        }
+    }
+}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "rg -n 'heartbeat\\(|runAdb\\(|debug.keystore|javac' tvagent && find .. -name AGENTS.md -print" in /Users/example-owner/TV-wt-tvagent-wl
+hook: PreToolUse
+hook: PreToolUse Completed
+mcp: mem/get_profile started
+mcp: mem/get_profile (completed)
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+已確認兩種心跳都共用同一個方法；名單檢查可以接在既有 `echo ok` 之後，並獨立處理失敗。建置腳本會在 keystore 不存在時產生新檔，因此我會先確認現有 keystore 完好，再執行建置。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'for f in AGENTS.md tvagent/AGENTS.md tvagent/src/AGENTS.md tvagent/src/com/AGENTS.md tvagent/src/com/example/AGENTS.md tvagent/src/com/example/tvagent/AGENTS.md tvagent/test/AGENTS.md; do if [ -f "$f" ]; then cat "$f"; fi; done' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'shasum -a 256 tvagent/debug.keystore && git status --short && git branch --show-current' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+83c5654528d0e450754efd99e55fae5433837a5cfa3b56b14c0df1a98f6a1ffb  tvagent/debug.keystore
+tvagent-wl
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+apply patch
+patch: completed
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/README.md
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/src/com/example/tvagent/AgentService.java
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/src/com/example/tvagent/Whitelist.java
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/test.sh
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/test/AdbClientTest.java
+diff --git a/tvagent/README.md b/tvagent/README.md
+index acf5a465e5e36787e509350f1b560d5afc95997b..69aa89bced2fe017a970d7277255c9ffed1ff2ed
+--- a/tvagent/README.md
++++ b/tvagent/README.md
+@@ -4,7 +4,7 @@
+ 停用／啟用 App」。只做實驗，不碰額度、不碰 Cloudflare、不取代 v4。
+ 
+ - 套件：`com.example.tvagent`，無桌面圖示，minSdk 26、targetSdk 30。
+-- 只准停用／啟用 `com.example.tkey`；程式裡沒有其他套件名。
++- 停用／啟用只針對 `com.example.tkey`；心跳另會維護 TGuard 的保護名單。
+ 
+ ## 檔案
+ 
+@@ -35,10 +35,28 @@
+ adb shell run-as com.example.tvagent cat files/agent.log
+ ```
+ 
+-心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息>`；
++心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息> wl=<狀態>`；
+ 服務啟動記 `start reason=<boot|test|other>`。`adb=ok` 表示輸出 trim 後等於 `ok`。
+ pid 變化＝程序曾被系統砍掉重啟。
+ 
++`wl=keep` 表示名單已有 tvagent；`wl=set` 表示已設定並驗證；`wl=fail` 表示設定後仍未查到；`wl=skip` 表示 adb 心跳失敗，未檢查名單。`wl=unexpected` 表示指令輸出不符合預期，`wl=<錯誤類別:訊息>` 表示名單指令發生例外。
++
++## TGuard 保護名單
++
++`AgentService` 的 `WHITELIST` 常數保存 Owner 選定的九個套件：
++
++```text
++com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent
++```
++
++名單只存在 TGuard 的記憶體；TGuard 重啟或電視重開後會恢復預設。心跳每分鐘檢查 tvagent 是否在名單中，缺少時以常數整份取代並重新驗證。若 tvagent 已在名單中，其他成員不會被變更。
++
++手動還原原本的 11 個套件（之後心跳仍會自動補回選定名單）：
++
++```sh
++adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList 'com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV'
++```
++
+ ## TCL 凍結機制與鬧鐘心跳
+ 
+ 實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結，
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index da64511a08e171d7615f2beb3882cdbd05031e6d..e77edecdcbf60659c82263635985bf3efd84a3d1
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -47,6 +47,11 @@
+ 
+     static final String TARGET = "com.example.tkey";
+     static final String CMD_ECHO = "echo ok";
++    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
++    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
++            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
++            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>&1; "
++            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+     static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+     static final String CMD_LIST_DISABLED = "pm list packages -d";
+     static final String CMD_ENABLE = "pm enable com.example.tkey";
+@@ -218,8 +223,18 @@
+         } catch (Exception e) {
+             status = AdbClient.IO + ":" + oneLine(e.getMessage());
+         }
++        String wl = "skip";
++        if ("ok".equals(status)) {
++            try {
++                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
++            } catch (AdbClient.AdbException e) {
++                wl = e.kind + ":" + oneLine(e.getMessage());
++            } catch (Exception e) {
++                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
++            }
++        }
+         long uptime = SystemClock.elapsedRealtime() / 1000;
+-        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status);
++        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+     }
+ 
+     private void runSelftest() {
+diff --git a/tvagent/src/com/example/tvagent/Whitelist.java b/tvagent/src/com/example/tvagent/Whitelist.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9c3e70851dce33c131dd3a6e2ceeada76d71275
+--- /dev/null
++++ b/tvagent/src/com/example/tvagent/Whitelist.java
+@@ -0,0 +1,9 @@
++package com.example.tvagent;
++
++final class Whitelist {
++    static String wlStatus(String shellOutput) {
++        String status = shellOutput.trim();
++        return "keep".equals(status) || "set".equals(status) || "fail".equals(status)
++                ? status : "unexpected";
++    }
++}
+diff --git a/tvagent/test.sh b/tvagent/test.sh
+index 56fa55b7feb0a51d9ae89cacef674015ceeb8696..2dff070860938ce132bb68213ff79580b2df9b61
+--- a/tvagent/test.sh
++++ b/tvagent/test.sh
+@@ -3,6 +3,6 @@
+ # 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+ cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+ rm -rf testout && mkdir -p testout
+-javac -d testout src/com/example/tvagent/AdbClient.java test/AdbClientTest.java
++javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java test/AdbClientTest.java
+ java -cp testout com.example.tvagent.AdbClientTest testdata
+ rm -rf testout'
+diff --git a/tvagent/test/AdbClientTest.java b/tvagent/test/AdbClientTest.java
+index c12642c093a9d377e9066d163a2a366ba5ad2228..e1e3a7d5937d260a7aebcf8c5ccf4ee20d1cb8b1
+--- a/tvagent/test/AdbClientTest.java
++++ b/tvagent/test/AdbClientTest.java
+@@ -700,6 +700,11 @@
+             testBigOutput();
+             testTruncated();
+             testErrors();
++            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
++            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
++            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
++            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
++            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
+         } catch (Exception e) {
+             System.out.println("FAIL harness :: " + e);
+             e.printStackTrace(System.out);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'sh tvagent/test.sh' in /Users/example-owner/TV-wt-tvagent-wl
+ exited 1 in 712ms:
+failed to connect to the docker API at unix:///Users/example-owner/.orbstack/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/example-owner/.orbstack/run/docker.sock: connect: no such file or directory
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+程式與離線測試已修改完成。首次執行測試時，Docker 無法連線到 OrbStack；我正在檢查現有建置環境並嘗試恢復服務，之後會重跑指定測試和建置。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'ls -ld /Applications/OrbStack.app /Applications/Docker.app ~/.orbstack/run 2>/dev/null; command -v orb; command -v java; command -v javac' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+drwxr-xr-x@ 3 example-owner  staff   96 Aug  7 22:16 /Applications/OrbStack.app
+drwx------@ 4 example-owner  staff  128 Oct 30 12:08 /Users/example-owner/.orbstack/run
+/opt/homebrew/bin/orb
+/usr/bin/java
+/usr/bin/javac
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'docker context ls' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+NAME         DESCRIPTION                               DOCKER ENDPOINT                                  ERROR
+default      Current DOCKER_HOST based configuration   unix:///var/run/docker.sock                      
+orbstack *   OrbStack                                  unix:///Users/example-owner/.orbstack/run/docker.sock   
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'git diff --stat && git status --short' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+ tvagent/README.md                                | 22 ++++++++++++++++++++--
+ tvagent/src/com/example/tvagent/AgentService.java | 17 ++++++++++++++++-
+ tvagent/test.sh                                  |  2 +-
+ tvagent/test/AdbClientTest.java                  |  5 +++++
+ 4 files changed, 42 insertions(+), 4 deletions(-)
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ M tvagent/test.sh
+ M tvagent/test/AdbClientTest.java
+?? tvagent/src/com/example/tvagent/Whitelist.java
+
+hook: PostToolUse
+hook: PostToolUse Completed
+ exited 1 in 36281ms:
+tvagent/src/com/example/tvagent/AgentService.java:136:                        heartbeat("alarm");
+tvagent/src/com/example/tvagent/AgentService.java:162:                    heartbeat("start");
+tvagent/src/com/example/tvagent/AgentService.java:191:    private String runAdb(String cmd) throws AdbClient.AdbException {
+tvagent/src/com/example/tvagent/AgentService.java:204:    private void heartbeat(String src) {
+tvagent/src/com/example/tvagent/AgentService.java:214:            String output = runAdb(CMD_ECHO);
+tvagent/src/com/example/tvagent/AgentService.java:228:            String echo = runAdb(CMD_ECHO);
+tvagent/src/com/example/tvagent/AgentService.java:239:            if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+tvagent/src/com/example/tvagent/AgentService.java:251:            runAdb(CMD_DISABLE);
+tvagent/src/com/example/tvagent/AgentService.java:258:                if (!runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+tvagent/src/com/example/tvagent/AgentService.java:268:                runAdb(CMD_ENABLE);
+tvagent/src/com/example/tvagent/AgentService.java:276:                if (runAdb(CMD_LIST_DISABLED).contains(TARGET)) {
+tvagent/src/com/example/tvagent/AgentService.java:294:            runAdb(CMD_ENABLE);
+tvagent/build.sh:6:[ -f debug.keystore ] || keytool -genkeypair -keystore debug.keystore -storepass android -keypass android -alias tvagent -keyalg RSA -validity 36500 -dname CN=tvagent
+tvagent/build.sh:8:javac -source 8 -target 8 -bootclasspath $JAR -d out/classes src/com/example/tvagent/*.java
+tvagent/build.sh:12:$BT/apksigner sign --ks debug.keystore --ks-pass pass:android --out tvagent.apk out/aligned.apk
+tvagent/README.md:14:  產出 `tvagent.apk`（`debug.keystore` 不存在就產生，alias `tvagent`）。
+tvagent/test.sh:6:javac -d testout src/com/example/tvagent/AdbClient.java test/AdbClientTest.java
+find: ../Downloads: Operation not permitted
+../.config/opencode/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/vercel/skills/react-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/data-analytics/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/build-web-apps/skills/react-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/build-web-apps/skills/supabase-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/product-design/templates/mobile-app/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/product-design/templates/prototype/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/zoom/AGENTS.md
+../Tools/xiaohongshu-mcp-readonly/AGENTS.md
+../go/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.7.0/AGENTS.md
+../ai_dispatcher/.claude/worktrees/suspicious-mclean-3992c7/AGENTS.md
+../ai_dispatcher/AGENTS.md
+../WhisperMacTool/AGENTS.md
+../.claude/plugins/cache/ponytail/ponytail/4.8.3/AGENTS.md
+../.claude/plugins/marketplaces/ponytail/AGENTS.md
+../Library/Application Support/orca/codex-runtime-home/home/AGENTS.md
+../Library/Caches/example-dev/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.33/AGENTS.md
+../.teamdev/repos/example-teamA/AGENTS.md
+../.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.59/AGENTS.md
+../.codex/.chatgpt-projects/g-p-6a09029d73808191b6c48bcedd928871/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69fd8c7facd88191a9432e0a19be87ea/AGENTS.md
+../.codex/.chatgpt-projects/g-p-68ef86022a04819193cddd83549174b4/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69d79ea39a5c8191ad033cdbab1538ed/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69e609fc4840819197f0964c195a3bd3/AGENTS.md
+../.codex/plugins/cache/ponytail/ponytail/5.3.3/AGENTS.md
+../.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-8gLgFE/AGENTS.md
+../.codex/.tmp/plugins/plugins/vercel/skills/react-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/data-analytics/AGENTS.md
+../.codex/.tmp/plugins/plugins/build-web-apps/skills/react-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/build-web-apps/skills/supabase-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/product-design/templates/mobile-app/AGENTS.md
+../.codex/.tmp/plugins/plugins/product-design/templates/prototype/AGENTS.md
+../.codex/.tmp/plugins/plugins/zoom/AGENTS.md
+../.codex/.tmp/marketplaces/ponytail/AGENTS.md
+../.codex/AGENTS.md
+../example-docs/tmp/word-oss-eval/w2/wc/AGENTS.md
+../example-teamA/AGENTS.md
+../example-ime/AGENTS.md
+../FAMILY-DOCS/eBooks/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-109/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-100/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-98/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-96/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-99/AGENTS.md
+../orca/workspaces/example-teamA/knifefish/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-95/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-94/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-93/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/cron/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/cron/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/cron/AGENTS.md
+../.hermes/hermes-agent/tools/AGENTS.md
+../.hermes/hermes-agent/hermes_cli/AGENTS.md
+../.hermes/hermes-agent/plugins/AGENTS.md
+../.hermes/hermes-agent/web/AGENTS.md
+../.hermes/hermes-agent/agent/AGENTS.md
+../.hermes/hermes-agent/tui_gateway/AGENTS.md
+../.hermes/hermes-agent/skills/AGENTS.md
+../.hermes/hermes-agent/AGENTS.md
+../.hermes/hermes-agent/apps/desktop/AGENTS.md
+../.hermes/hermes-agent/apps/desktop/src/AGENTS.md
+../.hermes/hermes-agent/gateway/AGENTS.md
+../.hermes/hermes-agent/cron/AGENTS.md
+../.pi/agent/AGENTS.md
+../AI-Quota-Plugin/CodexBar/.build/checkouts/Commander/AGENTS.md
+../AI-Quota-Plugin/CodexBar/.build/checkouts/SweetCookieKit/AGENTS.md
+../AI-Quota-Plugin/CodexBar/AGENTS.md
+
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'open -a OrbStack' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'sh tvagent/test.sh' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 9096ms:
+PASS vector-pubkey
+PASS vector-sig
+PASS vector-pubkey-nul
+PASS vector-loadOrGenerate-pubkey
+PASS opaque-priv-pubkey
+PASS direct-priv-pubkey
+PASS conscrypt-broken-object-throws
+PASS conscrypt-broken-error-specific
+PASS conscrypt-file-pubkey-matches-pub
+PASS generate-writes-file
+PASS generate-load-same-pubkey
+PASS round1-fake-clean
+PASS round1-echo
+PASS round1-sent-pubkey
+PASS round1-key-parsed
+PASS round1-time
+PASS round2-fake-clean
+PASS round2-echo
+PASS round2-no-pubkey
+PASS big-fake-clean
+PASS big-concat
+PASS truncated-throws
+PASS truncated-time
+PASS err-connect-kind
+PASS err-connect-time
+PASS err-authtimeout-kind
+PASS err-authtimeout-time
+PASS err-disconnect-kind
+PASS err-disconnect-time
+PASS err-stls-kind
+PASS err-stls-time
+PASS err-badmagic-kind
+PASS err-badmagic-time
+PASS err-badcksum-kind
+PASS err-badcksum-time
+PASS err-garbage-kind
+PASS err-garbage-time
+PASS wl-keep
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+ALL PASS
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+OrbStack 已恢復，離線測試全部通過，包含新增的五種名單狀態案例。接下來會使用現有簽章檔建置 APK，並核對變更範圍與驗收報告。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'test -f tvagent/debug.keystore && sh tvagent/build.sh' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 6216ms:
+Note: src/com/example/tvagent/AgentService.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'git diff -- tvagent/src/com/example/tvagent/AgentService.java tvagent/test.sh tvagent/test/AdbClientTest.java tvagent/README.md' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+diff --git a/tvagent/README.md b/tvagent/README.md
+index acf5a46..69aa89b 100644
+--- a/tvagent/README.md
++++ b/tvagent/README.md
+@@ -4,7 +4,7 @@
+ 停用／啟用 App」。只做實驗，不碰額度、不碰 Cloudflare、不取代 v4。
+ 
+ - 套件：`com.example.tvagent`，無桌面圖示，minSdk 26、targetSdk 30。
+-- 只准停用／啟用 `com.example.tkey`；程式裡沒有其他套件名。
++- 停用／啟用只針對 `com.example.tkey`；心跳另會維護 TGuard 的保護名單。
+ 
+ ## 檔案
+ 
+@@ -35,10 +35,28 @@ sh tvagent/build.sh
+ adb shell run-as com.example.tvagent cat files/agent.log
+ ```
+ 
+-心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息>`；
++心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息> wl=<狀態>`；
+ 服務啟動記 `start reason=<boot|test|other>`。`adb=ok` 表示輸出 trim 後等於 `ok`。
+ pid 變化＝程序曾被系統砍掉重啟。
+ 
++`wl=keep` 表示名單已有 tvagent；`wl=set` 表示已設定並驗證；`wl=fail` 表示設定後仍未查到；`wl=skip` 表示 adb 心跳失敗，未檢查名單。`wl=unexpected` 表示指令輸出不符合預期，`wl=<錯誤類別:訊息>` 表示名單指令發生例外。
++
++## TGuard 保護名單
++
++`AgentService` 的 `WHITELIST` 常數保存 Owner 選定的九個套件：
++
++```text
++com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent
++```
++
++名單只存在 TGuard 的記憶體；TGuard 重啟或電視重開後會恢復預設。心跳每分鐘檢查 tvagent 是否在名單中，缺少時以常數整份取代並重新驗證。若 tvagent 已在名單中，其他成員不會被變更。
++
++手動還原原本的 11 個套件（之後心跳仍會自動補回選定名單）：
++
++```sh
++adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList 'com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV'
++```
++
+ ## TCL 凍結機制與鬧鐘心跳
+ 
+ 實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結，
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index da64511..e77edec 100644
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -47,6 +47,11 @@ public class AgentService extends Service {
+ 
+     static final String TARGET = "com.example.tkey";
+     static final String CMD_ECHO = "echo ok";
++    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
++    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
++            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
++            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>&1; "
++            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+     static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+     static final String CMD_LIST_DISABLED = "pm list packages -d";
+     static final String CMD_ENABLE = "pm enable com.example.tkey";
+@@ -218,8 +223,18 @@ public class AgentService extends Service {
+         } catch (Exception e) {
+             status = AdbClient.IO + ":" + oneLine(e.getMessage());
+         }
++        String wl = "skip";
++        if ("ok".equals(status)) {
++            try {
++                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
++            } catch (AdbClient.AdbException e) {
++                wl = e.kind + ":" + oneLine(e.getMessage());
++            } catch (Exception e) {
++                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
++            }
++        }
+         long uptime = SystemClock.elapsedRealtime() / 1000;
+-        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status);
++        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+     }
+ 
+     private void runSelftest() {
+diff --git a/tvagent/test.sh b/tvagent/test.sh
+index 56fa55b..2dff070 100644
+--- a/tvagent/test.sh
++++ b/tvagent/test.sh
+@@ -3,6 +3,6 @@
+ # 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+ cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+ rm -rf testout && mkdir -p testout
+-javac -d testout src/com/example/tvagent/AdbClient.java test/AdbClientTest.java
++javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java test/AdbClientTest.java
+ java -cp testout com.example.tvagent.AdbClientTest testdata
+ rm -rf testout'
+diff --git a/tvagent/test/AdbClientTest.java b/tvagent/test/AdbClientTest.java
+index c12642c..e1e3a7d 100644
+--- a/tvagent/test/AdbClientTest.java
++++ b/tvagent/test/AdbClientTest.java
+@@ -700,6 +700,11 @@ public class AdbClientTest {
+             testBigOutput();
+             testTruncated();
+             testErrors();
++            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
++            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
++            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
++            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
++            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
+         } catch (Exception e) {
+             System.out.println("FAIL harness :: " + e);
+             e.printStackTrace(System.out);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "git diff --check && git diff --stat && git status --short && grep -n 'wl=' tvagent/src/com/example/tvagent/AgentService.java && stat -f '%Sm %N' -t '%Y-%m-%d %H:%M:%S %Z' tvagent/tvagent.apk && shasum -a 256 tvagent/debug.keystore" in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+ tvagent/README.md                                |  22 ++++++++++++++++++++--
+ tvagent/src/com/example/tvagent/AgentService.java |  17 ++++++++++++++++-
+ tvagent/test.sh                                  |   2 +-
+ tvagent/test/AdbClientTest.java                  |   5 +++++
+ tvagent/tvagent.apk                              | Bin 24981 -> 24981 bytes
+ 5 files changed, 42 insertions(+), 4 deletions(-)
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ M tvagent/test.sh
+ M tvagent/test/AdbClientTest.java
+ M tvagent/tvagent.apk
+?? tvagent/src/com/example/tvagent/Whitelist.java
+237:        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+2026-10-30 21:08:35 CST tvagent/tvagent.apk
+83c5654528d0e450754efd99e55fae5433837a5cfa3b56b14c0df1a98f6a1ffb  tvagent/debug.keystore
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "cat > /Users/example-owner/TV/research/wo/WO-G2_done.md <<'EOF'
+# WO-G2 完成報告
+
+- "'`tvagent/src/com/example/tvagent/AgentService.java`：加入九個套件的名單常數與單次 shell 檢查、設定、驗證；心跳記錄 `wl=`，並處理錯誤。
+- `tvagent/src/com/example/tvagent/Whitelist.java`：純 Java 名單結果判斷。
+- `tvagent/test/AdbClientTest.java`、`tvagent/test.sh`：加入並執行五種離線狀態測試。
+- `tvagent/README.md`：說明名單、狀態、記憶體限制與還原指令。
+- `tvagent/tvagent.apk`：重新建置。
+
+`sh tvagent/test.sh` 成功，最後五行：
+
+```text
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+ALL PASS
+```
+
+`sh tvagent/build.sh` 成功；APK 修改時間為 2026-10-30 21:08:35（台北時間）。使用原有 `debug.keystore`，建置前後 SHA-256 相同。編譯器提示既有程式使用已棄用 API，未阻止建置。
+
+首次測試時 OrbStack 未啟動，啟動後重跑通過。未執行 adb 或操作電視，故尚未驗證新 APK 的實機行為；已在名單中的情況只檢查 tvagent，不校正其他成員。未修改 testdata、AdbClient 協定或 keystore，也未 commit、push。
+EOF' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+已完成 tvagent 的 TGuard 保護名單維護：每次有效心跳會在 `echo ok` 後檢查，必要時設定並驗證，結果寫入 `wl=` 欄位。
+
+- `sh tvagent/test.sh` 通過，最後一行為 `ALL PASS`。
+- `sh tvagent/build.sh` 成功，APK 已更新；使用原有 debug keystore，檔案雜湊未變。
+- 已寫入[驗收報告](/Users/example-owner/TV/research/wo/WO-G2_done.md)。程式變更均在 `tvagent/` 下；未 commit 或 push。
+
+未執行 adb 或操作電視，因此新 APK 的實機行為尚未驗證。
+hook: Stop
+hook: Stop Completed
+tokens used
+57,484
+已完成 tvagent 的 TGuard 保護名單維護：每次有效心跳會在 `echo ok` 後檢查，必要時設定並驗證，結果寫入 `wl=` 欄位。
+
+- `sh tvagent/test.sh` 通過，最後一行為 `ALL PASS`。
+- `sh tvagent/build.sh` 成功，APK 已更新；使用原有 debug keystore，檔案雜湊未變。
+- 已寫入[驗收報告](/Users/example-owner/TV/research/wo/WO-G2_done.md)。程式變更均在 `tvagent/` 下；未 commit 或 push。
+
+未執行 adb 或操作電視，因此新 APK 的實機行為尚未驗證。

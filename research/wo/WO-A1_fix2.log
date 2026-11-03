@@ -1,0 +1,68 @@
+施工完成，WO-A1 退修 2 全部做完。回報如下。
+
+## 改了什麼（都在 `tvagent/` 底下）
+
+1. **新增 `src/com/example/tvagent/AlarmReceiver.java`** — 鬧鐘廣播入口，只做一件事：組一個 action 為 `HEARTBEAT`、目標 `AgentService` 的 Intent，經 `startForegroundService` 把服務叫起來（服務被殺也能重建）。自己不做任何 adb 動作。無用 import 已清掉。
+2. **改 `src/com/example/tvagent/AgentService.java`**
+   - `ScheduledExecutorService` → `ExecutorService`（`newSingleThreadExecutor`），**刪掉 `scheduleAtFixedRate` 週期心跳**，只留單次工作佇列；SELFTEST 照舊排進同一執行緒序列化。
+   - 新增 `HEARTBEAT_ACTION`、`HEARTBEAT_MS=60秒`、`DEDUP_MS=30秒`、`ALARM_REQ=1`；新增 `scheduleNextAlarm()`：`setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, elapsedRealtime+60秒)`，PendingIntent 固定 requestCode＋`FLAG_UPDATE_CURRENT|FLAG_IMMUTABLE`（同一時間只有一個待發鬧鐘）。
+   - `onStartCommand` 收到 HEARTBEAT → 排一次 `heartbeat("alarm")`＋排下一次鬧鐘；boot／test／other（含系統重建的 null intent）→ 寫 `start reason=…`、排下一次鬧鐘、先做一次 `heartbeat("start")`，有 selftest flag 才接著排 SELFTEST。
+   - `heartbeat(src)`：先比 `elapsedRealtime`，距上次 `<30秒` 就略過不寫；心跳行變成 `uptime=… pid=… src=alarm|start adb=…`。
+   - AdbClient 呼叫、SELFTEST 流程、錯誤分類一字未動。
+3. **`AndroidManifest.xml`** — 加 `<receiver android:name=".AlarmReceiver" android:exported="false" />`（無 intent-filter，只收明確廣播）；權限零新增。
+4. **`README.md`** — 心跳行格式加 `src` 欄位；新增「TCL 凍結機制與鬧鐘心跳」一節；檔案清單補 AlarmReceiver。
+5. **重建 `tvagent.apk`**。`AdbClient.java`、`test/`、`testdata/` 完全沒碰。
+
+## 鬧鐘與服務的流程
+
+- 服務啟動（boot／test／other／系統重建）→ `scheduleNextAlarm()` 排 60 秒後精確鬧鐘 ＋ 記 `start` 行 ＋ 做一次 `src=start` 心跳。
+- 60 秒到 → 系統解凍程序 → `AlarmReceiver.onReceive` → `startForegroundService(HEARTBEAT)` → 服務把 `src=alarm` 心跳排進單執行緒 → 同時 `scheduleNextAlarm()` 排下一次（不用 `setRepeating`，每次重排）。
+- 凍結期間漏跑的心跳在解凍時若補跑、且距上次 `<30秒`，直接略過不寫行。
+
+## 指令實際輸出
+
+```
+$ sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+Note: src/com/example/tvagent/AgentService.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+-rw-r--r--@ 1 example-owner  staff  20885 10月 30 09:06 tvagent/tvagent.apk
+```
+（deprecation 註記是既有的 `Notification.Builder` API<26 分支，原來就有）
+
+```
+$ aapt2 dump badging tvagent/tvagent.apk | grep -E "package:|targetSdk|launchable|uses-permission"
+package: name='com.example.tvagent' versionCode='1' versionName='1' ...（無 launchable-activity/leanback-launchable-activity）
+targetSdkVersion:'30'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+```
+
+```
+$ aapt2 dump xmltree tvagent/tvagent.apk --file AndroidManifest.xml | grep -E "receiver|service|exported|action"
+E: service (line=9)            exported=false   (.AgentService)
+E: receiver (line=10)          exported=true    (.BootReceiver)  + action BOOT_COMPLETED
+E: receiver (line=15)          exported=true    (.TestReceiver) + action com.example.tvagent.SELFTEST
+E: receiver (line=20)          exported=false   (.AlarmReceiver，無 action／無 filter)
+```
+
+```
+$ sh tvagent/test.sh 2>&1 | tail -1
+ALL PASS
+```
+
+```
+$ grep -n "scheduleAtFixedRate\|scheduleWithFixedDelay\|setRepeating\|youtube" tvagent/src/com/example/tvagent/*.java
+（無任何輸出，exit=1）
+```
+
+```
+$ git status --porcelain --untracked-files=all
+ M tvagent/AndroidManifest.xml
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ M tvagent/tvagent.apk
+?? tvagent/src/com/example/tvagent/AlarmReceiver.java
+```
+
+範圍乾淨：只有 `tvagent/` 底下 4 改 1 新增；`AdbClient.java`、`test/`、`testdata/` 未動；無 commit、無 adb、無電視連線。

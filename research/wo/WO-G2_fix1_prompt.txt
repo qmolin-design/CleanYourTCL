@@ -1,0 +1,12 @@
+WO-G2 退修（第 1 次失敗，Opus 實機審定 FAIL）。原工單：/Users/example-owner/TV/research/wo/WO-G2_prompt.txt（限制與完成標準不變）。worktree /Users/example-owner/TV-wt-tvagent-wl，不 commit、不 push、不執行 adb。
+
+失敗原因（電視上實測）：`dumpsys activity service $S | grep -q ...` 時，grep -q 找到就提前結束，dumpsys 會往 stderr 印 `Failed to write while dumping service activity: Broken pipe`。tvagent 的 AdbClient 開的是 `shell:`（v1）服務，stdout 與 stderr 會合在同一個串流，所以 runAdb 拿到的是「Broken pipe 那行＋keep」，Whitelist.wlStatus trim 後不等於 keep，回 unexpected。實測輸出：
+```
+Failed to write while dumping service activity: Broken pipe
+keep
+```
+修法要求：
+1. CMD_WHITELIST 裡每個 dumpsys 都加 `2>/dev/null`（讀取的兩次與設定那次）。不要拿掉 grep -q 改用其他寫法，也不要把錯誤藏在 Java 端。
+2. 保險：Whitelist.wlStatus 改成取輸出「最後一個非空白行」判斷 keep/set/fail，其餘回 unexpected。測試加一個案例：輸入 "Failed to write while dumping service activity: Broken pipe\nkeep\n" 要回 keep；原本 5 個案例保留。
+3. 重跑 `sh tvagent/test.sh`（ALL PASS）與 `sh tvagent/build.sh`。
+4. 在 /Users/example-owner/TV/research/wo/WO-G2_done.md 末尾加「## 退修 1」：改了什麼、test.sh 最後 7 行。

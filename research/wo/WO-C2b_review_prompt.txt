@@ -1,0 +1,5 @@
+你是唯讀審核。只看下面兩個檔，不要讀清單外的檔案、不要改任何檔：
+1. /Users/example-owner/TV-wt-v5design/research/wo/WO-C2b_prompt.txt（工單與完成標準）
+2. /Users/example-owner/TV-wt-v5design/research/wo/WO-C2b.diff（工人的 diff）
+對照工單「要做」1～4 與「禁止」審查 diff：時間戳格式與台北時區、src 是否只會是 boot|kick|alarm 且每跳記自己的、重跑 act 的條件是否只在 balance 或 enforce 改變時、有沒有改到扣額／同步／鎖定邏輯或碰禁止檔案、有沒有引入錯誤（例如 NPE、執行緒問題）。
+輸出第一行必須是 PASS 或 FAIL，之後條列理由（阻擋的與不阻擋的分開）。

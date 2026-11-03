@@ -1,0 +1,192 @@
+SERVICE com.tcl.guard/.memorymanager.TGuardService 90ba958 pid=943
+  Client:
+    =========================================================
+
+    =================== StrategyConfigInfo Begin =================== 
+
+    interval
+    mMinProcessTrimInterval:   60
+    mKillSystemBlackList:      {   
+                               }
+
+    enable
+    mHandleEnable:             true
+    mKillEnable:               true
+    mReclaimEnable:            true
+    mPollingEnable:            true
+    mPollingCleanIntervalMS    30000
+    mIsScreenOn:               true
+    CURRENT_PACKAGE:           com.tcl.guard
+    mServicePid:               943
+    MIN_INTERNAL:              5
+    mLmkWaterMark:             81920
+    mLastHandleTime:           0
+    mLastAvailable:            531108
+    mLastTrimEclipseTime:      37988202
+    mKillEclipseTime:          0
+    mMaxPopWindowShow:         1
+
+    level
+    mLevel:                    0
+    mTrend:                    2
+    mTrendGap:                 217565
+    mTrendStayCount:           0
+    mWarningThreadHold:        153740
+    MaxKillRank:               {
+                               -1     -1     3     9
+                               -1     -1     9     10
+                               -1     3     10     16
+                               }
+
+    cache
+    mMaxCache:                 1024000
+    mMinCache:                 81920
+    mMagic:                    1.5
+    MIN_TRIM_KB:               1024
+    MAX_IMPORTANT_PKG_MEM_KB:  819200
+    MAX_RECLAIM_CPU_LOADING:   30
+    LargeSystemApp:            0
+    AllSystemAppMemThreshold:  512000
+
+    ImportantAppList
+    KillWhiteList
+    KillWhiteList:          com.google.android.apps.mediashell
+    KillWhiteList:          com.android.bluetooth
+    KillWhiteList:          com.android.providers.media.module
+    KillWhiteList:          com.tcl.tvinput
+    KillWhiteList:          com.android.providers.tv
+    KillWhiteList:          com.tcl.autopair
+    KillWhiteList:          com.google.android.katniss
+    KillWhiteList:          com.tcl.ttvs
+    KillWhiteList:          com.tcl.versionUpdateApp
+    KillWhiteList:          com.tcl.usagestats
+    KillWhiteList:          com.tcl.MultiScreenInteraction_TV
+    OneKeyCleanWhiteList
+    OneKeyCleanWhiteList:          com.tcl.MultiScreenInteraction_TV
+
+
+    =================== StrategyConfigInfo End   =================== 
+
+
+    =================== AppInfoRepository  Begin =================== 
+
+    AppInfoRepositoryRankList 2026-10-30 08:37:45
+
+    RankLevel 0 :
+
+    RankLevel 2 :
+        com.google.android.ext.services, DEFAULT|SYSTEM_APP, 7862 :
+            {
+              com.google.android.ext.services : 1286, 4, 7862
+            }
+        com.google.android.gms, DEFAULT|SYSTEM_APP, 120907 :
+            {
+              com.google.android.gms : 1462, 4, 120907
+            }
+        com.google.android.katniss, DEFAULT|SYSTEM_APP, 123074 :
+            {
+              com.google.android.katniss:interactor : 1617, 0, 54989
+              com.google.android.katniss:search : 1001, 0, 68085
+            }
+        com.tcl.tvinput, DEFAULT|SYSTEM_APP, 0 :
+            {
+              com.tcl.tvinput : 1641, 4, 0
+            }
+        com.android.providers.media.module, DEFAULT|SYSTEM_APP, 12912 :
+            {
+              com.android.providers.media.module : 1672, 4, 12912
+            }
+        com.android.providers.tv, DEFAULT|SYSTEM_APP, 8236 :
+            {
+              com.android.providers.tv : 1899, 4, 8236
+            }
+        com.google.android.apps.mediashell, DEFAULT|SYSTEM_APP, 30175 :
+            {
+              com.google.android.apps.mediashell : 2291, 4, 30175
+            }
+
+    RankLevel 3 :
+        com.tcl.micmanager, DEFAULT|SYSTEM_APP|FROZEN_APP, 0 :
+            {
+              com.tcl.micmanager : 1893, 4, 0
+            }
+        com.google.android.permissioncontroller, DEFAULT|SYSTEM_APP|FROZEN_APP, 12791 :
+            {
+              com.google.android.permissioncontroller : 1619, 4, 12791
+            }
+        com.tcl.xian.StartandroidService, DEFAULT|SYSTEM_APP|FROZEN_APP, 18320 :
+            {
+              com.tcl.xian.StartandroidService : 3131, 4, 18320
+            }
+
+    RankLevel 6 :
+        com.android.tv.settings, DEFAULT|SYSTEM_APP|HIGH_USED, 0 :
+            {
+              com.android.tv.settings : 1491, 4, 0
+            }
+        com.tcl.partnercustomizer, DEFAULT|SYSTEM_APP|HIGH_USED, 0 :
+            {
+              com.tcl.partnercustomizer : 1950, 4, 0
+            }
+        com.tcl.keycustomfunctionservice, DEFAULT|SYSTEM_APP|APP_STACK_OLD|HIGH_USED, 0 :
+            {
+              com.tcl.keycustomfunctionservice:remote : 1328, 0, 0
+            }
+
+    RankLevel 9 :
+        com.tcl.miracast, DEFAULT|SYSTEM_APP|SHOWING_APP, 0 :
+            {
+              com.tcl.miracast : 2680, 20, 0
+            }
+        com.tcl.settings, DEFAULT|SYSTEM_APP|SHOWING_APP, 0 :
+            {
+              com.tcl.settings : 2315, 4, 0
+            }
+
+    RankLevel 10 :
+        com.netflix.ninja, DEFAULT|SYSTEM_APP|HIGH_USED|DOWNLOAD|APP_STACK_NEW, 196722 :
+            {
+              com.netflix.ninja : 2345, 4, 196722
+            }
+        com.gathin.tvhome, DEFAULT|HIGH_USED|APP_STACK_NEW, 19551 :
+            {
+              com.gathin.tvhome : 1776, 4, 19551
+            }
+
+    RankLevel 12 :
+        com.google.android.youtube.tv, DEFAULT|SYSTEM_APP|HIGH_USED|DOWNLOAD|AV|APP_STACK_NEW|VISIBLE, 189619 :
+            {
+              com.google.android.youtube.tv : 2870, 261, 189619
+            }
+
+    RankLevel 14 :
+        com.google.android.tv.remote.service, DEFAULT|SYSTEM_APP|SHOWING_APP|BLUETOOTH, 8994 :
+            {
+              com.google.android.tv.remote.service : 1369, 20, 8994
+            }
+
+    RankLevel 15 :
+        com.tcl.inputmethod.international, DEFAULT|SYSTEM_APP|INPUT_ENGINE, 8364 :
+            {
+              com.tcl.inputmethod.international : 1595, 4, 8364
+            }
+
+    allProcessSize : 21
+
+    RecentList
+    RecentList   :             com.google.android.youtube.tv
+    RecentList   :             com.gathin.tvhome
+    RecentList   :             com.netflix.ninja
+    RecentList   :             com.tcl.keycustomfunctionservice
+
+    mPackageAutoRestartList:   {   
+                               }
+
+    mProcessAutoRestartList:   {   
+                               com.google.android.katniss:search gap: 1536
+                               }
+
+    =================== AppInfoRepository  End =================== 
+
+     is invalid and you can try --MemoryInfoManager 
+    =========================================================

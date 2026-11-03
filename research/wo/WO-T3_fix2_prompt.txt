@@ -1,0 +1,17 @@
+你是施工工人，這是 WO-T3 的第 2 次退修（第 3 次施工，最後一次）。工作目錄：/Users/example-owner/TV-wt-tvgate4（分支 tvgate-v4）。只改 tvgate/ 下的檔案。
+規格與禁止事項同前（research/PLAN_v4_ui.md；不執行真 adb、不連電視、不裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、~/Library/Logs/tvgate.log、不 commit）。
+審核意見原文：/Users/example-owner/TV/research/wo/WO-T3_review2_dsf.md（FAIL）、/Users/example-owner/TV/research/wo/WO-T3_review2_gemini.md（PASS）。先讀完。
+
+必須修（大腦裁定，三項都是阻擋）：
+1. state.json 防呆：內容不是 dict、欄位型別錯、數值不合理（until／last_check 不是有限數字、或離現在超過 ±400 天）→ 該欄位當作不存在（until 無效＝沒有授權；last_check 無效＝now），log 記一行，服務照常啟動。monitor 執行緒內任何單次迴圈的例外都要被接住並 log，不得讓執行緒死掉（下一輪繼續）。測試：state.json 分別寫入 `[]`、`"x"`、`5`、`null`、`{"until":1e300}`、`{"until":"abc"}`、`{"last_check":1e18}` → 服務啟動、/status 200、authorized=false、之後 /open 正常、排程仍可觸發（至少一種情況驗排程）。
+2. expire 只記真正的到期：只有「主迴圈發現到期時間已過（until 存在且 ≤ now）而清掉授權並鎖定」時才記 expire；/lock、排程切斷、/open 覆蓋都不得產生 expire。若到期後 /open 在主迴圈察覺前覆蓋，/open 處理時先檢查舊授權是否已過期，已過期就先記一筆 expire。測試：/open 後 /lock → 等兩個週期，/log 沒有 expire；排程切斷後同樣沒有 expire；真到期仍有 1 筆 expire（不是 2 筆）。
+3. GATE_LOCK 正向測試：/lock 成功後 `SELECT count(*) FROM events WHERE type='GATE_LOCK'` 增加 1；到期鎖、排程切斷也各增加 1；讀回不是 locked 時不增加（既有反向測試保留）。
+另外順手修（非阻擋，小改）：
+4. README 環境變數段補上 TVGATE_HOME_NET、TVGATE_AWAY_SECONDS、TVGATE_FETCH_INTERVAL、TVGATE_CLOCK 與其他所有程式讀取的 TVGATE_* 變數與預設值。
+5. 加一個測試：跑完一連串操作後，文字 log 與 DB 的 log 表都不含任何鑰匙字串。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate4/tvgate && python3 test_gate.py   （全過、150 秒內、無殘留；連跑兩次）
+  stat -f %m ~/Library/Logs/tvgate.log   （前後相同）
+  git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all   （只有 tvgate/ 下的檔）
+最後回報：1～5 各改在哪、對應測試名稱、上面三個指令的實際輸出。

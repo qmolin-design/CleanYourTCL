@@ -1,0 +1,32 @@
+# B 站 TV App 實測 MEMO（2026-11-01 晚間，Owner：電視不急，先記錄）
+
+## 一句話
+TCL 55P715（Android TV 11，台灣 ExampleISP）裝了 3 個 B 站 TV 客戶端，**全部播不了**。根因已定位：不是網路，是 **B 站伺服器拒絕這組「Google 註冊帳號＋第三方 TV App」**（48007），與鎖區無關（UP 主 UGC 在台灣 IP 本來就通）。
+
+## 時間線與證據
+1. **Play 商店查無**：電視開 `market://details?id=com.bilibili.app.tv`，uiautomator 讀畫面為「找不到項目」。台灣區 Play 沒有 B 站 TV 版，只能側載。
+2. **1.6.6 修復版**（`com.bilibili.tv`，qidian55 v10.0）：首頁有內容，點播報「因為某些未知的原因，視頻解析失敗」。GitHub 上同 repo 的 #258/#268/#269/#271（Sony/小米/TCL 用戶）同症狀，作者未修。→ **已解除安裝**。
+3. **BBLL**（`com.xx.blbl`，xiaye13579 v1.5.2）：列表正常，點播全 SOURCE ERROR。→ **已解除安裝**。
+4. **newBV**（`dev.frost819.newbv`，Frost819 v1.2.0，5 天前發版，README 自稱海外專用）：能開，列表正常，但須掃碼登入。
+   - 掃碼：手機顯示成功，電視顯示「二維碼已過期」。
+   - logcat 實錘（poll 每秒一次，簽名正常，網路通）：
+     `86090 已掃碼未確認 → 48007 当前账号暂不支持在本APP登录 → 86038 已失效`
+   - 未登入點播 UP 主片 → SOURCE ERROR。
+   - → **已解除安裝**。
+5. **對照組（證明台灣 IP 沒問題）**：Mac 同網路 `yt-dlp` 拉 BV1C8xn6YEDA（UP 主多 P 影片）720p 片源正常；TV 端 ping api/passport.bilibili.com 0% 丟包；TV 時鐘與 Mac 誤差 1 秒（auto_time=1）。
+6. **帳號資訊**：Owner 的 B 站號是 Google 方式註冊多年老號，無大陸手機綁定。
+
+## 結論
+- 播放失敗 ≠ 鎖區（點的是 UP 主片，不是番劇；番劇海外本來就鎖，這點 Owner 已知）。
+- 真因＝ **48007 帳號限制**：B 站拒絕該 Google 註冊帳號在第三方 TV App 登入；未登入則拿不到 playurl。
+- 待確認：是「Google/海外號一律擋」還是「該帳號缺手機綁定」。等作者回覆。
+
+## 待辦（不急）
+- [ ] 追 newBV issue #322：https://github.com/Frost819/newBV/issues/322（已附 log 序列＋三問：帳號類型限制？未登入播不了是否預期？需補什麼 log？）
+- [ ] 作者回覆後再重裝測試（`gh release download`＋`adb install` 即可，包名見上）。
+- [ ] 若作者確認 Google 號無解，選項：換綁大陸手機的老號／官方雲視聽小電視（需大陸商店抓包）／開回 Chromecast＋TCL 投屏走手機投放（兩者目前皆停用中）。
+- [ ] 若要把 B 站納入家長控管（目前 tvagent 只管 YouTube＋Netflix），另開工單。
+
+## 電視現況（已還原乾淨）
+- B 站相關包全移除：`pm list packages | grep bili` 無結果；桌面已 HOME；/tmp 的 APK 已清。
+- 其餘狀態未動：bal/額度、TGuard 名單、Chromecast 與 MultiScreen 停用維持原狀。

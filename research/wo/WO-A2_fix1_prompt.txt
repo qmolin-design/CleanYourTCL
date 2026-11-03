@@ -1,0 +1,15 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-a2（分支 adult-a2）修正你上一輪的 WO-A2（改動還在工作區，未 commit）。規則同原工單 /Users/example-owner/TV/research/wo/WO-A2_prompt.txt（先讀）：只能改 Quota.java、AgentService.java、tvagent/test/QuotaTest.java、tvagent/README.md、apk；不准 commit、不准 adb／wrangler；既有測試不能放寬。
+
+Opus 審定發現兩個 bug（都會讓小孩少扣時間）：
+
+1. AgentService.heartbeat：`long freeToWall = wall - (el - q.adultEnd);` 在 adultEnd＝0（不在時段或剛失效）時等於「本次開機的牆鐘時刻」。重開機後第一跳的區間 [qWall, wall] 包含開機前的觀看，會被錯誤排除不扣。
+   修法：抽成 Quota 靜態方法 `static long freeToWall(long wall, long el, long adultEnd) { return adultEnd > 0 ? wall - (el - adultEnd) : 0; }`，heartbeat 改用它。
+
+2. AgentService.sync：`adult_left_s == 0` 時 `q.adultEnd = el2`（非 0）。下一跳 freeToWall＝el2 對應的牆鐘，落在上一跳 qWall 之後（相差 status＋act＋sync 的耗時，END 時含 10 秒 sleep），這段前景每一跳都被排除不扣。
+   修法：`q.adultEnd = adultLeftS > 0 ? el2 + Math.min(adultLeftS, 600) * 1000 : 0;`
+
+再檢查：jump 路徑 `Math.max(q.qEl, q.adultEnd)` 在 adultEnd＝0 時正確（不用改，確認即可）。
+
+QuotaTest 新增：⑫ `freeToWall(1_000_000, 50_000, 0) == 0`；⑬ `freeToWall(1_000_000, 50_000, 40_000) == 990_000`；⑭ 用 freeToWall 結果（adultEnd＝0）當參數呼叫 usage()：區間內前景 60 秒 → seconds＝60（證明不在時段時完全照扣）。
+驗收：sh tvagent/test.sh 全 PASS、sh tvagent/build.sh 成功、git diff --stat。
+完成後把修正說明「追加」到 /Users/example-owner/TV-wt-a2/research/wo/WO-A2_report.md 檔尾（標題「fix1」）。

@@ -1,0 +1,2885 @@
+Reading additional input from stdin...
+OpenAI Codex v0.163.0
+--------
+workdir: /Users/example-owner/TV-wt-tvgate4
+model: openai/gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 000000000019-0000-4000-8000-000000000000
+--------
+user
+你是施工工人，這是 WO-T3 的第 2 次退修（第 3 次施工，最後一次）。工作目錄：/Users/example-owner/TV-wt-tvgate4（分支 tvgate-v4）。只改 tvgate/ 下的檔案。
+規格與禁止事項同前（research/PLAN_v4_ui.md；不執行真 adb、不連電視、不裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、~/Library/Logs/tvgate.log、不 commit）。
+審核意見原文：/Users/example-owner/TV/research/wo/WO-T3_review2_dsf.md（FAIL）、/Users/example-owner/TV/research/wo/WO-T3_review2_gemini.md（PASS）。先讀完。
+
+必須修（大腦裁定，三項都是阻擋）：
+1. state.json 防呆：內容不是 dict、欄位型別錯、數值不合理（until／last_check 不是有限數字、或離現在超過 ±400 天）→ 該欄位當作不存在（until 無效＝沒有授權；last_check 無效＝now），log 記一行，服務照常啟動。monitor 執行緒內任何單次迴圈的例外都要被接住並 log，不得讓執行緒死掉（下一輪繼續）。測試：state.json 分別寫入 `[]`、`"x"`、`5`、`null`、`{"until":1e300}`、`{"until":"abc"}`、`{"last_check":1e18}` → 服務啟動、/status 200、authorized=false、之後 /open 正常、排程仍可觸發（至少一種情況驗排程）。
+2. expire 只記真正的到期：只有「主迴圈發現到期時間已過（until 存在且 ≤ now）而清掉授權並鎖定」時才記 expire；/lock、排程切斷、/open 覆蓋都不得產生 expire。若到期後 /open 在主迴圈察覺前覆蓋，/open 處理時先檢查舊授權是否已過期，已過期就先記一筆 expire。測試：/open 後 /lock → 等兩個週期，/log 沒有 expire；排程切斷後同樣沒有 expire；真到期仍有 1 筆 expire（不是 2 筆）。
+3. GATE_LOCK 正向測試：/lock 成功後 `SELECT count(*) FROM events WHERE type='GATE_LOCK'` 增加 1；到期鎖、排程切斷也各增加 1；讀回不是 locked 時不增加（既有反向測試保留）。
+另外順手修（非阻擋，小改）：
+4. README 環境變數段補上 TVGATE_HOME_NET、TVGATE_AWAY_SECONDS、TVGATE_FETCH_INTERVAL、TVGATE_CLOCK 與其他所有程式讀取的 TVGATE_* 變數與預設值。
+5. 加一個測試：跑完一連串操作後，文字 log 與 DB 的 log 表都不含任何鑰匙字串。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate4/tvgate && python3 test_gate.py   （全過、150 秒內、無殘留；連跑兩次）
+  stat -f %m ~/Library/Logs/tvgate.log   （前後相同）
+  git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all   （只有 tvgate/ 下的檔）
+最後回報：1～5 各改在哪、對應測試名稱、上面三個指令的實際輸出。
+hook: SessionStart
+hook: SessionStart
+hook: SessionStart Completed
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+我會先讀兩份審核意見與必要的工作環境指引，再檢查 `tvgate/` 的實作與測試；全程遵守你列出的禁止事項。這次會依 Ponytail 工作方式控制修改範圍。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat /Users/example-owner/TV/research/wo/WO-T3_review2_dsf.md /Users/example-owner/TV/research/wo/WO-T3_review2_gemini.md' in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc 'cat /Users/example-owner/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail/SKILL.md' in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc 'cat ~/.agents/MODELS.md ~/.agents/CLI-GUIDE.md' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+---
+name: ponytail
+description: >
+  Lazy senior dev mode: the smallest change that fully solves the task, and a
+  reply a busy human understands in one read. Use on any coding task (writing,
+  fixing, refactoring, reviewing, choosing dependencies) and when the user says
+  "ponytail", "be lazy", "simplest solution", "yagni", or complains about
+  over-engineering or bloat. Levels: lite, full (default), ultra.
+argument-hint: "[lite|full|ultra|off]"
+license: MIT
+---
+
+# Ponytail
+
+You are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.
+
+Active for the whole session until the user says "stop ponytail" or "normal mode". Switch level: `/ponytail lite|full|ultra`.
+
+## Before you write
+
+Read the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.
+
+## The smallest complete change
+
+Take the first option that fully works:
+
+1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request ("build me X") gets the smallest version that does the core job.
+2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.
+3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.
+4. An installed dependency? Use it. Never add a dependency for a few lines.
+5. Can it be one line a reader gets at a glance? One line.
+6. Otherwise: the minimum code that works.
+
+- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.
+- No abstraction, wrapper, type conversion, option, config, boilerplate or "for later" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.
+- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.
+- Comment only the why the code cannot show, in one line.
+- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.
+- Code you move or merge keeps its error handling and validation.
+- Between options of equal size, take the one that is correct on edge cases.
+- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.
+- A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.
+
+Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
+
+## Levels
+
+| Level | Behavior |
+|-------|----------|
+| **lite** | Build what was asked. Name the smaller option in one line and let the user pick. |
+| **full** | The rules above. Default. |
+| **ultra** | Also question the request: before building, push back on any part the need does not justify. |
+
+ succeeded in 0ms:
+# AI 訂閱／HARNESS-MODEL 使用規範（所有 harness 開工前必讀）
+
+> **總綱要＝本檔**。所有 harness（Claude Code、Codex、pi、OpenCode、AGY）啟動後、做任何實質工作前先讀本檔；各 harness 的 context 檔只放一行指向這裡，不重複內容。Claude Code 例外：開場不自動載入，由 `/team-dev` 指令載入並設定本 session 分工（2026-10-28 Owner 定案）。
+> 要更新規範：只改本檔（改完更新下方「最後查證」日期）；各 CLI 的設定檔是機器開關，依本檔去調整，怎麼調見 `~/.agents/CLI-GUIDE.md`。
+> 要從一個 harness 呼叫別的 CLI（派工、問意見），先看 `~/.agents/CLI-GUIDE.md`「必看的坑」一節，避免 timeout／卡死／沒有輸出。
+> 單一真相來源。工作單、派工、對話一律用「暱稱」，實際 ID 查本表。
+
+## 訂閱線（有哪些錢包、各准用什麼）
+
+| 訂閱線 | 進入的 harness | 准用模型 |
+|---|---|---|
+| Anthropic 訂閱 | Claude Code | OPUS、SONNET、HAIKU |
+| OpenAI 訂閱（ChatGPT 帳號） | Codex（經 opencodex，`gpt-*`） | SOL、TERRA、LUNA、ASTRA（被指定才用） |
+| OpenCode-Go 訂閱 | pi、OpenCode、Codex（`OC-*`） | 白名單：DEEPSEEK FLASH、MUSE SPARK、MIMO FLASH；＋免費模型 |
+| Google AI Pro | AGY（只有 AGY） | GEMINI FLASH |
+| DeepSeek 官方 API（按量計費） | DSCC（`~/.zshrc` 的 `ds-cc-flash`／`ds-cc-flash-high`）、pi 的 `deepseek` provider | 只用 DEEPSEEK FLASH（`deepseek-v4-flash`）。**DEEPSEEK PRO 停用**（2026-10-18 Owner 定案；`cc-ds`／`ds-cc`／`ds-cc-high` 已註解；pi 內建清單仍列得到 PRO，但不准用） |
+| TypeSafe／Cloudflare（按量計費） | 不進 harness，只給程式呼叫 | JEV（見下方） |
+
+## 鐵律
+
+- **R1** GEMINI 只走 AGY，不接到其他 harness。`GEMINI_API_KEY` 留在電腦上給程式開發用，pi 不接。
+- **R2** AGY 只用 Google AI Pro 內建模型，不外掛 API（2026-10-18 查過：agy 設定裡沒有任何外部 key，現況符合）。
+- **R3** OpenCode-Go 只用白名單＋免費模型。白名單只有 Owner 能改；免費模型由 `~/.agents/bin/ocgo-free-sync.py` 每 2 天自動檢查一次（launchd `com.example.ocgo-free-sync`：自動新增／移除免費模型，並把 OpenCode 裡非白名單、非免費的模型關掉；log 在 `~/.agents/logs/ocgo-free-sync.log`）（models.dev 標價 0 而且上游 /v1/models 有列出，兩個來源都同意才收；有疑慮就從 pi／OpenCode 清單移除）。
+- **R4** 本檔沒列的模型不准自己選；指定的模型失敗就回報，不准默默換別的。
+- 已定案不做（不要重提）：API 探針驗證；在 OpenCode Console 找 model 開關（那裡管不到 Go 訂閱線）。詳見 QMem #316。
+
+---
+
+# 模型清單
+> 本檔與其他任何檔案（AGENTS.md、skill、舊工單）的 model ID 衝突時，以本檔為準。
+> 最後查證：2026-09-30（opencodex 2.73.0 / Codex CLI 0.159.2 / App 內建 0.158；16 項實測含工具呼叫全 PASS）；2026-10-13 增列 AGY 欄、GEMINI 4 ARGON（waiting list）、OpenCode-Go 白名單；2026-10-27 pi 的 DEEPSEEK FLASH ID 改為 `opencode-go/deepseek-v4.1-flash`（舊 ID 上游回 ModelDeprecated；Owner 同意）；2026-10-28 移除 GEMINI 4 ARGON、新增 TERRA（`openai/gpt-6.1-terra` 實測可用）與 HAIKU、MIMO FLASH 擴為基礎工作、加 Codex 速度規則（Owner 定案）。
+
+## 暱稱 → 用途
+
+| 暱稱 | 家族 | 用途 |
+|---|---|---|
+| SOL | OpenAI | 高階：規劃、架構；同一工人 3 次未過時的接手者 |
+| TERRA | OpenAI | 高階：challenger |
+| LUNA | OpenAI | 中階：施工、review |
+| ASTRA | OpenAI | 高階；太貴，被指定才用 |
+| OPUS | Anthropic | 高階：大腦（規劃、審定）（Claude Code，主力） |
+| SONNET | Anthropic | 中階：施工、review（Claude Code） |
+| HAIKU | Anthropic | 初階：基礎工作（查詢、整理）（Claude Code） |
+| MUSE SPARK | OpenCode-Go | 中階：施工、review |
+| DEEPSEEK FLASH | OpenCode-Go | 中階：施工、review |
+| MIMO FLASH | OpenCode-Go | 初階：基礎工作（查詢、整理）、看圖 |
+| GEMINI FLASH | Google | 中階：施工、review（AGY） |
+| JEV | TypeSafe | 判斷專用（System One：只回選項＋機率，不生成文字）：記憶分類／去重／取代判斷。試用中，其他用途視情形再加 |
+
+OPENCODE（API／model，非 CLI）只走 OpenCode-Go。OpenCode-Go 採**白名單**，目前納入：MUSE SPARK／MIMO FLASH／DEEPSEEK FLASH／FREE MODEL。OpenCode CLI 與 pi CLI 都讀這份白名單；白名單外的 API 由 Owner 自行接。
+
+不在本表的 model：不要自己挑。要用請先問 Owner。
+高階不做中階工作，除非被指定（如 Rescuer）。高階額度不足時：留一個高階做 Planner，DEEPSEEK FLASH＋MUSE SPARK 各用最高 effort 平行做 Challenger。
+派工角色規則以 QMem 必讀 **#425** 為準（#310 → #424 → #425；2026-10-28 改為預設分工版），本 session 實際分工由 `/team-dev` 設定。
+
+**Codex 速度**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。
+
+## 暱稱 → 各 CLI 實際寫法
+
+| 暱稱 | Claude Code | Codex（App 選單／`-m`，經 opencodex） | OpenCode | pi | AGY |
+|---|---|---|---|---|---|
+| SOL | —（改 CLI 派工） | `gpt-6.1-sol` | —（未開放） | — | — |
+| TERRA | —（改 CLI 派工） | `openai/gpt-6.1-terra` | — | — | — |
+| LUNA | —（改 CLI 派工） | `gpt-6-luna` | —（已停用） | — | — |
+| ASTRA | —（改 CLI 派工） | `gpt-6-astra` | — | — | — |
+| OPUS | `opus`（別名，自動跟最新） | — | — | — | — |
+| SONNET | `sonnet`（別名，自動跟最新） | — | — | — | — |
+| HAIKU | `haiku`（Agent 工具 model 參數） | — | — | — | — |
+| MUSE SPARK | — | `OC-muse-spark` | `opencode-go/muse-spark-1.3-contributor` | `opencode-go/muse-spark-1.3-contributor` | — |
+| DEEPSEEK FLASH | —（改 CLI 派工） | `OC-deepseek-flash`（或不經 proxy：`-p oc_ds_flash`） | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash`（舊 ID `opencode-go/deepseek-flash` 已於 2026-10-27 被上游停用） | — |
+| MIMO FLASH | — | `OC-mimo-flash` | `opencode-go/mimo-v2.6-flash` | `--provider opencode-go --model mimo-v2.6-flash` | — |
+| GEMINI FLASH | — | — | — | `google-gemini/gemini-2.5-flash`（免費，備援） | `gemini-3.8-flash-high`（另 medium／low） |
+
+Codex 的 `OC-*` 是 opencodex 別名，**名稱不帶版本、永遠不變**；上游改版只改別名背後的 target（見 CLI-GUIDE.md「Codex」）。
+
+JEV 不是聊天模型，CLI 叫不到；三條管道（2026-10-01 查證，價格皆為輸入 $0.042／1M token、輸出免費）：
+- **Cloudflare Workers AI**（主力）：`env.AI.run('typesafe/jev', …)`；官方標示 zero data retention。第三方模型**不在免費額度內**：未儲值會回 402 `Insufficient balance`；不儲值。
+- **TypeSafe 官方 API**（**QMem Worker 正式用這條**，Owner 2026-10-01 裁決）：`POST /v1/systemone`，model `jev-1.13.0`（別名 `jev-latest`）；金鑰 `~/.secrets/example-home/JEV.env`。
+- **OpenCode Zen**（Owner 有 USD $5 初始額度）：`jev-1.13`、限時免費 `jev-1.13-free`（免費版資料政策未查證，只餵模擬資料）。**不在 opencode-go 訂閱內**；`opencode.json` 的 policy 目前擋掉 Zen，要用請直接打 API，改設定先問 Owner。
+
+**AGY**（`/Users/example-owner/.local/bin/agy`）：GEMINI 家族一律走 AGY，`--model gemini-3.8-flash-high`（另有 medium／low）；`agy models` 可列當期清單。GEMINI 4 ARGON 2026-10-28 移出清單（一直沒排入使用名單）。
+
+**Claude Code 不再用 `ocx-*` subagent 呼叫外部模型**（2026-10-13 Owner 定案）：之後一律改 CLI 派工。舊紀錄若見 `ocx-gpt-6-1-sol`、`ocx-gpt-6-luna`、`ocx-gpt-6-astra`、`ocx-oc-deepseek-flash` 等名稱，只作歷史查照，不再使用。
+
+## 推理強度（effort）寫法
+
+| CLI | 寫法 |
+|---|---|
+| Claude Code | `/model` 選單調整 |
+| Codex | `-c model_reasoning_effort="xhigh"`（low / medium / high / xhigh） |
+| OpenCode | `-m provider/model#variant` |
+| pi | `--model id:max` 或 `--thinking max`（off … high / xhigh / max） |
+
+## 找不到 model 時（白名單失效）
+
+1. 不要猜新 ID、不要自己換成別的 model。
+2. 跑該 CLI 的列清單指令，找同家族最新版：
+   - Codex：`python3 -c "import json;[print(m['slug']) for m in json.load(open('$HOME/.codex/opencodex-catalog.json'))['models']]"`
+   - Codex 清單沒有新 GPT model → 不必等 opencodex 發版：`ocx models add openai/<新ID>` 手動註冊即可進選單。
+   - OpenCode：`opencode models | grep opencode-go/`
+   - pi：`pi --list-models <關鍵字>`
+   - AGY：`agy models`
+3. 回報 Owner：「暱稱 X 的 ID 從 A 變成 B，要更新 MODELS.md 嗎？」由 Owner 拍板後才改本檔與 CLI 設定。
+# Coding CLI 使用手冊（團隊合作前先讀）
+
+> 所有 CLI 共用。模型 ID 一律查 `~/.agents/MODELS.md`，本檔只講機制、注意事項、指令。
+> 最後查證：2026-10-28 加 HAIKU、ocx-* 標停用、Codex 速度規則；2026-10-27 pi DEEPSEEK FLASH 範例改新 ID；2026-10-18 增「必看的坑」一節；2026-09-30（codex-cli 0.159.2 / opencodex 2.73.0 / opencode v2.0.10 / pi 0.87.1）
+
+## 共通規則
+
+- 派工、報告一律寫模型暱稱（SOL、LUNA、DEEPSEEK FLASH…），並附實際 ID 與 effort。
+- 不得默默換 model。指定的 model 失敗 → 回報，不要自己找替代。
+- 派別的 CLI 當 worker / reviewer 時：非同步背景跑，不要 blocking 等；超過 5 分鐘是正常的。
+- Reviewer 一律唯讀（Codex 加 `--sandbox read-only`）。
+- Owner 非技術背景：回報先講白話「這是什麼、為什麼」，再講技術細節。
+- **等待背景工作（2026-10-08 Owner 同意；起因：`pgrep -f` 比對到等待腳本自己，空等 25 分鐘，且常發生）**：
+  1. 盯 PID，不按名字找：啟動時記 `$!`（寫進 `.pid` 檔），等待只用 `kill -0 <PID>`。
+  2. 或用完成標記檔：`<指令> > log 2>&1; echo $? > done.flag`，等待只看 `done.flag`，順便拿到結束碼。
+  3. 每個等待迴圈都設上限（預估時間約 2 倍），逾時就停下回報，不無限期空等。
+  4. 不得不按名字找時要排除自己：`pgrep -f "[n]ode --test"`；只當退路。
+  5. 等待超過預估 1.5 倍，主動查狀態並回報 Owner，不等 Owner 來問。
+
+## 從一個 harness 呼叫另一個 CLI：必看的坑（2026-10-18 彙整）
+
+> 任何 harness 要用 Bash 派工／叫別的 CLI 前先看這張表。來源：QMem #43、#108、#278 與實測。
+
+**通用（所有 CLI 都適用）**
+- 背景執行一律加 `< /dev/null`，不加可能卡在等 stdin（Codex 必卡；pi MUSE SPARK 曾卡 9.5 小時）。
+- 一律設時間上限。macOS **沒有 `timeout` 指令**，改用：`perl -e 'alarm shift; exec @ARGV' <秒數> <指令…>`。
+- 不要用 `| tail`／`| head` 接長時間任務：pipe 會等指令結束才吐輸出，看起來像卡住。判斷進度看工作目錄檔案 mtime 或 `git status -s`。
+- 背景派工用工具的背景執行（Claude Code `run_in_background`），**不要用 `( … ) &`**：pi 這樣啟動會被砍且輸出 0 bytes。
+- 驗證模型身分不要叫模型自報（常答錯），看 CLI 印的 session header＋派一個可驗證的小任務。
+
+| CLI | 正確寫法 | 坑 |
+|---|---|---|
+| **AGY** | `agy --model gemini-3.8-flash-high --print-timeout 20m -p "<prompt>" < /dev/null` | ① `-p` 會把**下一個字**當 prompt：寫成 `-p --model …` 會報錯或吃錯參數，**`-p "<prompt>"` 放最後**。② 非互動預設 **5 分鐘就中斷**，審查／長任務一定加 `--print-timeout 20m`（或更長）。③ `--model` 要用 slug（`gemini-3.8-flash-high`），不要用顯示名稱（如「Gemini 3.6 Flash (High)」），否則會回「模型不可用」或走慢速預設而逾時。④ 實測 reviewer 品質不如 pi DEEPSEEK FLASH，AGY 的「全部沒問題」不可直接當結論。 |
+| **pi** | `pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>" < /dev/null` | ① `pi -p` **整個任務做完才一次輸出**，執行中 log 一直是 0 bytes，這是正常的；判斷活著看檔案 mtime／`git status -s`。② MIMO 用 `--provider opencode-go --model mimo-v2.6-flash`（把 provider 寫進 `--model` 曾無聲退出）。③ MUSE SPARK 要寫完整 ID `muse-spark-1.3-contributor`。④ 要確認 pi 可用：跑一句「原樣回覆 OK」的小測試。⑤ 不要用 `pi install` 試裝擴充，它會改全域 `settings.json`；臨時要用就 `-e` 載入。 |
+| **Codex** | `codex exec -m <id> --cd <dir> "<prompt>" < /dev/null` | ① 不加 `< /dev/null` 必卡（process 活著但不做事）。② 全域是 `danger-full-access`，要降權必須明確加 `--sandbox`。③ `--sandbox read-only` 的 reviewer 跑不了測試、寫不了暫存檔，要實測的驗收改派 pi 或 Opus。④ 收結果用 `-o <file>`／`--json`。 |
+| **OpenCode** | `opencode run --auto -m opencode-go/deepseek-v4.1-flash "<prompt>" < /dev/null` | ① 讀工作目錄外的檔（例如 `~/.agents/`）會被 `external_directory` 擋下並中斷，非互動要加 `--auto`。② 背景 service 卡住時加 `--standalone`。③ MIMO FLASH 偶爾工具呼叫格式出錯，換 DEEPSEEK FLASH。 |
+| **Claude Code** | `echo "<prompt>" \| claude -p --model sonnet` | 只能用 OPUS／SONNET／HAIKU（Claude Code 內派工直接用 Agent 工具的 `model` 參數較省事）；prompt 有特殊字元要正確跳脫，避免被 shell 執行。 |
+
+## Claude Code
+
+**機制**
+- 只用 Anthropic 官方模型（OPUS / SONNET / HAIKU）。`opus`、`sonnet`、`haiku` 是別名，會自動跟到最新版，不會有白名單失效問題。
+- `ocx-*` subagent **已停用**（2026-10-13 Owner 定案）：Agent 清單裡看得到，但不要用；呼叫別家模型一律改 CLI 派工。
+- 全域指令：`~/.claude/CLAUDE.md`（支援 `@路徑` 匯入別的檔案）。
+
+**指令**
+- 非互動：`claude -p "<prompt>"`
+- 切模型：`/model`
+
+## Codex（經 opencodex）
+
+**機制**
+- `~/.codex/config.toml` 的 `openai_base_url` 被 opencodex 指到本機 proxy `http://127.0.0.1:10100/v1`，再分流：
+  - `gpt-*` → ChatGPT 帳號（OpenAI 訂閱）
+  - `OC-*` → OpenCode-Go（opencodex 的 combo 別名）
+- **Codex App 的選單也來自 opencodex**（`~/.codex/opencodex-catalog.json`）。沒有 opencodex，App 選單只剩 GPT，OC-* 全部消失（2026-09-30 實測）。
+- 不經 proxy 的備援：`-p oc_ds_flash`（原生 `opencode_go` provider，只支援 DeepSeek；Muse、Mimo 原生不行）。team-dev relay 用這條。
+- **速度規則**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。全域 `~/.codex/config.toml` 的 `service_tier = "fast"` 已註解掉（預設一般速度，Codex App 也一樣）；派 LUNA 時加 `-c service_tier='"fast"'`（2026-10-28 實測可跑）。
+- TERRA 是用 `ocx models add` 手動註冊的，`-m` 要寫 `openai/gpt-6.1-terra`（2026-10-28 實測可用）。
+
+**Owner 的清單怎麼維持（不必每次更新）**
+- OpenCode-Go：選單只放三個**不帶版號**的別名 `OC-deepseek-flash`、`OC-muse-spark`、`OC-mimo-flash`。上游出新模型不會自動冒出來（`liveModels=false`）。上游改名或下架時，只改 target，別名不動：
+  `ocx combo set OC-mimo-flash --targets opencode-go/<新ID> --alias OC-mimo-flash`
+- OpenAI：新 GPT model 內建在 opencodex 版本裡。**不想等發版** → `ocx models add openai/<新ID>` 手動註冊；不要的用 `disabledModels` 藏起來（黑名單，新 model 預設會出現）。
+- 升級 opencodex：`ocx update`（會自動重套 compat shim）。**不是必要的**，只有想要新功能，或不想手動 add 新 model 時才升。
+
+**常用 ocx 指令**
+- 狀態：`ocx status`；修復：`ocx ensure`；看別名：`ocx combo list`
+- 暫停 proxy、還原原生 Codex：`ocx restore`（`ocx restore back` 接回去）。**不要用 `ocx uninstall`**：它會刪掉 config，而且 App 選單的 OC-* 會消失。
+- 改了 `~/.opencodex/config.json`（金鑰、combo）要重開 proxy 才生效：`launchctl kickstart -k gui/$(id -u)/com.opencodex.proxy`（不要用 `ocx stop`，它會順便還原原生 Codex）。`ocx combo set` 會把該 combo 的 `defaultEffort` 清成 null，改完要手動補回。
+- `OC-*` 回 `No available targets for combo` 時，先直接打 proxy 看真正錯誤（2026-10-27 是 OpenCode-Go 金鑰過期 401）：opencodex 的 `providers.opencode-go(-responses).apiKey` 要跟 `~/.secrets/example-home/opencode.env` 同一把。
+
+**沙盒（sandbox）白話版**
+
+Sandbox = 限制 Codex 能碰什麼。三種模式：
+
+| 模式 | 能讀 | 能寫 | 網路 | 用在 |
+|---|---|---|---|---|
+| `read-only` | 全部 | 不能 | 不能 | reviewer |
+| `workspace-write` | 全部 | 只有工作目錄（`--add-dir` 可加） | 預設關 | 一般施工 |
+| `danger-full-access` | 全部 | 全部 | 開 | Owner 本機全域預設 |
+
+- Owner 全域設定是 `danger-full-access` ＋ `approval_policy = "never"`（等於不設限、不問）。
+- 「怪怪的」通常是 `workspace-write`：`npm install`、`git push`、寫工作目錄外的檔案會失敗，因為網路預設關、寫入範圍受限。不是 bug。
+- 全域 AGENTS.md：`~/.codex/AGENTS.md`（不支援匯入，要寫「先讀某檔」）。
+
+**指令**
+- 非互動：`codex exec -m <id> -c model_reasoning_effort="high" --cd <dir> "<prompt>" < /dev/null`（背景執行一定要 `< /dev/null`，否則會卡在等 stdin）
+- DeepSeek：`codex exec -p oc_ds_flash --cd <dir> "<prompt>" < /dev/null`
+- prompt 從 stdin：結尾放 `-`，例如 `codex exec ... - < prompt.txt`
+- Reviewer：`codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" --sandbox read-only --cd <dir> -`
+- 只要最後回覆：`-o <file>`；JSON 事件流：`--json`
+- 列模型：見 MODELS.md「找不到 model 時」
+
+## OpenCode
+
+**機制**
+- 設定：`~/.config/opencode/opencode.json`。
+- 模型用**黑名單**（`"disabled": true`）：上游新增的 model 會自動出現，要手動再關掉；舊 model 下架不會壞設定。
+- `experimental.policies` 擋掉 `openrouter`、`deepseek`、`opencode`（付費 Zen 線）三個 provider，只走 `opencode-go` 訂閱線。
+- 原生支援 MCP（已接 FRIDAY `mem`）。
+- `instructions` 陣列列出的檔案每次 session 自動載入。
+- `opencode run` 預設連背景 service；service 卡住時加 `--standalone`。
+
+**指令**
+- 非互動：`opencode run -m opencode-go/deepseek-v4.1-flash "<prompt>"`
+- 自動核准權限：`--auto`；JSON 輸出：`--format json`
+- 列模型：`opencode models | grep opencode-go/`
+
+## pi
+
+**機制**
+- 設定：`~/.pi/agent/settings.json`（`enabledModels` = 白名單，Ctrl+P 切換用）、`~/.pi/agent/models.json`（自訂 model 定義）。
+- 白名單項目在上游消失時只會警告 `No models match pattern`，不會擋啟動。
+- **內建 MCP**（2026-10-09 查證，pi 1.0.4）：直接讀 `~/.pi/agent/mcp.json`（已接 QMem 本機 `qmem`）。**不要再載 `pi-mcp-adapter`**：它會自動在 `settings.json` 寫入 `"-builtin:mcp"` 關掉內建 MCP。
+- `pi -p` 跑完才一次輸出 stdout；背景派工判斷是否還活著，看 worktree 檔案 mtime 或 `git status -s`，不要看 log 大小。
+- 全域記憶：`~/.pi/agent/AGENTS.md`（`--no-context-files` 可關）。
+
+**指令**
+- 非互動：`pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>"`
+- mimo 用 provider 寫法較保險：`pi -p --provider opencode-go --model mimo-v2.6-flash "<prompt>"`
+- 隔離執行：`--no-session --no-extensions --no-context-files --tools read,bash`（`--no-extensions` 連內建 MCP 一起關，要用 QMem 就拿掉）
+- 列模型：`pi --list-models <關鍵字>`
+
+ succeeded in 0ms:
+FAIL
+
+## 一、阻擋（違反規格或測試可假通過）
+
+**B-1 `tvgate/gate.py:74`（`except` 在 :83）：state.json 內容是合法 JSON 但不是物件時，服務啟動就崩潰**
+`load()` 先用 `saved.get('last_check')`；若檔案內容是 `[]`、`"x"`、`5`、`null`，會拋 `AttributeError`，而 `except (OSError, ValueError, KeyError, TypeError)` 接不到，`main()` 也沒有保護，程序直接結束。launchd `KeepAlive` 會讓它反覆重啟，結果**完全失去鎖定能力**（電視停在上一輪 SIGTERM／睡前開放時的狀態）。
+違反 PLAN_v3 「到期時間：…不存在或壞掉＝沒有授權，壞掉時 log 記一行」與 v4「DB／狀態壞掉不影響鎖定」。這是本輪回歸：`main` 版用 `saved['until']`，非 dict 會拋 `TypeError` 被接住，加入 `.get` 後失效。
+同一類問題還有數值未驗範圍：`until=1e300` 會讓 `display()`（:67）在 `/status`（:582）拋例外；`last_check=1e18` 會讓 `schedule_due`（:440）拋例外，**monitor 執行緒直接死掉**（不再對帳、不再切排程、不再記 expire）。
+測試缺口：`tvgate/test_gate.py:320-327` 只寫入 `'bad'`（非法 JSON），沒測「合法 JSON、型別或範圍錯」，所以現在 34 個測試全綠也抓不到。
+
+**B-2 `tvgate/gate.py:262`（寫入在 :280）：`expire` 用「授權狀態轉態」推導，手動鎖與排程切斷後必多記一筆「到期」**
+`expired = previous_authorized and not now_authorized`；`/lock`（:643-648）與排程切斷（:271-276）都會把 `until` 設成 `None`，下一輪迴圈必然 `previous_authorized=True / now_authorized=False` → 多寫一筆 `expire`。`/log` 是 `rowid DESC`，所以按完「立即鎖」後，畫面最上面會是「到期 系統」。
+違反 PLAN_v4 §紀錄 的動作語意（`expire` = 到期）與挑戰裁定 MS C-12（紀錄必須是「真實動作」）。反向也錯：若一次授權到期後、在 monitor 察覺前又被 `/open` 蓋掉，那次真正的到期完全不記。`test_gate.py:500-513` 只驗「真到期會記 expire」，抓不到多記。
+
+**B-3 `tvgate/test_gate.py:661-671`：GATE_LOCK 寫入只有反向測試，實作整段刪掉也全綠**
+`apply()` 在 :199-200 讀回確認 `tv=='locked'` 才寫 `events(...,'GATE_LOCK',...)`（實作正確），但唯一相關測試 `test_lock_event_requires_readback` 只斷言「讀回不是 locked 時不要寫」。34 個測試中**沒有任何一個**對 `events` 表做 `type='GATE_LOCK'` 的正向斷言（`test_calc_exact:600` 只是餵假事件給純函式）。
+違反 PLAN_v4 §使用時間「每次 force-stop＋disable-user 成功，寫一筆 `events(now,'GATE_LOCK',...)`」——這正是挑戰 MS C-03「鎖定期間被算進 YouTube」的解法，也是 WO-T4 第 4 項驗收（鎖後靜置分鐘數不增加）的前提。測試可假通過。
+
+## 二、WO-T3 完成標準第 1 項逐子項對照
+
+| 子項 | 對應測試 | 結果 |
+|---|---|---|
+| 未知鑰匙／檔不存在／壞掉／值不是字串 → 401、log 沒新增、服務沒掛 | `:349-368`（401 在 :357-362） | 有；「log 沒新增」只查 DB（:364），文字 log 那行沒驗 → 見非阻擋 N-3 |
+| 兩把鑰匙各 open/lock → /log device 正確 | `:350-355` | 有（精確比對 `[('lock',name),('open',name)]`） |
+| 改鑰匙檔刪一把 → 不重啟即 401 | `:366-368` | 有 |
+| log 種類 expire/schedule/relock/away/grace/schedule-add/schedule-delete | `:500-513`、`:558-572`、`:386-387` | 都有；**缺 GATE_LOCK（B-3）** |
+| calc 六組精確值 | `:595-610` | 六組都在，數值精確（1800/1200、600+600、1200、2400、0、14400、1800） |
+| 抓取去重＋UNKNOWN／In-memory 不誤讀 | `:422-449`（count==2 :442、Netflix 0 :443、UNKNOWN 0 :444、第二次抓取後 count 不變 :445-448） | 有，優於規格（比筆數不比分鐘） |
+| 真實樣本 ≥40 筆、YouTube/Netflix >0 且 ≤ 跨度 | `:612-618` | 有（樣本 `Last 24 hour events` 開頭、54 筆 RESUMED、無 `In-memory` 段） |
+| 抓取不擋鎖定（卡 20 秒、/open <20s、/status <2s） | `:462-469` | 有 |
+| 抓取失敗不改 tv、不觸發寬限 | `:450-460` | 有（tv/auth/notified/log 無 grace 全查） |
+| 併發 20×5×4 無 500 | `:413-420` | 有（直接斷言 200，更嚴） |
+| DB 損壞 → 啟動、open/lock 正常、/usage 503 | `:389-399` | 有（/log、/schedule 也驗 503） |
+| schedule_due 五個案例 | `:691-700` | 有（含週日 23:59→週一、兩天區間 3 次） |
+| 排程端到端：寬限中照鎖／>600 skipped／重開不回補 | `:535-556`、`:558-585` | 有（600 邊界另見 A5） |
+| 回家觸發：3 分鐘失敗恢復照鎖／離家≥2 分回來給寬限 | `:679-689`（單元）、`:515-533`（整合，電視重連不給寬限 :520-522） | 有；整合用 `TVGATE_AWAY_SECONDS=0.5`（:516），預設 120 秒只靠讀碼 → 非阻擋 N-2 |
+| 端點錯誤碼（非 JSON、25:00、7:40、[0]、[]、[1,1]、第 21 條、重複 id、delete 404、range=year 400、空 DB） | `:370-387`、`:472-480` | 全部有 |
+| 網頁（200/no-store/無鑰匙/三個中文標題/HEAD 無 body/GET 405） | `:401-411` | 有 |
+| `--links`（每設備 2 行、自帶鑰匙、5 秒內結束、不停服務） | `:486-498` | 有；埠用測試自選（:489），**預設 8790 未斷言**（A3 允許）→ 非阻擋 |
+| 150 秒內、log mtime 不變、git status 只有 tvgate/ | 未執行（依指示）| `TVGATE_LOG` 隔離在 `:97`；git status 實查只有 3 個 tvgate 檔、無 tmp* |
+
+（另註：檔內實測 **34 個 test 方法**（GateTest 26＋PureTest 8），與「已跑過 31 個全過」不符，建議確認 run 輸出真的是 34 個；列非阻擋。）
+
+## 三、原有 14 個測試的斷言有沒有被刪／放寬
+
+**沒有。** 以 `git diff main -- tvgate/test_gate.py` 並逐行比對 `main` 版所有含 `assert` 的行：**每一行都逐字存在**於新檔，沒有任何參數比對變寬、時間上限變大或檢查被移除（`3*INTERVAL`、10 秒、20 秒、1 秒、`assert_lock_sequence`、`assertIn(ENABLE, ...)`、`assertNotIn('grace', ...)` 全部原樣）。
+被改動的只有 5 處固定 sleep，而且都是**改嚴**：
+- `:213-216`（hung_adb）`time.sleep(.3)` → `wait_for(any('list' in ...))`，改為等假 adb 真的收到 `list` 才打 /status。
+- `:259-262`、`:267-270`、`:280-282`、`:297-299`（grace 相關 4 處）`time.sleep(2*INTERVAL)` → `wait_for(2 次 list 呼叫)`，改為確認對帳真的又跑了兩輪才斷言「還是沒被鎖」。
+其餘 `setUp` 差異是規格要求（token 改 JSON、加 `TVGATE_LOG`／`TVGATE_HOME_NET`），`request()` 多一個 `body=`，都不影響舊斷言。
+
+## 四、gate.py 規格逐項
+
+- **calc 段落結束規則** `:372-391`：同 package 連續 RESUMED 不切（:381-383）、其他 package 的 RESUMED／SCREEN_NON_INTERACTIVE／DEVICE_SHUTDOWN／DEVICE_STARTUP／同 package 的 GATE_LOCK 才結束（:384-386）、同秒排序 RESUMED 在後（:380）→ 符合。
+- **4 小時上限** `:378` `min(end, start+14400, day_end)` → 符合。
+- **min(now,last_fetch)** `:387-388`，`last_fetch is None` 不延伸（:387 條件）→ 符合。
+- **跨午夜切分** `:376-378` 用 `max(start, day_start)`／`day_end`；`schedule_due`（:438-451）逐日以「該時間點的日期」判週幾 → 符合。
+- **GATE_LOCK 事件** `:197-200` 先讀回、`tv=='locked'` 才寫 → 符合（測試正向缺口見 B-3）。
+- **抓取執行緒不拿 adb_lock、不呼叫 read_tv、不改鎖定狀態** `:393-424`（不碰 `tv`／`failed_since`／`grace`，只用 `fetch_lock`＋自己的 15 秒 adb）→ 符合；失敗只寫文字 log（`'usage'` 不在 DB 動作表 :58）。
+- **回家觸發只有 wake 或 Mac 回家**：`hooks()` :310-311（wake→`arrival()`）、`monitor()` :245-251（離家 ≥`TVGATE_AWAY_SECONDS` 才 `arrival()`）；電視重連走 :281-287 的普通對帳、不呼叫 `arrival` → 符合（有 `test_three_minute...`、`test_network_return...` 佐證）。
+- **schedule_due 用時間點日期判週幾** `:443-450` → 符合。
+- **last_check 先存再處理** `:252-260`（`last_check=now` 後立刻 `save`，之後才跑 due；存檔失敗就丟棄 due）→ 符合。
+- **600 秒窗口** `:267` `now - target > 600`（600 觸發、601 skipped）→ 符合，`:620-643` 精確驗邊界。
+- **鑰匙檔錯誤一律 401、改檔即生效** `:486-494`＋`:573-578`（每請求重讀、非 dict／非字串→ValueError→`{}`→401、值空字串濾掉 :491）→ 符合。
+- **sqlite 單一連線＋db_lock、DB 壞不影響鎖定** `:316-347`、`:393-424` → 符合。
+- **GET／HEAD／POST 路徑** `:549-558`（GET/HEAD 只放行 `/`、其餘 405）、`:544-547`（未支援方法 501→405）、`:621-622`（未知路徑 POST 404）→ 符合；註：未知路徑但鑰匙錯時先回 401（`:576-578`），與 v3 相同、屬既有優先序（非阻擋）。
+- **網頁不含鑰匙、讀 hash 不清 hash** `:514` → 符合。
+- **`--links` 預設 8790 且印 IP 版** `:693-698`、`:497-509` → 符合。
+
+## 五、安全
+
+- **鑰匙不寫進任何 log**：`log()`（:51-60）只寫 action/result；鑰匙錯誤只寫 `'invalid file'`／`'unauthorized'`（:493、:577），未帶內容；`log_message` 只記請求列（token 在 header，不在 URL）。→ 通過。
+- **innerHTML**：全檔**沒有** `innerHTML`／`insertAdjacentHTML`；狀態、設備名、紀錄、排程全部用 `textContent`／`createElement`（:514-523）。log 的 `detail` 甚至沒被渲染。→ 通過。
+- 非阻擋：沒有測試斷言「文字 log 不含任何鑰匙字串」（實作正確，但無回歸保護）。
+
+## 六、非阻擋
+
+- **N-1** `test_gate.py:673-677` `test_usage_bad_meta`：`database` 回傳 `rows=[]`，`data_since` 由 `min(row[0] ...)`（`gate.py:483`）算，空表恆 None，這半段斷言恆真。B4 的 `data_since` 已改由 DB 算，meta 值不再使用，故實際不影響。
+- **N-2** `gate.py:239` `TVGATE_AWAY_SECONDS` 預設 120、`:429` `TVGATE_FETCH_INTERVAL` 預設 600：測試都用縮短值，規格寫死的「2 分鐘」「10 分鐘」只靠讀碼；README 環境變數段也沒列 `TVGATE_HOME_NET`／`TVGATE_AWAY_SECONDS`／`TVGATE_FETCH_INTERVAL`／`TVGATE_CLOCK`。
+- **N-3** `gate.py:577` 的 401 文字 log 與「log 不含鑰匙」沒有測試；`test_devices_and_revocation:364` 比的 `before` 只涵蓋 DB rows（`'token'` 不進 DB），所以那條斷言必然成立。
+- **N-4** `gate.py:433-435` `get_rules()` 的 `json.loads` 例外未接：若 `schedule.days` 被寫壞（非 NULL／非合法 JSON），`monitor`（:252 在 try 外）會整個執行緒死掉，`/schedule*` 也會變成連線中斷而非 503。只在「DB 行內容被破壞」才觸發，門檻高。
+- **N-5** `gate.py:70-85` 只驗 `until`／`last_check` 的型別，未驗範圍（併入 B-1 陳述，修法相同）。
+- **N-6** `test_gate.py:581-585` 第三段（clock=target+602）本身無法區分 last_check 是否有恢復（兩種情況都會是 0 筆新 skipped）；可區分的是第二段 `:573-580`，A6 目的仍達成。
+- **N-7** `test_gate.py:193` `limit = 3*INTERVAL`（1.2 秒）與 `:286` `/lock <1 秒` 仍是真時鐘上限，機器負載高時理論上會 flaky；這兩條是 main 版原樣保留，未放寬。
+- **N-8** `gate.py:210-215` `arrival()` 會無上限等 `adb_lock`（HTTP `/open` 最多持有 ~19 秒），會延後同一輪的排程切斷；600 秒窗口足夠，非錯誤。
+- **N-9** `gate.py:498-504` 鑰匙檔壞掉時 `--links` 不印任何東西且 exit 0，容易被誤認為成功。
+- **N-10** `gate.py:402-404` `last_fetch` 取抓取「完成後」的時間（最多比 dump 取樣點晚 15 秒），規格未釘死，影響 ≤15 秒。
+- **N-11** 37 個 `test_schedule_validation_and_logs`（:370-387）會用真時鐘建立 07:40／08:00–08:18 的規則；若剛好在那些分鐘跑，monitor 可能多切一次，但該測試不驗授權狀態，不會誤判。
+
+## 七、退修清單 A1–A8／B1–B5／C1–C5
+
+**A（測試）**
+- **A1 做到**：`test_gate.py:445-448`（等第 2 次 `usagestats`、`last_fetch` 變大後用 `SELECT count(*) FROM events` 斷言筆數不變）。
+- **A2 做到**：`:453-460`（用 `TVGATE_FETCH_INTERVAL=1` 觸發失敗，非 wake；`:456` 等文字 log 出現 `usage fetch failed`；`:457-460` 斷言 tv=locked、未授權、無通知、`/log` 無 grace）。
+- **A3 做到**：`:486-498`（自選空閒埠 :486-489、`timeout=5` :490、結束後連線失敗 :497-498、三把不同鑰匙逐把比對 :494-496）。
+- **A4 做到**：`:535-537`、`:558-564` 注入 `TVGATE_CLOCK`（gate.py:240-244）；calc／schedule_due 走純函式 `:595-610`、`:691-700`。唯一的真時鐘留在 N-11（不影響斷言）。
+- **A5 做到**：`:621` `for age in (10, 600, 601)`，`:634-643` 分別斷言 600 觸發、601 skipped。
+- **A6 做到**：`:575-580`（重開前 `last_check=target-1`、重啟時 `target+601` → 恰 1 筆 skipped；若改成 now 則 window 空、0 筆，可區分）；載入端 `gate.py:74`、使用端 `:254`。
+- **A7 做到**：`test_schedule_end_to_end`（:558-585）三段各自 `stop→改檔→start`（:559/569、:573/577、:581/583），沒有多餘的 start/stop；測試主體已無 `time.sleep`（只剩 :36/37/46 假 adb、:67 假 hook、:80 `wait_for` 的 0.05）。
+- **A8 做到**：`:86` `tempfile.TemporaryDirectory()`（無 `dir=`）；`git status --porcelain -uall` 只有 `tvgate/README.md`、`gate.py`、`test_gate.py`，無 `tvgate/tmp*`。
+
+**B（gate.py）**
+- **B1 做到（實作）**：`:197-200`（先 `read_tv` 成功且 `tv=='locked'` 才 INSERT）。**測試只做一半** → 見 B-3。
+- **B2 做到**：`:267-278`（>600 先判、`at_home` 為 False 走 `schedule-skipped`／`Mac 不在家`）；單元測試 `:645-659` 精確比對 `assert_any_call('schedule-skipped','Mac 不在家',detail='Mac 不在家')`。
+- **B3 做到**：`gate.py:489-491`（空字串以 `if v` 濾掉，其他設備照常；非 dict／非字串→ValueError→`{}`→401）；測試 `:364-368`。
+- **B4 做到**：`gate.py:458-466`（`float`＋`isfinite`＋`display` try/except）；`data_since` 已不再讀 meta（:483 由 rows 算）；測試 `:673-677`（data_since 那半恆真，見 N-1）。
+- **B5 做到**：`gate.py:483` `min(row[0] for row in rows)`；測試 `:449` 精確比對 `data_since`。
+
+**C（網頁）**
+- **C1 做到**：`gate.py:512`（`*{box-sizing:border-box;overflow-wrap:anywhere}`、`section{max-width:100%}`、`.buttons,#days{display:flex;flex-wrap:wrap}`）。
+- **C2 做到**：`gate.py:512` `.usage-row{display:grid;grid-template-columns:5em minmax(0,1fr) auto}`＋`:519` 每列用 `p.usage-row` 依序 append 名稱／progress／分鐘。
+- **C3 做到**：`gate.py:522`（連續→`週一～週五`、否則 `週一、三、五`）；勾選框中文 `:523`。
+- **C4 做到**：`gate.py:521` `x.time.slice(5,16)` → `MM-DD HH:MM`。
+- **C5 做到**：`test_gate.py:407` 斷言 HTML 含 `box-sizing` 與 `flex-wrap`。
+
+**上一輪問題是否仍存在**：A1–A8、B2–B5、C1–C5 都已消除；B1 只做到反向（B-3），另新發現 B-1（state.json 非 dict 崩潰，本輪新增 `.get` 造成）、B-2（`expire` 誤記）。
+PASS
+
+---
+
+### 一、退修清單逐項查驗（/Users/example-owner/TV/research/wo/WO-T3_fix1_prompt.txt）
+
+#### A. 測試
+- **A1. 去重斷言**：**做到**（[test_gate.py:445-448](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L445-L448)）
+  等 calls 出現第 2 次 usagestats 且 last_fetch 更新後，以 `SELECT count(*) FROM events` 斷言筆數維持不變（2 筆）。
+- **A2. dumpsys 失敗不影響鎖定**：**做到**（[test_gate.py:450-460](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L450-L460)）
+  前景設為 YouTube、tv 為 locked、無授權；以 `TVGATE_FETCH_INTERVAL=1` 觸發 dumpsys usagestats 失敗（非 wake）；等 calls 出現抓取且 log 有 `usage fetch failed` 後，斷言 `/status` 的 tv 仍為 locked、authorized 為 False、無通知、`/log` 無 grace。
+- **A3. --links 測試**：**做到**（[test_gate.py:485-499](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L485-L499)）
+  綁定測試空閒埠傳入 `TVGATE_PORT`，subprocess 設 `timeout=5`，斷言產生 6 行連結（3 設備各 .local 與 IP 兩行，各自帶專屬 token）；結束後以 socket 連線斷言該埠無人監聽。
+- **A4. 遠離午夜固定時間**：**做到**（[test_gate.py:424](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L424), [538](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L538), [560](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L560), [599-610](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L599-L610), [692-700](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L692-L700)）
+  統計抓取使用 `2099-10-26 12:00`；排程端到端與寬限測試以 `TVGATE_CLOCK` 注入 `2026-10-26 12:00`；calc 與 schedule_due 皆為純函式使用固定時間點，不受實際執行時刻影響。
+- **A5. 排程 600 秒邊界補測**：**做到**（[test_gate.py:621-643](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L621-L643)）
+  `test_schedule_cancels_grace_and_skips_old` 針對 age 為 10、600、601 進行測試，精確斷言 age<=600 觸發鎖定與 `schedule`，age==601 記 `schedule-skipped` 且不鎖定。
+- **A6. 重開不回補區分 last_check 恢復**：**做到**（[test_gate.py:574-585](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L574-L585)）
+  重開前 last_check 設為 target-1，重開時時鐘注入 target+601，斷言記 1 筆 `schedule-skipped`；再次重開時鐘設 target+602，斷言筆數仍維持 1 筆（不重複跳過）。
+- **A7. 移除多餘 start/stop 與固定 sleep**：**做到**（[test_gate.py:217](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L217), [260](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L260), [267](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L267), [281](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L281), [298](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L298), [559-586](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L559-L586)）
+  原有測試中的 `time.sleep` 全部改為以 calls 計數為條件的 `wait_for`；`test_schedule_end_to_end` 精簡為必要步驟。
+- **A8. 暫存目錄回歸系統暫存**：**做到**（[test_gate.py:86](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L86)）
+  使用預設 `tempfile.TemporaryDirectory()`，不再在 tvgate/ 目錄下建立暫存。
+
+#### B. gate.py
+- **B1. GATE_LOCK 只在鎖定讀回成功後寫入**：**做到**（[gate.py:198-200](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L198-L200)）
+  先執行 `read_tv(deadline)` 確認 tv 實際狀態，`if desired == 'locked' and tv == 'locked':` 才寫入 DB events。
+- **B2. 排程時間點 600 秒內但 Mac 不在家**：**做到**（[gate.py:277-278](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L277-L278)）
+  `elif at_home:` 切斷，`else:` 記 `schedule-skipped`，detail 明確標註 `Mac 不在家`。
+- **B3. 鑰匙檔空字串項忽略、格式錯才 401**：**做到**（[gate.py:488-494](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L488-L494)）
+  檢查必須為 dict 且鍵值皆為 str，透過 `{k: v for k, v in data.items() if v}` 忽略空字串值；整份解析失敗或非字串映射才記 invalid 並回傳空 dict（全部 401）。
+- **B4. meta 非數值轉為 null 不得 500**：**做到**（[gate.py:459-467](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L459-L467)）
+  對 float 轉換加上 `math.isfinite` 判斷與例外捕捉（KeyError、ValueError、TypeError、OverflowError），異常時設為 None。
+- **B5. data_since 改為 DB 最早事件時間**：**做到**（[gate.py:483](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L483)）
+  改為 `display(min(row[0] for row in rows), '%Y-%m-%d %H:%M') if rows else None`。
+
+#### C. 網頁（375px 手機適配）
+- **C1. box-sizing、flex-wrap、overflow-wrap**：**做到**（[gate.py:512](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L512)）
+  全域宣告 `*{box-sizing:border-box;overflow-wrap:anywhere}`，section 設 `max-width:100%`，按鈕與星期容器設 `flex-wrap:wrap`。
+- **C2. 前景時間 grid 對齊**：**做到**（[gate.py:512](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L512), [519](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L519)）
+  `.usage-row{display:grid;grid-template-columns:5em minmax(0,1fr) auto;gap:8px;align-items:center}`，進度條起點齊一。
+- **C3. 排程中文星期與勾選框**：**做到**（[gate.py:522-523](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L522-L523)）
+  判斷連續天數呈現「週一～週五」，不連續呈現「週一、三、五」；勾選框標籤均使用「週一」～「週日」。
+- **C4. 紀錄時間格式 MM-DD HH:MM**：**做到**（[gate.py:521](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L521)）
+  前端顯示取 `x.time.slice(5, 16)`，截取月日時分。
+- **C5. test_web_page 斷言 CSS 屬性**：**做到**（[test_gate.py:407](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L407)）
+  測試中加入 `self.assertIn('box-sizing', page)` 與 `self.assertIn('flex-wrap', page)`。
+
+---
+
+### 二、WO-T3 完成標準第 1 項子項與測試對照
+
+| 完成標準子項 | 對應測試函式 | 行號 | 檢查完整性與偽通過檢視 |
+|---|---|---|---|
+| (1) 鑰匙認證、多把鑰匙紀錄、改檔即生效、401 | `test_devices_and_revocation` | [test_gate.py:349-369](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L349-L369) | 完整驗證兩把鑰匙對應設備名稱、未授權時 log 不新增、空字串過濾、動態刪除免重啟即 401。無偽通過漏洞。 |
+| (2) log 種類覆蓋（expire, schedule, relock, away, grace, schedule-add/del） | `test_event_log_expiry_relock_sleep_grace`<br>`test_schedule_validation_and_logs`<br>`test_schedule_locks_during_grace` | [test_gate.py:500-514](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L500-L514)<br>[385-386](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L385-L386)<br>[555](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L555) | 完整覆蓋規格要求的各類系統與設備 action。 |
+| (3) calc 6 組精確值驗證 | `PureTest.test_calc_exact` | [test_gate.py:595-611](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L595-L611) | 6 組數值（1800/1200、跨午夜 600/600、同 App 連續 1200、無後續 2400/0、4 小時上限 14400、DEVICE_STARTUP 1800）全數精確斷言。 |
+| (4) 抓取與去重、未知事件略過、In-memory 截斷 | `test_usage_fetch_dedup_and_failure_isolated` | [test_gate.py:423-449](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L423-L449) | 斷言 DB 事件筆數兩次抓取後不變，確認 UNKNOWN_TYPE 與 In-memory 區塊不被寫入。 |
+| (5) 真實樣本 usagestats 解析與時間跨度 | `PureTest.test_real_sample` | [test_gate.py:612-619](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L612-L619) | 斷言 ACTIVITY_RESUMED 筆數 >= 40，YouTube 與 Netflix 秒數 > 0 且 <= 總跨度。 |
+| (6) 抓取不擋鎖定、卡住 20 秒內完成、失敗不影響 tv | `test_usage_hang_does_not_block`<br>`test_usage_fetch_dedup_and_failure_isolated` | [test_gate.py:462-470](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L462-L470)<br>[450-461](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L450-L461) | 驗證 dumpsys 延遲 20 秒時 `/open` 正常返回、`/status` < 2 秒；dumpsys 失敗時 tv 保持 locked、不誤觸 grace。 |
+| (7) 併發測試（20 執行緒打各端點） | `test_concurrent_endpoints` | [test_gate.py:413-421](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L413-L421) | 20 worker 同步呼叫各端點 5 次（共 400 次請求），斷言無 500。 |
+| (8) DB 損壞容錯 | `test_db_corrupt` | [test_gate.py:389-400](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L389-L400) | 檔案填入垃圾字元，斷言服務正常起跑、open/lock 成功、資料庫相關端點回傳 503。 |
+| (9) schedule_due 判定邊界與跨天計算 | `PureTest.test_schedule_due` | [test_gate.py:691-701](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L691-L701) | 週一、週六、週日 23:59 跨午夜判斷週日、相隔兩天列出 3 次觸發，皆精確斷言。 |
+| (10) 排程端到端與 600 秒跳過 | `test_schedule_locks_during_grace`<br>`PureTest.test_schedule_cancels_grace_and_skips_old`<br>`test_schedule_end_to_end` | [test_gate.py:535-557](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L535-L557)<br>[620-644](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L620-L644)<br>[558-586](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L558-L586) | 寬限中照鎖、600 秒邊界測試、重開機讀取 last_check 且不重複跳過。 |
+| (11) 回家觸發與電視重連無寬限 | `PureTest.test_three_minute_tv_failure_does_not_trigger_arrival`<br>`test_network_return_and_tv_reconnect` | [test_gate.py:680-690](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L680-L690)<br>[515-534](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L515-L534) | 電視斷線 3 分鐘恢復不觸發 arrival；Mac 離家網路滿門檻回來觸發寬限與通知。 |
+| (12) 端點驗證與空 DB | `test_schedule_validation_and_logs`<br>`test_empty_database_and_links` | [test_gate.py:370-388](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L370-L388)<br>[472-480](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L472-L480) | 錯誤輸入 400（重複 days、time 超界、21 條限制）、刪除 404、空 DB 200 全 0 與 null。 |
+| (13) 網頁 HEAD/GET 與 Cache-Control | `test_web_page` | [test_gate.py:401-412](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L401-L412) | 200, no-store, 無 token, HEAD 無 body, GET /status 405。 |
+| (14) --links 輸出格式 | `test_empty_database_and_links` | [test_gate.py:481-499](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L481-L499) | 預設 8790 埠、輸出 6 行（.local 與 IP）、不啟動 HTTP 服務。 |
+
+---
+
+### 三、原有 14 個測試之斷言比對（git diff main 審查）
+
+比對 `git -C /Users/example-owner/TV-wt-tvgate4 diff main -- tvgate/test_gate.py`，原有 14 個測試：
+1. **無任何斷言被刪除**。
+2. **無任何斷言被放寬**：
+   - 假 adb 狀態比對、`assert_lock_sequence`（force-stop 接 disable-user 順序）、狀態碼與回傳 JSON 鍵值比對完全保留。
+   - 舊有測試中依賴固定 `time.sleep` 等待對帳週期的寫法（如 [test_gate.py:217, 260, 267, 281, 298](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L217)），全數改為等待可觀察條件 `wait_for(lambda: sum('list' in a for a in self.calls()[count:]) >= 2)` 或 `any('list' in a ...)`，比對條件更嚴格且消除 flaky 風險。
+   - Token 檔初始化配合 v4 格式改為 JSON 字串，認證邏輯與測試預期結果保持一致。
+
+---
+
+### 四、gate.py 規格遵循性稽核
+
+1. **calc 段落計算與邊界**：
+   - [gate.py:380](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L380)：排序使用 `(e[0], e[1] == 'ACTIVITY_RESUMED')`，同秒時非 RESUMED（結束事件）優先處理，符合規格。
+   - [gate.py:382-387](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L382-L387)：同 package 連續 RESUMED 不切段；其他 package RESUMED 或 `SCREEN_NON_INTERACTIVE`、`DEVICE_SHUTDOWN`、`DEVICE_STARTUP` 或該 package 之 `GATE_LOCK` 結束段落。
+   - [gate.py:378](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L378)：`seconds = max(0, min(end, start + 14400, day_end) - max(start, day_start))`，落實 4 小時（14400 秒）上限截斷與 `[day_start, day_end)` 跨午夜切分。
+   - [gate.py:388-390](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L388-L390)：末段若無結束事件且 `last_fetch is not None`，算至 `min(now, last_fetch)`；為 null 則不延伸。
+2. **GATE_LOCK 事件**：
+   - [gate.py:198-200](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L198-L200)：執行 `am force-stop` 與 `pm disable-user` 後，再次呼叫 `read_tv()` 成功讀回且確認 `tv == 'locked'`，才寫入 `GATE_LOCK` 事件。
+3. **抓取執行緒隔離性**：
+   - [gate.py:393-431](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L393-L431)：`fetch_usage()` 使用獨立的 `fetch_lock` 與自有的 `dumpsys usagestats` 呼叫（上限 15 秒），不碰 `adb_lock`，不呼叫 `read_tv`，不改動 `failed_since`、`tv`、`until` 或鎖定狀態。
+4. **回家觸發與寬限條件**：
+   - [gate.py:245-251](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L245-L251), [306-307](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L306-L307)：`arrival()` 僅由 sleephook 的 `wake` 或 Mac 離開家用網路滿門檻（預設 120 秒）回來時觸發。
+   - [gate.py:281-288](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L281-L288)：電視故障重連恢復（`had_failure`）僅呼叫一般對帳 `apply()`，不呼叫 `arrival()`，絕不誤給寬限。
+5. **排程邏輯（schedule_due 與 600 秒窗口）**：
+   - [gate.py:438-451](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L438-L451)：逐日遍歷並依每個時間點當日的 `date.isoweekday()` 比對。
+   - [gate.py:255-257](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L255-L257)：主迴圈每次取得 `due_rules` 後，先將 `last_check = now` 存入 `state.json`，再行處理切斷或跳過。
+   - [gate.py:267-278](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L267-L278)：若 `now - target > 600` 則記 `schedule-skipped`；若在 600 秒內但 Mac 不在家亦不切並記 `schedule-skipped`。
+6. **鑰匙管理與安全機制**：
+   - [gate.py:486-495](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L486-L495), [574-578](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L574-L578)：每次 POST 動態讀取鑰匙檔，以 `hmac.compare_digest` 安全比對；檔案不存在、格式異常均回 401；改檔即時生效。
+7. **SQLite 單一連線與故障隔離**：
+   - [gate.py:316-347](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L316-L347)：單一連線（`check_same_thread=False`）配搭 `db_lock`，開啟 `WAL` 與 `busy_timeout=5000`；DB 損壞時捕獲 `sqlite3.Error`，鎖定控制邏輯依然運作，端點回傳 503。
+8. **HTTP 方法與路徑限制**：
+   - [gate.py:549-563](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L549-L563)：僅 `GET /` 回傳 200，`HEAD /` 回傳 200 且無 body；其他路徑 GET/HEAD 一律 405；非指定路徑之 POST 回傳 404。
+9. **網頁安全與 hash 處理**：
+   - [gate.py:514](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L514)：前端讀取 `location.hash` 後儲存於 localStorage，**完全不清空 hash**。
+10. **--links 參數**：
+    - [gate.py:497-508](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L497-L508), [693-697](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L693-L697)：預設埠 8790，輸出本機 .local 與 en0 IP 兩版本，執行完畢即結束，不啟動服務。
+
+---
+
+### 五、安全審查
+
+1. **Log 敏感資訊洩漏**：
+   - [gate.py:55](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L55), [493](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L493), [533](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L533), [577](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L577), [643](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L643)：文字 log 與 DB log 均未記錄 raw token 內容；未授權時僅記 `unauthorized`；HTTP access log 僅記錄請求行，不包含 `X-Token` 標頭。
+2. **XSS / innerHTML 檢查**：
+   - 審查 [gate.py:511-524](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L511-L524)：前端腳本**完全沒有使用 `innerHTML`**。所有由伺服器回傳之設備名稱、log detail、App 名稱、狀態字串，均透過 `textContent` 或 `document.createTextNode()` 建立並以 `append()` 插入 DOM，徹底杜絕 XSS 風險。
+
+---
+
+### 六、非阻擋項目
+
+- **[非阻擋] [tvgate/test_gate.py:445-449](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L445-L449)**：
+  在 `test_usage_fetch_dedup_and_failure_isolated` 中，測試依照 Fix1 A1 要求，在第二次抓取後直接以 `SELECT count(*) FROM events` 斷言事件筆數維持不變（並隨後呼叫一次 `/usage` 檢查 `data_since`），未在第 1 次抓取後與第 2 次抓取後各呼叫一次 `/usage` 比對其 `minutes` 欄位。因 DB 事件資料筆數未變且包含唯一限制（UNIQUE），經純函式 calc 計算之分鐘數必然相同，不影響去重正確性，屬非阻擋項目。
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'stat -f %m ~/Library/Logs/tvgate.log; git status --porcelain --untracked-files=all' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+1793293858
+ M tvgate/README.md
+ M tvgate/gate.py
+ M tvgate/test_gate.py
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat research/PLAN_v4_ui.md' in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc 'cat /Users/example-owner/TV/research/wo/WO-T3_review2_dsf.md' in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc 'cat /Users/example-owner/TV/research/wo/WO-T3_review2_gemini.md' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+# 時間管理 v4：管理網頁、使用時間統計、設備紀錄、排程切斷
+
+狀態：APPROVED（2026-10-30 01:35，Opus）。挑戰：DEEPSEEK FLASH max（15 條）＋MUSE SPARK xhigh（15 條），裁定見文末。
+建立在 PLAN_v3_service.md 之上：v3 規則（授權、對帳、休眠開放、回家寬限、失效表）不變，**只有「回家」的觸發條件改掉**（見下），其餘本檔只寫新增部分。
+
+## Owner 裁定（10-30 01:10）
+- 管理介面做網頁，Mac 與 iPhone 共用（iPhone 加到主畫面當 App）；之後「iPhone 接手管理」直接用同一頁。
+- 排程只做「時間點切斷」：例如週一～五 07:40 → 清掉授權、立刻關閉並鎖住 YouTube（正在看也切）；之後家長仍可再授權。不做禁止時段。
+- 設備：爸爸 iPhone、媽媽 iPhone、MacBook，各一把鑰匙；授權紀錄要記是哪個設備給的。
+- 過渡期：v3 服務已暫停（01:10 bootout，YouTube 開放；plist 改名 .paused 防登入自啟），v4 驗收後再上線。
+
+## 實機事實（01:12 查）
+- 電視時區 Asia/Taipei（+0800），與 Mac 相同。
+- `dumpsys usagestats` 的「Last 24 hour events」段落保留最近 24 小時事件，跨重開機保留；格式：`time="2026-10-29 22:42:40" type=ACTIVITY_RESUMED package=com.netflix.ninja class=...`。段落以標題行開始，到下一個「In-memory」標題結束。樣本：`tvgate/testdata/usagestats_events_sample.txt`（從 22:37 開機起，不是完整 24 小時；含 UNKNOWN_TYPE_ 等未知類型）。
+- 8765 被 Hermes scope_proxy 占用，正式用 8790。
+
+## v3 行為修正：「回家」觸發條件
+- v3 的觸發「電視連續讀取失敗 ≥2 分鐘後重新讀成功」會被**電視拔插頭重開**觸發（TCL 開機把 YouTube 改回啟用 → 孩子開著 YouTube → 進寬限一直看），是繞過漏洞。
+- 改為：只有 (a) sleephook 送 `wake`，或 (b) **Mac 自己**離開家用網路 ≥2 分鐘後回來，才算回家。判斷 Mac 在家用網路：UDP socket `connect(("192.0.2.69", 9))` 後 `getsockname()[0]` 以 `192.0.2.` 開頭（不送封包，只看路由）。電視斷線再連上＝一般對帳（沒授權就鎖，不給寬限）。
+
+## 新增設計
+
+### 設備鑰匙
+- 鑰匙檔改為 `~/.secrets/tvgate.tokens.json`：`{"爸爸 iPhone": "<hex>", "媽媽 iPhone": "<hex>", "MacBook": "<hex>"}`，權限 600。`TVGATE_TOKEN` 指向這個檔。舊的單一 `tvgate.token` 不再讀。
+- 每個請求讀一次鑰匙檔，以 `X-Token` 找出設備名稱：找不到、檔案不存在、壞掉、不是「字串→字串」的 dict → 一律 401（不是 500），文字 log 記一行（不記鑰匙內容）。改檔即生效，不必重啟（輪替：改檔刪掉那把 → `--links` → 重傳連結）。
+- Mac 也用鑰匙，不開「本機免鑰匙」（避免瀏覽器跨站請求）。
+- `python3 gate.py --links`：每個設備印兩行連結：`http://<LocalHostName>.local:8790/#t=<token>` 與 `http://<en0 IP>:8790/#t=<token>`（IP 版備援）。`--port` 可改；**程式預設埠改為 8790**。不啟動服務。
+
+### 紀錄
+- 文字 log 照舊（`log()` 一個函式同時寫文字 log 與 DB；DB 失敗只影響 DB，不影響文字 log 與鎖定控制）。文字 log 路徑可用 `TVGATE_LOG` 換（測試必設），預設 `~/Library/Logs/tvgate.log`。既有 log 文字不改名。
+- DB：`$TVGATE_HOME/tvgate.db`。單一連線（`check_same_thread=False`）＋單一 `db_lock` 包住所有操作，`PRAGMA journal_mode=WAL`、`busy_timeout=5000`，`CREATE TABLE IF NOT EXISTS`。DB 打不開或損壞 → 服務照常啟動與鎖定，`/usage`、`/log`、`/schedule` 回 `{"error":"db"}`（HTTP 503）。
+- 表 `log(ts_epoch, device, action, minutes, until, detail)`。記：`open`（設備、分鐘、到期）、`lock`（設備）、`expire`（系統）、`schedule`（排程）、`schedule-skipped`（排程，detail＝錯過的規則時間）、`relock`（系統：對帳發現沒授權卻是啟用而停回）、`away`（系統：睡前／停止時開放）、`grace`（系統：回家寬限開始）、`schedule-add`／`schedule-delete`（設備）。
+- `/log` 固定回最近 30 筆，無參數。
+
+### 使用時間（「前景時間」：App 在畫面最前面的時間，不等於真的在看）
+- **抓取**：獨立背景執行緒，每 10 分鐘一次（Mac 喚醒、回家時立即一次）。用自己的鎖、自己的 adb 呼叫（15 秒上限），**不拿 adb_lock、不呼叫 read_tv、不改 failed_since 或任何鎖定狀態**。只取「Last 24 hour events」段落中 type 為 ACTIVITY_RESUMED（所有 package）、SCREEN_NON_INTERACTIVE、DEVICE_SHUTDOWN、DEVICE_STARTUP 的行，存入 `events(ts_epoch, type, package, class)`，`UNIQUE(ts_epoch, type, package, class)`。未知類型忽略不報錯。成功 → 記 `last_fetch`（存 DB）。失敗只寫文字 log。
+- **gate 自己的鎖定也當事件**：每次 force-stop＋disable-user 成功，寫一筆 `events(now, 'GATE_LOCK', 'com.google.android.youtube.tv', '')`。
+- **計算**：純函式 `calc(events, now, last_fetch, day_start, day_end)`，不讀系統時鐘。事件依時間排序（同秒時 RESUMED 排在結束類事件之後不影響結果）：
+  - 「前景 App」＝最近一個 ACTIVITY_RESUMED 的 package。
+  - 段落結束於：另一個 package 的 ACTIVITY_RESUMED、SCREEN_NON_INTERACTIVE、DEVICE_SHUTDOWN、DEVICE_STARTUP、或該 package 的 GATE_LOCK。同 package 連續 RESUMED（例如 ShellActivity→MainActivity）不切段、不重複算。
+  - 最後一段沒有結束事件：算到 `min(now, last_fetch)`（`last_fetch` 是最後一次確認「之後還沒有結束事件」的時間；抓取失敗時就停在那裡，下次抓到結束事件會自動補正）；`last_fetch` 為 null → 不延伸。
+  - 任一段最長 4 小時，超過截斷（防 HDMI 等沒有事件的情況無限延伸）。
+  - 以秒計，切到 `[day_start, day_end)` 內；顯示時無條件捨去到分鐘。
+- 統計的 App：YouTube、Netflix（com.netflix.ninja）、四季（tv.fourgtv.video）、Spotify（com.spotify.tv.android）、Disney+（com.disney.disneyplus）、HBO Max（com.wbd.stream）。其他 package 只用來結束段落，不顯示。
+- 範圍：今天、本週（週一起）、本月（1 日起），本機時間。今天與本週另回每天分鐘數；本月只回總計。
+- `events` 保留 40 天，每天清一次舊資料。
+- 限制（頁面要寫）：Mac 離家超過 24 小時，中間電視事件會遺失而少算；HDMI 或沒有事件的情況最多多算到 4 小時；資料從服務上線才開始。
+
+### 排程切斷
+- 表 `schedule(id, days, time)`：days＝1（週一）…7（週日）的集合，time＝`HH:MM`（00:00～23:59，兩位數）。最多 20 條，超過 400。
+- 判斷函式 `schedule_due(rules, prev_epoch, now_epoch) -> [(rule, target_epoch)]`：列出所有落在 `(prev, now]` 的規則時間點，**用每個時間點自己的日期判斷週幾**。
+- 主迴圈：每次醒來先取 now → `due = schedule_due(rules, last_check, now)` → 先把 `last_check=now` 存進 state.json → 再處理 due：`now - target ≤ 600 秒` → 清掉授權、取消回家寬限、立刻 force-stop＋disable-user（不看前景、不給寬限）、log `schedule`；超過 600 秒（Mac 睡過頭、服務停過）→ 不切，log `schedule-skipped`。
+- 服務第一次啟動（state.json 沒有 last_check）→ last_check＝now，不回補。
+- 排程切斷之後，v3 的「Mac 睡前開放」照常（Owner Q1：Mac 不在就開放）；也就是排程只在 Mac 在家醒著時有效。寫進失效表。
+
+### 網頁
+- HTML、CSS、JS 全部內嵌在 gate.py，不引用外部網址；頁面本身不含任何秘密。`GET /` 回 200、`Cache-Control: no-store`；`HEAD /` 不回 body；其他路徑的 GET／HEAD 一律 405；未知路徑的 POST 404。
+- 鑰匙：每次載入先讀 `location.hash` 的 `t=`（**不清掉 hash**，讓書籤與主畫面捷徑保留完整連結），讀到就同時存 localStorage；沒有 hash 才讀 localStorage；都沒有 → 顯示「請用設備連結開啟」。
+- 頁面（繁體中文，手機優先、大按鈕）：
+  1. 狀態：已授權到 HH:MM／未授權；電視：已開放／已鎖／無法確認；最後確認時間。每 15 秒更新。
+  2. 按鈕：開放 15／30／60 分、立即鎖；按完顯示結果文字（成功／電視沒回應＋note）。
+  3. 前景時間：今天／本週／本月分頁；每個 App 一條橫條＋分鐘；今天與本週列每天合計。固定顯示「資料起點」「最後抓取時間」與限制說明一行。
+  4. 紀錄：最近 30 筆（時間、設備、動作、分鐘、到期），動作用中文。
+  5. 排程：列出規則可刪除；新增＝勾週幾＋`<input type="time">`。
+  - 頁尾：目前設備名稱。
+
+### 端點（全部 POST＋X-Token；body 一律 JSON 或空）
+- `/status`：多回 `device`。
+- `/usage?range=day|week|month`：`{"range","from":"YYYY-MM-DD","apps":[{"name","minutes"}],"days":[{"date","minutes":{App:N}}]（month 為 []）,"data_since":"YYYY-MM-DD HH:MM"|null,"last_fetch":"YYYY-MM-DD HH:MM"|null}`；DB 空 → 200、全 0、null。range 錯 → 400。
+- `/log`：`{"items":[...]}`。
+- `/schedule`、`/schedule/add`（`{"days":[1,2,3,4,5],"time":"07:40"}`；非 JSON、days 空／重複／不在 1～7、time 格式錯、超過 20 條 → 400；相同規則已存在 → 回既有 id）、`/schedule/delete`（`{"id":N}`，不存在 → 404）。
+
+## 失效表（新增列）
+| 情況 | 結果 |
+|---|---|
+| 排程時間 Mac 睡著或服務沒跑 | 不切；醒來後 log `schedule-skipped`（10 分鐘內醒來仍會切） |
+| 排程切斷後 Mac 闔蓋 | 照 Q1 開放 YouTube（Mac 不在＝開放） |
+| 電視拔插頭重開 | 一般對帳鎖回，**不給寬限** |
+| 一把鑰匙外洩 | 那把有完整管理權；改鑰匙檔刪掉即失效（不必重啟） |
+
+## 不做
+推播通知（之後 iPhone 接手管理時再做）、外網、帳號系統、修改或刪除歷史紀錄、禁止時段、事後重算、其他 App 的鎖定、唯讀鑰匙。
+
+## 工單
+
+### WO-T3 施工（工人 TERRA high priority，Owner 指定）
+- 改：`tvgate/gate.py`、`tvgate/test_gate.py`、`tvgate/README.md`；可新增 `tvgate/testdata/` 下的檔。不改 plist 與 sleephook.swift。
+- 完成標準（Opus 審定時跑）：
+  1. `cd tvgate && python3 test_gate.py` 全過、150 秒內、無殘留子程序；跑完 `~/Library/Logs/tvgate.log` 的 mtime 不變（測試全部用 `TVGATE_LOG`）。原有 14 個測試照樣過（鑰匙檔改格式後跟著改，斷言不得放寬）。新增測試至少：
+     - **鑰匙**：兩把各 `/open`、`/lock` → `/log` 的 device 正確；未知鑰匙、鑰匙檔不存在、內容壞掉、值不是字串 → 401 且 log 沒新增、服務沒掛；改鑰匙檔刪掉一把 → 不重啟即 401。
+     - **log 種類**：到期 → `expire`；排程 → `schedule`；對帳停回 → `relock`；sleep → `away`；wake＋前景 YouTube → `grace`；新增／刪除排程 → `schedule-add`／`schedule-delete`。
+     - **calc 精確值**（直接呼叫函式，注入 now／last_fetch；某日 D）：
+       - D 10:00 RESUMED YouTube、10:30 RESUMED Netflix、10:50 SCREEN_NON_INTERACTIVE → YouTube 1800 秒、Netflix 1200 秒。
+       - D 23:50 RESUMED YouTube、D+1 00:10 RESUMED 桌面（com.gathin.tvhome）→ D 的 YouTube 600 秒、D+1 的 YouTube 600 秒。
+       - 10:00 RESUMED YouTube（ShellActivity）＋10:00 RESUMED YouTube（MainActivity）、10:20 GATE_LOCK → YouTube 1200 秒（不重複）。
+       - 10:00 RESUMED YouTube、無後續事件、last_fetch=10:40、now=12:00 → 2400 秒；last_fetch=null → 0。
+       - 10:00 RESUMED YouTube、無後續、last_fetch=now=16:00 → 14400 秒（4 小時上限）。
+       - 10:00 RESUMED YouTube、10:30 DEVICE_STARTUP → 1800 秒。
+     - **抓取與去重**：假 adb 的 `dumpsys usagestats` 回測試資料；抓兩次 `/usage` 數字不變；含 UNKNOWN_TYPE_ 與「In-memory daily stats」之後段落的資料不被誤讀。
+     - **真實樣本**：`testdata/usagestats_events_sample.txt` 解析出的 ACTIVITY_RESUMED 筆數 ≥ 40，且 YouTube、Netflix 前景秒數都 > 0、都 ≤ 樣本時間跨度。
+     - **抓取不擋鎖定**：假 adb 的 dumpsys 卡 20 秒期間，`/open` 在 20 秒內 ok=true、`/status` 2 秒內回；dumpsys 失敗不改變 `/status` 的 tv 值、不觸發寬限。
+     - **併發**：20 個執行緒同時打 `/usage`、`/log`、`/open`、`/status` 各 5 次 → 沒有 500。
+     - **DB 損壞**：`tvgate.db` 寫成垃圾 → 服務啟動、`/open`／`/lock` 正常、`/usage` 503。
+     - **schedule_due**：週一 07:40 規則：prev=週一 07:39:58、now=07:40:03 → 觸發 1 次；prev=07:40:03、now=07:40:08 → 不觸發；週六不觸發；週日 23:59 規則、prev=週日 23:59:58、now=週一 00:00:02 → 觸發（以週日判斷）；prev 與 now 相隔兩天 → 列出區間內所有時間點（主迴圈再依 600 秒規則決定 skipped）。
+     - **排程端到端**（注入或縮短時鐘皆可，不得真等到整點）：觸發時即使在回家寬限中、前景是 YouTube 也照鎖；超過 600 秒 → 不鎖、log `schedule-skipped`；重開服務 → last_check 從 state.json 恢復、不回補。
+     - **回家觸發**：電視讀取失敗 3 分鐘後恢復、前景 YouTube、沒授權 → 照鎖、不進寬限；`TVGATE_HOME_NET` 類環境變數模擬 Mac 離開家用網路 ≥2 分鐘後回來＋前景 YouTube → 進寬限。
+     - **端點**：`/schedule/add` 錯誤輸入（非 JSON、time=25:00、7:40、days=[0]、[]、[1,1]、第 21 條）→ 400；重複規則回既有 id；`/schedule/delete` 不存在 → 404；`/usage?range=year` → 400；DB 空 → `/usage` 200 全 0 且 data_since=null。
+     - **網頁**：`GET /` 200、含 `Cache-Control: no-store`、內容不含任何鑰匙字串、含「前景時間」「紀錄」「排程」；`HEAD /` 無 body；`GET /status` 405。
+     - **--links**：每個設備 2 行（.local 與 IP），埠 8790，不啟動 HTTP 服務。
+  2. `git status --porcelain --untracked-files=all` 只有 tvgate/ 下的檔。
+  3. Opus：用假 adb 起服務、curl 取 `/` 與各端點確認可用。
+- 禁止：同 WO-T1（不碰真 adb／電視、不裝套件、不 launchctl、不讀寫 `~/Library/Application Support/tvgate`、`~/.secrets`、`~/Library/LaunchAgents`、`~/Library/Logs/tvgate.log`、不 commit）。
+
+### WO-T4 上線（Opus＋Owner，不委派）
+- 回滾準備：保留 v3 的 `tvgate.token` 與 v3 版 gate.py（git tag `tvgate-v3`）直到 WO-T4 通過；失敗 → bootout、checkout v3、YouTube 恢復開放。
+- 安裝：產生 `tvgate.tokens.json`（3 把，600）；plist 改回 `.plist` 並 bootstrap；`--links` 產生連結；確認 8790 監聽、8765 仍是 Hermes；Mac 防火牆允許連入。
+- Owner：Mac 開 MacBook 連結並加書籤；AirDrop 把爸爸／媽媽連結傳到兩支 iPhone，用 Safari 開、加入主畫面；從主畫面打開確認還認得設備。
+- 驗收：
+  1. 三個設備各按一次開放 15 分 → 紀錄顯示正確設備；立即鎖 → 紀錄有 lock。
+  2. 沒有鑰匙的網址 → 顯示「請用設備連結開啟」；刪掉一把鑰匙 → 該手機 401、其他正常，再加回。
+  3. 校準：Owner 記錄 YouTube 10 分鐘＋桌面閒置 10 分鐘＋Netflix 5 分鐘的起訖時間，與今日前景時間比對，誤差各 ≤ 3 分鐘。
+  4. 播放中立即鎖後靜置 30 分鐘 → YouTube 今日分鐘數不增加。
+  5. YouTube → 切 HDMI 10 分鐘 → 切回：記錄 YouTube 分鐘數變化（若 HDMI 切換沒有事件，記為已知誤差，不擋上線）。
+  6. 新增 2 分鐘後的排程 → 準時切斷、紀錄 `schedule`；刪除後不再觸發；重開服務後排程仍在。
+  7. 電視拔插頭重開、前景開 YouTube → 約 1～2 分鐘內被鎖（不給寬限）。
+- v3 WO-T2 未做的實機項目（闔蓋、kickstart、手動啟用停回秒數）另列 WO-T2b，不擋 v4。
+
+## 挑戰裁定（DSF＝DEEPSEEK FLASH max；MS＝MUSE SPARK xhigh；原文 research/challenge/PLAN_v4_DSF.md、PLAN_v4_MUSE.md）
+| 意見 | 裁定 | 處理 |
+|---|---|---|
+| DSF C-01、MS C-01／C-02 段落沒有結束 | 採納 | 存所有 package 的 RESUMED；加 DEVICE_STARTUP、GATE_LOCK 結束；4 小時上限；WO-T4 HDMI 實測 |
+| MS C-03 鎖定期間被算進 YouTube | 採納 | GATE_LOCK 事件結束段落；WO-T4 第 4 項 |
+| MS C-04「算到 min(now,last_fetch)」寫錯 | 駁回 | last_fetch 是「最後確認仍無結束事件」的時間，延伸到那裡才正確；抓取失敗時不再延伸，下次抓到會補正 |
+| DSF C-02 排程 Mac 睡著 | 部分採納 | last_check 存 state.json、600 秒窗口、錯過記 `schedule-skipped`；不做補切（Mac 不在本來就開放，Q1） |
+| DSF C-03 排程被睡前開放與寬限抵銷 | 部分採納 | 睡前開放照 Q1 保留（寫進失效表）；**寬限觸發改成只有 wake 或 Mac 自己回家**，電視重開不再給寬限（修 v3 漏洞） |
+| DSF C-04、MS C-13 calc 測試可假通過 | 採納 | calc 改純函式；WO 寫死 6 組精確值；真實樣本改斷言筆數與 >0；排程函式簽名釘死 |
+| MS C-13④ 審定不應由 Opus | 駁回 | 外部審核員已有（GEMINI＋DSF）；Opus 審定是 team-dev 規定的機械閘門 |
+| DSF C-05、MS C-06 sqlite 執行緒 | 採納 | 單一連線＋db_lock＋WAL＋busy_timeout；DB 壞不影響鎖定；併發測試 |
+| DSF C-06、MS C-05 抓取擋鎖定、誤觸寬限 | 採納 | 獨立執行緒與鎖、不碰鎖定狀態；去重鍵加 class；卡住測試 |
+| DSF C-07 --links 埠錯 | 採納 | 預設 8790、印 IP 備援 |
+| DSF C-08 前景≠觀看 | 採納 | 改稱「前景時間」、顯示資料起點與最後抓取 |
+| DSF C-09 localStorage | 部分採納 | 先讀 hash、不清 hash，再存 localStorage 備用 |
+| DSF C-10、MS C-09 鑰匙錯誤處理與輪替 | 採納 | 讀檔錯一律 401；改檔即生效；README 寫輪替；不另做唯讀鑰匙 |
+| DSF C-11 紀錄雙軌、不改名 | 採納 | log() 同時寫文字與 DB；既有文字不改名 |
+| MS C-12 系統事件太多 | 駁回 | 都是真實動作、頻率低，Owner 要知道誰開的與為什麼被鎖 |
+| DSF C-12 測試寫到真 log、介面未定 | 採納 | TVGATE_LOG；mtime 斷言；schedule_due 簽名與「用時間點日期判斷週幾」 |
+| DSF C-13、MS C-14 缺的測試 | 採納 | 已併入 WO-T3（mutation 檢查不做，由審核員讀測試） |
+| DSF C-14、MS C-15 WO-T4 缺項 | 採納 | 校準、鎖後靜置、HDMI、刪排程、拔插頭、鑰匙刪除、回滾；v3 欠債另開 WO-T2b |
+| DSF C-15、MS C-11 過度設計 | 部分採納 | HTML 內嵌、/log 固定 30、本月只總計、排程上限 20；週／月保留（Owner 明確要求） |
+| MS C-08 排程不補做沒寫進失效表 | 採納 | 已加 |
+| MS C-10 GET 邊界 | 採納 | 方法×路徑寫明並測 |
+
+第 2 輪挑戰：不進行。修改為收緊規格與補測試，唯一行為變更（寬限觸發）是修漏洞、方向更保守。
+
+ succeeded in 0ms:
+FAIL
+
+## 一、阻擋（違反規格或測試可假通過）
+
+**B-1 `tvgate/gate.py:74`（`except` 在 :83）：state.json 內容是合法 JSON 但不是物件時，服務啟動就崩潰**
+`load()` 先用 `saved.get('last_check')`；若檔案內容是 `[]`、`"x"`、`5`、`null`，會拋 `AttributeError`，而 `except (OSError, ValueError, KeyError, TypeError)` 接不到，`main()` 也沒有保護，程序直接結束。launchd `KeepAlive` 會讓它反覆重啟，結果**完全失去鎖定能力**（電視停在上一輪 SIGTERM／睡前開放時的狀態）。
+違反 PLAN_v3 「到期時間：…不存在或壞掉＝沒有授權，壞掉時 log 記一行」與 v4「DB／狀態壞掉不影響鎖定」。這是本輪回歸：`main` 版用 `saved['until']`，非 dict 會拋 `TypeError` 被接住，加入 `.get` 後失效。
+同一類問題還有數值未驗範圍：`until=1e300` 會讓 `display()`（:67）在 `/status`（:582）拋例外；`last_check=1e18` 會讓 `schedule_due`（:440）拋例外，**monitor 執行緒直接死掉**（不再對帳、不再切排程、不再記 expire）。
+測試缺口：`tvgate/test_gate.py:320-327` 只寫入 `'bad'`（非法 JSON），沒測「合法 JSON、型別或範圍錯」，所以現在 34 個測試全綠也抓不到。
+
+**B-2 `tvgate/gate.py:262`（寫入在 :280）：`expire` 用「授權狀態轉態」推導，手動鎖與排程切斷後必多記一筆「到期」**
+`expired = previous_authorized and not now_authorized`；`/lock`（:643-648）與排程切斷（:271-276）都會把 `until` 設成 `None`，下一輪迴圈必然 `previous_authorized=True / now_authorized=False` → 多寫一筆 `expire`。`/log` 是 `rowid DESC`，所以按完「立即鎖」後，畫面最上面會是「到期 系統」。
+違反 PLAN_v4 §紀錄 的動作語意（`expire` = 到期）與挑戰裁定 MS C-12（紀錄必須是「真實動作」）。反向也錯：若一次授權到期後、在 monitor 察覺前又被 `/open` 蓋掉，那次真正的到期完全不記。`test_gate.py:500-513` 只驗「真到期會記 expire」，抓不到多記。
+
+**B-3 `tvgate/test_gate.py:661-671`：GATE_LOCK 寫入只有反向測試，實作整段刪掉也全綠**
+`apply()` 在 :199-200 讀回確認 `tv=='locked'` 才寫 `events(...,'GATE_LOCK',...)`（實作正確），但唯一相關測試 `test_lock_event_requires_readback` 只斷言「讀回不是 locked 時不要寫」。34 個測試中**沒有任何一個**對 `events` 表做 `type='GATE_LOCK'` 的正向斷言（`test_calc_exact:600` 只是餵假事件給純函式）。
+違反 PLAN_v4 §使用時間「每次 force-stop＋disable-user 成功，寫一筆 `events(now,'GATE_LOCK',...)`」——這正是挑戰 MS C-03「鎖定期間被算進 YouTube」的解法，也是 WO-T4 第 4 項驗收（鎖後靜置分鐘數不增加）的前提。測試可假通過。
+
+## 二、WO-T3 完成標準第 1 項逐子項對照
+
+| 子項 | 對應測試 | 結果 |
+|---|---|---|
+| 未知鑰匙／檔不存在／壞掉／值不是字串 → 401、log 沒新增、服務沒掛 | `:349-368`（401 在 :357-362） | 有；「log 沒新增」只查 DB（:364），文字 log 那行沒驗 → 見非阻擋 N-3 |
+| 兩把鑰匙各 open/lock → /log device 正確 | `:350-355` | 有（精確比對 `[('lock',name),('open',name)]`） |
+| 改鑰匙檔刪一把 → 不重啟即 401 | `:366-368` | 有 |
+| log 種類 expire/schedule/relock/away/grace/schedule-add/schedule-delete | `:500-513`、`:558-572`、`:386-387` | 都有；**缺 GATE_LOCK（B-3）** |
+| calc 六組精確值 | `:595-610` | 六組都在，數值精確（1800/1200、600+600、1200、2400、0、14400、1800） |
+| 抓取去重＋UNKNOWN／In-memory 不誤讀 | `:422-449`（count==2 :442、Netflix 0 :443、UNKNOWN 0 :444、第二次抓取後 count 不變 :445-448） | 有，優於規格（比筆數不比分鐘） |
+| 真實樣本 ≥40 筆、YouTube/Netflix >0 且 ≤ 跨度 | `:612-618` | 有（樣本 `Last 24 hour events` 開頭、54 筆 RESUMED、無 `In-memory` 段） |
+| 抓取不擋鎖定（卡 20 秒、/open <20s、/status <2s） | `:462-469` | 有 |
+| 抓取失敗不改 tv、不觸發寬限 | `:450-460` | 有（tv/auth/notified/log 無 grace 全查） |
+| 併發 20×5×4 無 500 | `:413-420` | 有（直接斷言 200，更嚴） |
+| DB 損壞 → 啟動、open/lock 正常、/usage 503 | `:389-399` | 有（/log、/schedule 也驗 503） |
+| schedule_due 五個案例 | `:691-700` | 有（含週日 23:59→週一、兩天區間 3 次） |
+| 排程端到端：寬限中照鎖／>600 skipped／重開不回補 | `:535-556`、`:558-585` | 有（600 邊界另見 A5） |
+| 回家觸發：3 分鐘失敗恢復照鎖／離家≥2 分回來給寬限 | `:679-689`（單元）、`:515-533`（整合，電視重連不給寬限 :520-522） | 有；整合用 `TVGATE_AWAY_SECONDS=0.5`（:516），預設 120 秒只靠讀碼 → 非阻擋 N-2 |
+| 端點錯誤碼（非 JSON、25:00、7:40、[0]、[]、[1,1]、第 21 條、重複 id、delete 404、range=year 400、空 DB） | `:370-387`、`:472-480` | 全部有 |
+| 網頁（200/no-store/無鑰匙/三個中文標題/HEAD 無 body/GET 405） | `:401-411` | 有 |
+| `--links`（每設備 2 行、自帶鑰匙、5 秒內結束、不停服務） | `:486-498` | 有；埠用測試自選（:489），**預設 8790 未斷言**（A3 允許）→ 非阻擋 |
+| 150 秒內、log mtime 不變、git status 只有 tvgate/ | 未執行（依指示）| `TVGATE_LOG` 隔離在 `:97`；git status 實查只有 3 個 tvgate 檔、無 tmp* |
+
+（另註：檔內實測 **34 個 test 方法**（GateTest 26＋PureTest 8），與「已跑過 31 個全過」不符，建議確認 run 輸出真的是 34 個；列非阻擋。）
+
+## 三、原有 14 個測試的斷言有沒有被刪／放寬
+
+**沒有。** 以 `git diff main -- tvgate/test_gate.py` 並逐行比對 `main` 版所有含 `assert` 的行：**每一行都逐字存在**於新檔，沒有任何參數比對變寬、時間上限變大或檢查被移除（`3*INTERVAL`、10 秒、20 秒、1 秒、`assert_lock_sequence`、`assertIn(ENABLE, ...)`、`assertNotIn('grace', ...)` 全部原樣）。
+被改動的只有 5 處固定 sleep，而且都是**改嚴**：
+- `:213-216`（hung_adb）`time.sleep(.3)` → `wait_for(any('list' in ...))`，改為等假 adb 真的收到 `list` 才打 /status。
+- `:259-262`、`:267-270`、`:280-282`、`:297-299`（grace 相關 4 處）`time.sleep(2*INTERVAL)` → `wait_for(2 次 list 呼叫)`，改為確認對帳真的又跑了兩輪才斷言「還是沒被鎖」。
+其餘 `setUp` 差異是規格要求（token 改 JSON、加 `TVGATE_LOG`／`TVGATE_HOME_NET`），`request()` 多一個 `body=`，都不影響舊斷言。
+
+## 四、gate.py 規格逐項
+
+- **calc 段落結束規則** `:372-391`：同 package 連續 RESUMED 不切（:381-383）、其他 package 的 RESUMED／SCREEN_NON_INTERACTIVE／DEVICE_SHUTDOWN／DEVICE_STARTUP／同 package 的 GATE_LOCK 才結束（:384-386）、同秒排序 RESUMED 在後（:380）→ 符合。
+- **4 小時上限** `:378` `min(end, start+14400, day_end)` → 符合。
+- **min(now,last_fetch)** `:387-388`，`last_fetch is None` 不延伸（:387 條件）→ 符合。
+- **跨午夜切分** `:376-378` 用 `max(start, day_start)`／`day_end`；`schedule_due`（:438-451）逐日以「該時間點的日期」判週幾 → 符合。
+- **GATE_LOCK 事件** `:197-200` 先讀回、`tv=='locked'` 才寫 → 符合（測試正向缺口見 B-3）。
+- **抓取執行緒不拿 adb_lock、不呼叫 read_tv、不改鎖定狀態** `:393-424`（不碰 `tv`／`failed_since`／`grace`，只用 `fetch_lock`＋自己的 15 秒 adb）→ 符合；失敗只寫文字 log（`'usage'` 不在 DB 動作表 :58）。
+- **回家觸發只有 wake 或 Mac 回家**：`hooks()` :310-311（wake→`arrival()`）、`monitor()` :245-251（離家 ≥`TVGATE_AWAY_SECONDS` 才 `arrival()`）；電視重連走 :281-287 的普通對帳、不呼叫 `arrival` → 符合（有 `test_three_minute...`、`test_network_return...` 佐證）。
+- **schedule_due 用時間點日期判週幾** `:443-450` → 符合。
+- **last_check 先存再處理** `:252-260`（`last_check=now` 後立刻 `save`，之後才跑 due；存檔失敗就丟棄 due）→ 符合。
+- **600 秒窗口** `:267` `now - target > 600`（600 觸發、601 skipped）→ 符合，`:620-643` 精確驗邊界。
+- **鑰匙檔錯誤一律 401、改檔即生效** `:486-494`＋`:573-578`（每請求重讀、非 dict／非字串→ValueError→`{}`→401、值空字串濾掉 :491）→ 符合。
+- **sqlite 單一連線＋db_lock、DB 壞不影響鎖定** `:316-347`、`:393-424` → 符合。
+- **GET／HEAD／POST 路徑** `:549-558`（GET/HEAD 只放行 `/`、其餘 405）、`:544-547`（未支援方法 501→405）、`:621-622`（未知路徑 POST 404）→ 符合；註：未知路徑但鑰匙錯時先回 401（`:576-578`），與 v3 相同、屬既有優先序（非阻擋）。
+- **網頁不含鑰匙、讀 hash 不清 hash** `:514` → 符合。
+- **`--links` 預設 8790 且印 IP 版** `:693-698`、`:497-509` → 符合。
+
+## 五、安全
+
+- **鑰匙不寫進任何 log**：`log()`（:51-60）只寫 action/result；鑰匙錯誤只寫 `'invalid file'`／`'unauthorized'`（:493、:577），未帶內容；`log_message` 只記請求列（token 在 header，不在 URL）。→ 通過。
+- **innerHTML**：全檔**沒有** `innerHTML`／`insertAdjacentHTML`；狀態、設備名、紀錄、排程全部用 `textContent`／`createElement`（:514-523）。log 的 `detail` 甚至沒被渲染。→ 通過。
+- 非阻擋：沒有測試斷言「文字 log 不含任何鑰匙字串」（實作正確，但無回歸保護）。
+
+## 六、非阻擋
+
+- **N-1** `test_gate.py:673-677` `test_usage_bad_meta`：`database` 回傳 `rows=[]`，`data_since` 由 `min(row[0] ...)`（`gate.py:483`）算，空表恆 None，這半段斷言恆真。B4 的 `data_since` 已改由 DB 算，meta 值不再使用，故實際不影響。
+- **N-2** `gate.py:239` `TVGATE_AWAY_SECONDS` 預設 120、`:429` `TVGATE_FETCH_INTERVAL` 預設 600：測試都用縮短值，規格寫死的「2 分鐘」「10 分鐘」只靠讀碼；README 環境變數段也沒列 `TVGATE_HOME_NET`／`TVGATE_AWAY_SECONDS`／`TVGATE_FETCH_INTERVAL`／`TVGATE_CLOCK`。
+- **N-3** `gate.py:577` 的 401 文字 log 與「log 不含鑰匙」沒有測試；`test_devices_and_revocation:364` 比的 `before` 只涵蓋 DB rows（`'token'` 不進 DB），所以那條斷言必然成立。
+- **N-4** `gate.py:433-435` `get_rules()` 的 `json.loads` 例外未接：若 `schedule.days` 被寫壞（非 NULL／非合法 JSON），`monitor`（:252 在 try 外）會整個執行緒死掉，`/schedule*` 也會變成連線中斷而非 503。只在「DB 行內容被破壞」才觸發，門檻高。
+- **N-5** `gate.py:70-85` 只驗 `until`／`last_check` 的型別，未驗範圍（併入 B-1 陳述，修法相同）。
+- **N-6** `test_gate.py:581-585` 第三段（clock=target+602）本身無法區分 last_check 是否有恢復（兩種情況都會是 0 筆新 skipped）；可區分的是第二段 `:573-580`，A6 目的仍達成。
+- **N-7** `test_gate.py:193` `limit = 3*INTERVAL`（1.2 秒）與 `:286` `/lock <1 秒` 仍是真時鐘上限，機器負載高時理論上會 flaky；這兩條是 main 版原樣保留，未放寬。
+- **N-8** `gate.py:210-215` `arrival()` 會無上限等 `adb_lock`（HTTP `/open` 最多持有 ~19 秒），會延後同一輪的排程切斷；600 秒窗口足夠，非錯誤。
+- **N-9** `gate.py:498-504` 鑰匙檔壞掉時 `--links` 不印任何東西且 exit 0，容易被誤認為成功。
+- **N-10** `gate.py:402-404` `last_fetch` 取抓取「完成後」的時間（最多比 dump 取樣點晚 15 秒），規格未釘死，影響 ≤15 秒。
+- **N-11** 37 個 `test_schedule_validation_and_logs`（:370-387）會用真時鐘建立 07:40／08:00–08:18 的規則；若剛好在那些分鐘跑，monitor 可能多切一次，但該測試不驗授權狀態，不會誤判。
+
+## 七、退修清單 A1–A8／B1–B5／C1–C5
+
+**A（測試）**
+- **A1 做到**：`test_gate.py:445-448`（等第 2 次 `usagestats`、`last_fetch` 變大後用 `SELECT count(*) FROM events` 斷言筆數不變）。
+- **A2 做到**：`:453-460`（用 `TVGATE_FETCH_INTERVAL=1` 觸發失敗，非 wake；`:456` 等文字 log 出現 `usage fetch failed`；`:457-460` 斷言 tv=locked、未授權、無通知、`/log` 無 grace）。
+- **A3 做到**：`:486-498`（自選空閒埠 :486-489、`timeout=5` :490、結束後連線失敗 :497-498、三把不同鑰匙逐把比對 :494-496）。
+- **A4 做到**：`:535-537`、`:558-564` 注入 `TVGATE_CLOCK`（gate.py:240-244）；calc／schedule_due 走純函式 `:595-610`、`:691-700`。唯一的真時鐘留在 N-11（不影響斷言）。
+- **A5 做到**：`:621` `for age in (10, 600, 601)`，`:634-643` 分別斷言 600 觸發、601 skipped。
+- **A6 做到**：`:575-580`（重開前 `last_check=target-1`、重啟時 `target+601` → 恰 1 筆 skipped；若改成 now 則 window 空、0 筆，可區分）；載入端 `gate.py:74`、使用端 `:254`。
+- **A7 做到**：`test_schedule_end_to_end`（:558-585）三段各自 `stop→改檔→start`（:559/569、:573/577、:581/583），沒有多餘的 start/stop；測試主體已無 `time.sleep`（只剩 :36/37/46 假 adb、:67 假 hook、:80 `wait_for` 的 0.05）。
+- **A8 做到**：`:86` `tempfile.TemporaryDirectory()`（無 `dir=`）；`git status --porcelain -uall` 只有 `tvgate/README.md`、`gate.py`、`test_gate.py`，無 `tvgate/tmp*`。
+
+**B（gate.py）**
+- **B1 做到（實作）**：`:197-200`（先 `read_tv` 成功且 `tv=='locked'` 才 INSERT）。**測試只做一半** → 見 B-3。
+- **B2 做到**：`:267-278`（>600 先判、`at_home` 為 False 走 `schedule-skipped`／`Mac 不在家`）；單元測試 `:645-659` 精確比對 `assert_any_call('schedule-skipped','Mac 不在家',detail='Mac 不在家')`。
+- **B3 做到**：`gate.py:489-491`（空字串以 `if v` 濾掉，其他設備照常；非 dict／非字串→ValueError→`{}`→401）；測試 `:364-368`。
+- **B4 做到**：`gate.py:458-466`（`float`＋`isfinite`＋`display` try/except）；`data_since` 已不再讀 meta（:483 由 rows 算）；測試 `:673-677`（data_since 那半恆真，見 N-1）。
+- **B5 做到**：`gate.py:483` `min(row[0] for row in rows)`；測試 `:449` 精確比對 `data_since`。
+
+**C（網頁）**
+- **C1 做到**：`gate.py:512`（`*{box-sizing:border-box;overflow-wrap:anywhere}`、`section{max-width:100%}`、`.buttons,#days{display:flex;flex-wrap:wrap}`）。
+- **C2 做到**：`gate.py:512` `.usage-row{display:grid;grid-template-columns:5em minmax(0,1fr) auto}`＋`:519` 每列用 `p.usage-row` 依序 append 名稱／progress／分鐘。
+- **C3 做到**：`gate.py:522`（連續→`週一～週五`、否則 `週一、三、五`）；勾選框中文 `:523`。
+- **C4 做到**：`gate.py:521` `x.time.slice(5,16)` → `MM-DD HH:MM`。
+- **C5 做到**：`test_gate.py:407` 斷言 HTML 含 `box-sizing` 與 `flex-wrap`。
+
+**上一輪問題是否仍存在**：A1–A8、B2–B5、C1–C5 都已消除；B1 只做到反向（B-3），另新發現 B-1（state.json 非 dict 崩潰，本輪新增 `.get` 造成）、B-2（`expire` 誤記）。
+
+ succeeded in 0ms:
+PASS
+
+---
+
+### 一、退修清單逐項查驗（/Users/example-owner/TV/research/wo/WO-T3_fix1_prompt.txt）
+
+#### A. 測試
+- **A1. 去重斷言**：**做到**（[test_gate.py:445-448](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L445-L448)）
+  等 calls 出現第 2 次 usagestats 且 last_fetch 更新後，以 `SELECT count(*) FROM events` 斷言筆數維持不變（2 筆）。
+- **A2. dumpsys 失敗不影響鎖定**：**做到**（[test_gate.py:450-460](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L450-L460)）
+  前景設為 YouTube、tv 為 locked、無授權；以 `TVGATE_FETCH_INTERVAL=1` 觸發 dumpsys usagestats 失敗（非 wake）；等 calls 出現抓取且 log 有 `usage fetch failed` 後，斷言 `/status` 的 tv 仍為 locked、authorized 為 False、無通知、`/log` 無 grace。
+- **A3. --links 測試**：**做到**（[test_gate.py:485-499](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L485-L499)）
+  綁定測試空閒埠傳入 `TVGATE_PORT`，subprocess 設 `timeout=5`，斷言產生 6 行連結（3 設備各 .local 與 IP 兩行，各自帶專屬 token）；結束後以 socket 連線斷言該埠無人監聽。
+- **A4. 遠離午夜固定時間**：**做到**（[test_gate.py:424](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L424), [538](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L538), [560](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L560), [599-610](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L599-L610), [692-700](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L692-L700)）
+  統計抓取使用 `2099-10-26 12:00`；排程端到端與寬限測試以 `TVGATE_CLOCK` 注入 `2026-10-26 12:00`；calc 與 schedule_due 皆為純函式使用固定時間點，不受實際執行時刻影響。
+- **A5. 排程 600 秒邊界補測**：**做到**（[test_gate.py:621-643](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L621-L643)）
+  `test_schedule_cancels_grace_and_skips_old` 針對 age 為 10、600、601 進行測試，精確斷言 age<=600 觸發鎖定與 `schedule`，age==601 記 `schedule-skipped` 且不鎖定。
+- **A6. 重開不回補區分 last_check 恢復**：**做到**（[test_gate.py:574-585](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L574-L585)）
+  重開前 last_check 設為 target-1，重開時時鐘注入 target+601，斷言記 1 筆 `schedule-skipped`；再次重開時鐘設 target+602，斷言筆數仍維持 1 筆（不重複跳過）。
+- **A7. 移除多餘 start/stop 與固定 sleep**：**做到**（[test_gate.py:217](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L217), [260](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L260), [267](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L267), [281](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L281), [298](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L298), [559-586](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L559-L586)）
+  原有測試中的 `time.sleep` 全部改為以 calls 計數為條件的 `wait_for`；`test_schedule_end_to_end` 精簡為必要步驟。
+- **A8. 暫存目錄回歸系統暫存**：**做到**（[test_gate.py:86](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L86)）
+  使用預設 `tempfile.TemporaryDirectory()`，不再在 tvgate/ 目錄下建立暫存。
+
+#### B. gate.py
+- **B1. GATE_LOCK 只在鎖定讀回成功後寫入**：**做到**（[gate.py:198-200](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L198-L200)）
+  先執行 `read_tv(deadline)` 確認 tv 實際狀態，`if desired == 'locked' and tv == 'locked':` 才寫入 DB events。
+- **B2. 排程時間點 600 秒內但 Mac 不在家**：**做到**（[gate.py:277-278](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L277-L278)）
+  `elif at_home:` 切斷，`else:` 記 `schedule-skipped`，detail 明確標註 `Mac 不在家`。
+- **B3. 鑰匙檔空字串項忽略、格式錯才 401**：**做到**（[gate.py:488-494](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L488-L494)）
+  檢查必須為 dict 且鍵值皆為 str，透過 `{k: v for k, v in data.items() if v}` 忽略空字串值；整份解析失敗或非字串映射才記 invalid 並回傳空 dict（全部 401）。
+- **B4. meta 非數值轉為 null 不得 500**：**做到**（[gate.py:459-467](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L459-L467)）
+  對 float 轉換加上 `math.isfinite` 判斷與例外捕捉（KeyError、ValueError、TypeError、OverflowError），異常時設為 None。
+- **B5. data_since 改為 DB 最早事件時間**：**做到**（[gate.py:483](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L483)）
+  改為 `display(min(row[0] for row in rows), '%Y-%m-%d %H:%M') if rows else None`。
+
+#### C. 網頁（375px 手機適配）
+- **C1. box-sizing、flex-wrap、overflow-wrap**：**做到**（[gate.py:512](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L512)）
+  全域宣告 `*{box-sizing:border-box;overflow-wrap:anywhere}`，section 設 `max-width:100%`，按鈕與星期容器設 `flex-wrap:wrap`。
+- **C2. 前景時間 grid 對齊**：**做到**（[gate.py:512](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L512), [519](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L519)）
+  `.usage-row{display:grid;grid-template-columns:5em minmax(0,1fr) auto;gap:8px;align-items:center}`，進度條起點齊一。
+- **C3. 排程中文星期與勾選框**：**做到**（[gate.py:522-523](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L522-L523)）
+  判斷連續天數呈現「週一～週五」，不連續呈現「週一、三、五」；勾選框標籤均使用「週一」～「週日」。
+- **C4. 紀錄時間格式 MM-DD HH:MM**：**做到**（[gate.py:521](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L521)）
+  前端顯示取 `x.time.slice(5, 16)`，截取月日時分。
+- **C5. test_web_page 斷言 CSS 屬性**：**做到**（[test_gate.py:407](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L407)）
+  測試中加入 `self.assertIn('box-sizing', page)` 與 `self.assertIn('flex-wrap', page)`。
+
+---
+
+### 二、WO-T3 完成標準第 1 項子項與測試對照
+
+| 完成標準子項 | 對應測試函式 | 行號 | 檢查完整性與偽通過檢視 |
+|---|---|---|---|
+| (1) 鑰匙認證、多把鑰匙紀錄、改檔即生效、401 | `test_devices_and_revocation` | [test_gate.py:349-369](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L349-L369) | 完整驗證兩把鑰匙對應設備名稱、未授權時 log 不新增、空字串過濾、動態刪除免重啟即 401。無偽通過漏洞。 |
+| (2) log 種類覆蓋（expire, schedule, relock, away, grace, schedule-add/del） | `test_event_log_expiry_relock_sleep_grace`<br>`test_schedule_validation_and_logs`<br>`test_schedule_locks_during_grace` | [test_gate.py:500-514](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L500-L514)<br>[385-386](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L385-L386)<br>[555](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L555) | 完整覆蓋規格要求的各類系統與設備 action。 |
+| (3) calc 6 組精確值驗證 | `PureTest.test_calc_exact` | [test_gate.py:595-611](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L595-L611) | 6 組數值（1800/1200、跨午夜 600/600、同 App 連續 1200、無後續 2400/0、4 小時上限 14400、DEVICE_STARTUP 1800）全數精確斷言。 |
+| (4) 抓取與去重、未知事件略過、In-memory 截斷 | `test_usage_fetch_dedup_and_failure_isolated` | [test_gate.py:423-449](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L423-L449) | 斷言 DB 事件筆數兩次抓取後不變，確認 UNKNOWN_TYPE 與 In-memory 區塊不被寫入。 |
+| (5) 真實樣本 usagestats 解析與時間跨度 | `PureTest.test_real_sample` | [test_gate.py:612-619](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L612-L619) | 斷言 ACTIVITY_RESUMED 筆數 >= 40，YouTube 與 Netflix 秒數 > 0 且 <= 總跨度。 |
+| (6) 抓取不擋鎖定、卡住 20 秒內完成、失敗不影響 tv | `test_usage_hang_does_not_block`<br>`test_usage_fetch_dedup_and_failure_isolated` | [test_gate.py:462-470](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L462-L470)<br>[450-461](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L450-L461) | 驗證 dumpsys 延遲 20 秒時 `/open` 正常返回、`/status` < 2 秒；dumpsys 失敗時 tv 保持 locked、不誤觸 grace。 |
+| (7) 併發測試（20 執行緒打各端點） | `test_concurrent_endpoints` | [test_gate.py:413-421](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L413-L421) | 20 worker 同步呼叫各端點 5 次（共 400 次請求），斷言無 500。 |
+| (8) DB 損壞容錯 | `test_db_corrupt` | [test_gate.py:389-400](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L389-L400) | 檔案填入垃圾字元，斷言服務正常起跑、open/lock 成功、資料庫相關端點回傳 503。 |
+| (9) schedule_due 判定邊界與跨天計算 | `PureTest.test_schedule_due` | [test_gate.py:691-701](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L691-L701) | 週一、週六、週日 23:59 跨午夜判斷週日、相隔兩天列出 3 次觸發，皆精確斷言。 |
+| (10) 排程端到端與 600 秒跳過 | `test_schedule_locks_during_grace`<br>`PureTest.test_schedule_cancels_grace_and_skips_old`<br>`test_schedule_end_to_end` | [test_gate.py:535-557](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L535-L557)<br>[620-644](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L620-L644)<br>[558-586](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L558-L586) | 寬限中照鎖、600 秒邊界測試、重開機讀取 last_check 且不重複跳過。 |
+| (11) 回家觸發與電視重連無寬限 | `PureTest.test_three_minute_tv_failure_does_not_trigger_arrival`<br>`test_network_return_and_tv_reconnect` | [test_gate.py:680-690](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L680-L690)<br>[515-534](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L515-L534) | 電視斷線 3 分鐘恢復不觸發 arrival；Mac 離家網路滿門檻回來觸發寬限與通知。 |
+| (12) 端點驗證與空 DB | `test_schedule_validation_and_logs`<br>`test_empty_database_and_links` | [test_gate.py:370-388](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L370-L388)<br>[472-480](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L472-L480) | 錯誤輸入 400（重複 days、time 超界、21 條限制）、刪除 404、空 DB 200 全 0 與 null。 |
+| (13) 網頁 HEAD/GET 與 Cache-Control | `test_web_page` | [test_gate.py:401-412](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L401-L412) | 200, no-store, 無 token, HEAD 無 body, GET /status 405。 |
+| (14) --links 輸出格式 | `test_empty_database_and_links` | [test_gate.py:481-499](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L481-L499) | 預設 8790 埠、輸出 6 行（.local 與 IP）、不啟動 HTTP 服務。 |
+
+---
+
+### 三、原有 14 個測試之斷言比對（git diff main 審查）
+
+比對 `git -C /Users/example-owner/TV-wt-tvgate4 diff main -- tvgate/test_gate.py`，原有 14 個測試：
+1. **無任何斷言被刪除**。
+2. **無任何斷言被放寬**：
+   - 假 adb 狀態比對、`assert_lock_sequence`（force-stop 接 disable-user 順序）、狀態碼與回傳 JSON 鍵值比對完全保留。
+   - 舊有測試中依賴固定 `time.sleep` 等待對帳週期的寫法（如 [test_gate.py:217, 260, 267, 281, 298](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L217)），全數改為等待可觀察條件 `wait_for(lambda: sum('list' in a for a in self.calls()[count:]) >= 2)` 或 `any('list' in a ...)`，比對條件更嚴格且消除 flaky 風險。
+   - Token 檔初始化配合 v4 格式改為 JSON 字串，認證邏輯與測試預期結果保持一致。
+
+---
+
+### 四、gate.py 規格遵循性稽核
+
+1. **calc 段落計算與邊界**：
+   - [gate.py:380](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L380)：排序使用 `(e[0], e[1] == 'ACTIVITY_RESUMED')`，同秒時非 RESUMED（結束事件）優先處理，符合規格。
+   - [gate.py:382-387](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L382-L387)：同 package 連續 RESUMED 不切段；其他 package RESUMED 或 `SCREEN_NON_INTERACTIVE`、`DEVICE_SHUTDOWN`、`DEVICE_STARTUP` 或該 package 之 `GATE_LOCK` 結束段落。
+   - [gate.py:378](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L378)：`seconds = max(0, min(end, start + 14400, day_end) - max(start, day_start))`，落實 4 小時（14400 秒）上限截斷與 `[day_start, day_end)` 跨午夜切分。
+   - [gate.py:388-390](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L388-L390)：末段若無結束事件且 `last_fetch is not None`，算至 `min(now, last_fetch)`；為 null 則不延伸。
+2. **GATE_LOCK 事件**：
+   - [gate.py:198-200](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L198-L200)：執行 `am force-stop` 與 `pm disable-user` 後，再次呼叫 `read_tv()` 成功讀回且確認 `tv == 'locked'`，才寫入 `GATE_LOCK` 事件。
+3. **抓取執行緒隔離性**：
+   - [gate.py:393-431](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L393-L431)：`fetch_usage()` 使用獨立的 `fetch_lock` 與自有的 `dumpsys usagestats` 呼叫（上限 15 秒），不碰 `adb_lock`，不呼叫 `read_tv`，不改動 `failed_since`、`tv`、`until` 或鎖定狀態。
+4. **回家觸發與寬限條件**：
+   - [gate.py:245-251](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L245-L251), [306-307](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L306-L307)：`arrival()` 僅由 sleephook 的 `wake` 或 Mac 離開家用網路滿門檻（預設 120 秒）回來時觸發。
+   - [gate.py:281-288](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L281-L288)：電視故障重連恢復（`had_failure`）僅呼叫一般對帳 `apply()`，不呼叫 `arrival()`，絕不誤給寬限。
+5. **排程邏輯（schedule_due 與 600 秒窗口）**：
+   - [gate.py:438-451](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L438-L451)：逐日遍歷並依每個時間點當日的 `date.isoweekday()` 比對。
+   - [gate.py:255-257](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L255-L257)：主迴圈每次取得 `due_rules` 後，先將 `last_check = now` 存入 `state.json`，再行處理切斷或跳過。
+   - [gate.py:267-278](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L267-L278)：若 `now - target > 600` 則記 `schedule-skipped`；若在 600 秒內但 Mac 不在家亦不切並記 `schedule-skipped`。
+6. **鑰匙管理與安全機制**：
+   - [gate.py:486-495](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L486-L495), [574-578](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L574-L578)：每次 POST 動態讀取鑰匙檔，以 `hmac.compare_digest` 安全比對；檔案不存在、格式異常均回 401；改檔即時生效。
+7. **SQLite 單一連線與故障隔離**：
+   - [gate.py:316-347](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L316-L347)：單一連線（`check_same_thread=False`）配搭 `db_lock`，開啟 `WAL` 與 `busy_timeout=5000`；DB 損壞時捕獲 `sqlite3.Error`，鎖定控制邏輯依然運作，端點回傳 503。
+8. **HTTP 方法與路徑限制**：
+   - [gate.py:549-563](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L549-L563)：僅 `GET /` 回傳 200，`HEAD /` 回傳 200 且無 body；其他路徑 GET/HEAD 一律 405；非指定路徑之 POST 回傳 404。
+9. **網頁安全與 hash 處理**：
+   - [gate.py:514](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L514)：前端讀取 `location.hash` 後儲存於 localStorage，**完全不清空 hash**。
+10. **--links 參數**：
+    - [gate.py:497-508](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L497-L508), [693-697](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L693-L697)：預設埠 8790，輸出本機 .local 與 en0 IP 兩版本，執行完畢即結束，不啟動服務。
+
+---
+
+### 五、安全審查
+
+1. **Log 敏感資訊洩漏**：
+   - [gate.py:55](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L55), [493](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L493), [533](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L533), [577](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L577), [643](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L643)：文字 log 與 DB log 均未記錄 raw token 內容；未授權時僅記 `unauthorized`；HTTP access log 僅記錄請求行，不包含 `X-Token` 標頭。
+2. **XSS / innerHTML 檢查**：
+   - 審查 [gate.py:511-524](file:///Users/example-owner/TV-wt-tvgate4/tvgate/gate.py#L511-L524)：前端腳本**完全沒有使用 `innerHTML`**。所有由伺服器回傳之設備名稱、log detail、App 名稱、狀態字串，均透過 `textContent` 或 `document.createTextNode()` 建立並以 `append()` 插入 DOM，徹底杜絕 XSS 風險。
+
+---
+
+### 六、非阻擋項目
+
+- **[非阻擋] [tvgate/test_gate.py:445-449](file:///Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py#L445-L449)**：
+  在 `test_usage_fetch_dedup_and_failure_isolated` 中，測試依照 Fix1 A1 要求，在第二次抓取後直接以 `SELECT count(*) FROM events` 斷言事件筆數維持不變（並隨後呼叫一次 `/usage` 檢查 `data_since`），未在第 1 次抓取後與第 2 次抓取後各呼叫一次 `/usage` 比對其 `minutes` 欄位。因 DB 事件資料筆數未變且包含唯一限制（UNIQUE），經純函式 calc 計算之分鐘數必然相同，不影響去重正確性，屬非阻擋項目。
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n 'state|monitor|expire|GATE_LOCK|TVGATE_|def (apply|open|lock|log)|schedule' tvgate/gate.py tvgate/test_gate.py tvgate/README.md" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+tvgate/README.md:67:`TVGATE_HOME` 為狀態和資料庫目錄（預設 `~/Library/Application Support/tvgate`）；`TVGATE_TOKEN` 為鑰匙 JSON（預設 `~/.secrets/tvgate.tokens.json`）；`TVGATE_LOG` 可覆寫文字紀錄路徑；`ADB`、`TVGATE_HOOK`、`TVGATE_NOTIFY` 可指定程式；`TVGATE_PORT` 預設 8790；`TVGATE_INTERVAL` 預設 30 秒。
+tvgate/gate.py:21:HOME = Path(os.environ.get('TVGATE_HOME', Path.home() / 'Library/Application Support/tvgate'))
+tvgate/gate.py:22:TOKEN = Path(os.environ.get('TVGATE_TOKEN', Path.home() / '.secrets/tvgate.tokens.json'))
+tvgate/gate.py:24:HOOK = os.environ.get('TVGATE_HOOK', str(Path(__file__).with_name('sleephook')))
+tvgate/gate.py:25:NOTIFY = os.environ.get('TVGATE_NOTIFY', 'osascript')
+tvgate/gate.py:26:INTERVAL = float(os.environ.get('TVGATE_INTERVAL', '30'))
+tvgate/gate.py:29:STATE = HOME / 'state.json'
+tvgate/gate.py:30:LOG = Path(os.environ.get('TVGATE_LOG', Path.home() / 'Library/Logs/tvgate.log'))
+tvgate/gate.py:31:state_lock = threading.RLock()
+tvgate/gate.py:51:def log(action, result, device=None, minutes=None, end=None, detail=None):
+tvgate/gate.py:58:    if action in ('open', 'lock', 'expire', 'schedule', 'schedule-skipped', 'relock', 'away', 'grace', 'schedule-add', 'schedule-delete'):
+tvgate/gate.py:84:        log('state', 'invalid')
+tvgate/gate.py:138:    with state_lock:
+tvgate/gate.py:156:def apply(forced_open=False, deadline=None, force_lock=False, reconcile=True):
+tvgate/gate.py:164:        with state_lock:
+tvgate/gate.py:169:            with state_lock:
+tvgate/gate.py:187:        with state_lock:
+tvgate/gate.py:200:                database('INSERT OR IGNORE INTO events VALUES (?, ?, ?, ?)', (time.time(), 'GATE_LOCK', PACKAGE, ''), write=True)
+tvgate/gate.py:202:        with state_lock:
+tvgate/gate.py:212:        with state_lock:
+tvgate/gate.py:220:    override = os.environ.get('TVGATE_HOME_NET')
+tvgate/gate.py:234:def monitor():
+tvgate/gate.py:238:    away_threshold = float(os.environ.get('TVGATE_AWAY_SECONDS', '120'))
+tvgate/gate.py:241:        clock_file = os.environ.get('TVGATE_CLOCK')
+tvgate/gate.py:253:        with state_lock:
+tvgate/gate.py:254:            due_rules = schedule_due(rules or [], last_check if last_check is not None else now, now)
+tvgate/gate.py:259:                log('state', 'save failed')
+tvgate/gate.py:262:            expired = previous_authorized and not now_authorized
+tvgate/gate.py:268:                log('schedule-skipped', display(target, '%Y-%m-%d %H:%M'), detail=display(target, '%Y-%m-%d %H:%M'))
+tvgate/gate.py:270:                with state_lock:
+tvgate/gate.py:274:                    except OSError: log('state', 'save failed')
+tvgate/gate.py:275:                log('schedule', 'locked')
+tvgate/gate.py:278:                log('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+tvgate/gate.py:279:        if expired:
+tvgate/gate.py:280:            log('expire', 'expired')
+tvgate/gate.py:281:        if expired or due or had_failure is not None:
+tvgate/gate.py:285:                with state_lock:
+tvgate/gate.py:326:                CREATE TABLE IF NOT EXISTS schedule(id INTEGER PRIMARY KEY, days TEXT, time TEXT);
+tvgate/gate.py:385:        elif kind in ('SCREEN_NON_INTERACTIVE', 'DEVICE_SHUTDOWN', 'DEVICE_STARTUP') or (kind == 'GATE_LOCK' and package == current):
+tvgate/gate.py:429:        fetch_now.wait(float(os.environ.get('TVGATE_FETCH_INTERVAL', '600')))
+tvgate/gate.py:434:    rows = database('SELECT id, days, time FROM schedule ORDER BY id')
+tvgate/gate.py:438:def schedule_due(rules, prev_epoch, now_epoch):
+tvgate/gate.py:513:</style><h1>電視時間管理</h1><p id="message"></p><section><h2>狀態</h2><p id="status"></p><div class="buttons"><button onclick="action('/open?min=15')">開放 15 分</button><button onclick="action('/open?min=30')">開放 30 分</button><button onclick="action('/open?min=60')">開放 60 分</button><button onclick="action('/lock')">立即鎖</button></div><p id="result"></p></section><section><h2>前景時間</h2><button onclick="loadUsage('day')">今天</button><button onclick="loadUsage('week')">本週</button><button onclick="loadUsage('month')">本月</button><div id="usage"></div><small>前景時間不等於實際觀看；Mac 離家超過 24 小時可能少算，HDMI 或無事件時最多多算 4 小時；資料從服務上線開始。</small></section><section><h2>紀錄</h2><ul id="logs"></ul></section><section><h2>排程</h2><div id="rules"></div><form id="schedule"><div id="days"></div><input type="time" id="clock" required><button>新增</button></form></section><footer id="device"></footer><script>
+tvgate/gate.py:520:const labels={open:'開放',lock:'立即鎖',expire:'到期',schedule:'排程切斷','schedule-skipped':'排程錯過',relock:'對帳鎖回',away:'離開時開放',grace:'回家寬限','schedule-add':'新增排程','schedule-delete':'刪除排程'};
+tvgate/gate.py:522:async function loadRules(){let d=await api('/schedule');el('rules').replaceChildren();for(let r of d.items){let days=[...r.days].sort((a,b)=>a-b),names=['一','二','三','四','五','六','日'],label=days.length>1&&days.every((n,i)=>n===days[0]+i)?'週'+names[days[0]-1]+'～週'+names[days.at(-1)-1]:'週'+days.map(n=>names[n-1]).join('、');let p=text('p',label+' '+r.time),b=text('button','刪除');b.onclick=async()=>{try{await api('/schedule/delete',{id:r.id});refresh()}catch(e){el('message').textContent=e.message}};p.append(b);el('rules').append(p)}}
+tvgate/gate.py:523:for(let n=1;n<=7;n++){let label=document.createElement('label'),c=document.createElement('input');c.type='checkbox';c.value=n;label.append(c,document.createTextNode('週'+['一','二','三','四','五','六','日'][n-1]));el('days').append(label)}el('schedule').onsubmit=async e=>{e.preventDefault();try{await api('/schedule/add',{days:[...el('days').querySelectorAll(':checked')].map(x=>+x.value),time:el('clock').value});refresh()}catch(err){el('message').textContent=err.message}};refresh();setInterval(refresh,15000);
+tvgate/gate.py:532:    def log_message(self, fmt, *args):
+tvgate/gate.py:581:            with state_lock:
+tvgate/gate.py:592:        if url.path == '/schedule':
+tvgate/gate.py:595:        if url.path == '/schedule/add':
+tvgate/gate.py:608:                ident = database('INSERT INTO schedule(days,time) VALUES (?,?)', (json.dumps(days), clock), write=True)
+tvgate/gate.py:610:            log('schedule-add', clock, device=device, detail=clock)
+tvgate/gate.py:612:        if url.path == '/schedule/delete':
+tvgate/gate.py:619:                result = database('DELETE FROM schedule WHERE id=?', (value['id'],), write=True)
+tvgate/gate.py:621:            log('schedule-delete', str(value['id']), device=device, detail=str(value['id']))
+tvgate/gate.py:633:        with state_lock:
+tvgate/gate.py:646:            with state_lock:
+tvgate/gate.py:650:            with state_lock:
+tvgate/gate.py:663:    server = ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('TVGATE_PORT', '8790'))), Handler)
+tvgate/gate.py:671:    threading.Thread(target=monitor, daemon=True).start()
+tvgate/gate.py:694:    parser.add_argument('--port', type=int, default=int(os.environ.get('TVGATE_PORT', '8790')))
+tvgate/gate.py:698:    os.environ['TVGATE_PORT'] = str(args.port)
+tvgate/test_gate.py:32:p = Path(os.environ['TVGATE_HOME'])
+tvgate/test_gate.py:58:p=Path(os.environ['TVGATE_HOME'])
+tvgate/test_gate.py:72:(Path(os.environ['TVGATE_HOME'])/'notified').write_text('yes')
+tvgate/test_gate.py:97:        self.env = dict(os.environ, HOME=str(self.p), TVGATE_HOME=str(self.p), TVGATE_TOKEN=str(self.p/'token'), ADB=str(self.p/'adb'), TVGATE_HOOK=str(self.p/'hook'), TVGATE_NOTIFY=str(self.p/'notify'), TVGATE_PORT=str(self.port), TVGATE_INTERVAL='0.4', TVGATE_LOG=str(self.p/'Library/Logs/tvgate.log'), TVGATE_HOME_NET=str(self.p/'home_net'), PYTHONDONTWRITEBYTECODE='1')
+tvgate/test_gate.py:145:    def state(self): return self.request('/status')[1]
+tvgate/test_gate.py:146:    def locked(self): return (self.p/'locked').read_text() == '1'
+tvgate/test_gate.py:152:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:154:        initial = self.state()
+tvgate/test_gate.py:159:                current = self.state()
+tvgate/test_gate.py:170:        self.assertEqual((self.state()['authorized'], self.state()['tv']), (True, 'open'))
+tvgate/test_gate.py:173:        self.assertEqual((self.state()['authorized'], self.state()['tv']), (False, 'locked'))
+tvgate/test_gate.py:178:        (self.p/'state.json').write_text(json.dumps({'until': time.time()+1.5}))
+tvgate/test_gate.py:184:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:187:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:191:        limit = 3 * float(self.env['TVGATE_INTERVAL'])
+tvgate/test_gate.py:198:        self.assertEqual(self.state()['tv'], 'open')
+tvgate/test_gate.py:203:            wait_for(lambda: self.state()['tv'] in ('open', 'locked'))
+tvgate/test_gate.py:206:            wait_for(lambda: self.state()['tv'] == 'unknown')
+tvgate/test_gate.py:224:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:233:        self.assertEqual((self.state()['authorized'], self.state()['tv']), (False, 'locked'))
+tvgate/test_gate.py:238:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:287:        self.assertEqual((self.state()['tv'], self.state()['authorized']), ('locked', False))
+tvgate/test_gate.py:291:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:309:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:320:    def test_restart_and_corrupt_state(self):
+tvgate/test_gate.py:322:        until = self.state()['until']
+tvgate/test_gate.py:324:        self.assertTrue(self.state()['authorized'])
+tvgate/test_gate.py:325:        self.assertEqual(self.state()['until'], until)
+tvgate/test_gate.py:327:        (self.p/'state.json').write_text('bad')
+tvgate/test_gate.py:329:        self.assertFalse(self.state()['authorized'])
+tvgate/test_gate.py:332:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:342:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:370:    def test_schedule_validation_and_logs(self):
+tvgate/test_gate.py:372:            self.assertEqual(self.request('/schedule/add', body=data)[0], 400)
+tvgate/test_gate.py:373:        self.assertEqual(self.request('/schedule/add')[0], 400)
+tvgate/test_gate.py:374:        req = urllib.request.Request('http://127.0.0.1:%d/schedule/add' % self.port, data=b'not json', headers={'X-Token':'test-secret'}, method='POST')
+tvgate/test_gate.py:378:        ident = self.request('/schedule/add', body=rule)[1]['id']
+tvgate/test_gate.py:379:        self.assertEqual(self.request('/schedule/add', body=rule)[1]['id'], ident)
+tvgate/test_gate.py:381:            self.assertEqual(self.request('/schedule/add', body={'days': [2], 'time': '08:%02d' % n})[0], 200)
+tvgate/test_gate.py:382:        self.assertEqual(self.request('/schedule/add', body={'days': [3], 'time': '08:30'})[0], 400)
+tvgate/test_gate.py:383:        self.assertEqual(self.request('/schedule/delete', body={'id': 999})[0], 404)
+tvgate/test_gate.py:384:        self.assertEqual(self.request('/schedule/delete', body={'id': ident})[0], 200)
+tvgate/test_gate.py:386:        self.assertIn('schedule-add', actions); self.assertIn('schedule-delete', actions)
+tvgate/test_gate.py:399:        self.assertEqual(self.request('/schedule')[0], 503)
+tvgate/test_gate.py:428:        self.env['TVGATE_FETCH_INTERVAL'] = '1'
+tvgate/test_gate.py:438:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:451:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:452:        self.assertFalse(self.state()['authorized'])
+tvgate/test_gate.py:457:        self.assertEqual(self.state()['tv'], 'locked')
+tvgate/test_gate.py:458:        self.assertFalse(self.state()['authorized'])
+tvgate/test_gate.py:489:        env = dict(self.env, TVGATE_PORT=str(port), PATH=str(self.p)+os.pathsep+os.environ['PATH'])
+tvgate/test_gate.py:501:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:511:        (self.p/'state.json').write_text(json.dumps({'until': time.time()+1.5}))
+tvgate/test_gate.py:513:        wait_for(lambda: 'expire' in [x['action'] for x in self.request('/log')[1]['items']], 8)
+tvgate/test_gate.py:516:        self.stop(); self.env['TVGATE_AWAY_SECONDS'] = '0.5'; self.start()
+tvgate/test_gate.py:517:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:520:        wait_for(lambda: self.state()['tv'] == 'unknown')
+tvgate/test_gate.py:527:        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check', 0) > away_start)
+tvgate/test_gate.py:528:        away_seen = json.loads((self.p/'state.json').read_text())['last_check']
+tvgate/test_gate.py:529:        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check', 0) >= away_seen + .7)
+tvgate/test_gate.py:535:    def test_schedule_locks_during_grace(self):
+tvgate/test_gate.py:540:        self.env['TVGATE_CLOCK'] = str(clock)
+tvgate/test_gate.py:541:        self.env['TVGATE_INTERVAL'] = '2'
+tvgate/test_gate.py:543:        wait_for(lambda: (self.p/'state.json').exists() and json.loads((self.p/'state.json').read_text()).get('last_check') is not None)
+tvgate/test_gate.py:544:        wait_for(lambda: self.state()['tv'] == 'locked')
+tvgate/test_gate.py:552:        self.assertEqual(self.request('/schedule/add', body=rule)[0], 200)
+tvgate/test_gate.py:555:        self.assertIn('schedule', [x['action'] for x in self.request('/log')[1]['items']])
+tvgate/test_gate.py:556:        self.assertFalse(self.state()['authorized'])
+tvgate/test_gate.py:558:    def test_schedule_end_to_end(self):
+tvgate/test_gate.py:564:        self.env['TVGATE_CLOCK'] = str(clock)
+tvgate/test_gate.py:566:            db.execute('insert into schedule(days,time) values (?,?)', (json.dumps([now.isoweekday()]),now.strftime('%H:%M')))
+tvgate/test_gate.py:567:        (self.p/'state.json').write_text(json.dumps({'until': time.time()+3600,'last_check':target-1}))
+tvgate/test_gate.py:570:        wait_for(lambda: any(x['action']=='schedule' for x in self.request('/log')[1]['items']))
+tvgate/test_gate.py:572:        self.assertFalse(self.state()['authorized'])
+tvgate/test_gate.py:575:        (self.p/'state.json').write_text(json.dumps({'until':time.time()+3600,'last_check':target-1}))
+tvgate/test_gate.py:578:        wait_for(lambda: any(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']))
+tvgate/test_gate.py:579:        self.assertTrue(self.state()['authorized'])
+tvgate/test_gate.py:580:        self.assertEqual(sum(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']), 1)
+tvgate/test_gate.py:584:        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check') == target + 602)
+tvgate/test_gate.py:585:        self.assertEqual(sum(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']), 1)
+tvgate/test_gate.py:606:        self.assertEqual(calc([e(36000,resume,yt,'Shell'),e(36000,resume,yt,'Main'),e(37200,'GATE_LOCK',yt)])[yt],1200)
+tvgate/test_gate.py:620:    def test_schedule_cancels_grace_and_skips_old(self):
+tvgate/test_gate.py:629:                 mock.patch.object(gate, 'schedule_due', return_value=[(rule,1000-age)]), \
+tvgate/test_gate.py:633:                gate.monitor()
+tvgate/test_gate.py:638:                    self.assertIn('schedule', [call.args[0] for call in logs.call_args_list])
+tvgate/test_gate.py:643:                    self.assertIn('schedule-skipped', [call.args[0] for call in logs.call_args_list])
+tvgate/test_gate.py:645:    def test_schedule_away_is_logged(self):
+tvgate/test_gate.py:652:             mock.patch.object(gate, 'schedule_due', return_value=[(rule, 999)]), \
+tvgate/test_gate.py:656:            gate.monitor()
+tvgate/test_gate.py:659:            logs.assert_any_call('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+tvgate/test_gate.py:688:            gate.monitor()
+tvgate/test_gate.py:691:    def test_schedule_due(self):
+tvgate/test_gate.py:694:        self.assertEqual(len(gate.schedule_due([r],ts('2026-10-26 07:39:58'),ts('2026-10-26 07:40:03'))),1)
+tvgate/test_gate.py:695:        self.assertEqual(gate.schedule_due([r],ts('2026-10-26 07:40:03'),ts('2026-10-26 07:40:08')),[])
+tvgate/test_gate.py:696:        self.assertEqual(gate.schedule_due([r],ts('2026-10-31 07:39:58'),ts('2026-10-31 07:40:03')),[])
+tvgate/test_gate.py:698:        self.assertEqual(len(gate.schedule_due([sunday],ts('2026-11-01 23:58:58'),ts('2026-11-02 00:00:02'))),1)
+tvgate/test_gate.py:700:        self.assertEqual(len(gate.schedule_due([every],ts('2026-10-26 07:39:58'),ts('2026-10-28 07:40:03'))),3)
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+mcp: mem/get_profile started
+mcp: mem/get_profile (completed)
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+已讀完兩份審核意見；阻擋點集中在狀態載入、到期紀錄判斷，以及鎖定事件的正向驗證。既有三個修改檔都位於 `tvgate/`，我會保留其既有內容並補齊修正。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "sed -n '1,310p' tvgate/gate.py; sed -n '625,660p' tvgate/gate.py" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+#!/usr/bin/env python3
+import datetime
+import argparse
+import re
+import socket
+import sqlite3
+import hmac
+import json
+import math
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+HOME = Path(os.environ.get('TVGATE_HOME', Path.home() / 'Library/Application Support/tvgate'))
+TOKEN = Path(os.environ.get('TVGATE_TOKEN', Path.home() / '.secrets/tvgate.tokens.json'))
+ADB = os.environ.get('ADB', 'adb')
+HOOK = os.environ.get('TVGATE_HOOK', str(Path(__file__).with_name('sleephook')))
+NOTIFY = os.environ.get('TVGATE_NOTIFY', 'osascript')
+INTERVAL = float(os.environ.get('TVGATE_INTERVAL', '30'))
+DEVICE = '192.0.2.69:5555'
+PACKAGE = 'com.google.android.youtube.tv'
+STATE = HOME / 'state.json'
+LOG = Path(os.environ.get('TVGATE_LOG', Path.home() / 'Library/Logs/tvgate.log'))
+state_lock = threading.RLock()
+adb_lock = threading.Lock()
+children_lock = threading.Lock()
+children = set()
+stop = threading.Event()
+until = None
+tv = 'unknown'
+checked_at = None
+grace = False
+failed_since = None
+last_apply = 0
+hook = None
+last_check = None
+db = None
+db_lock = threading.RLock()
+fetch_lock = threading.Lock()
+fetch_now = threading.Event()
+APPS = {'com.google.android.youtube.tv': 'YouTube', 'com.netflix.ninja': 'Netflix', 'tv.fourgtv.video': '四季', 'com.spotify.tv.android': 'Spotify', 'com.disney.disneyplus': 'Disney+', 'com.wbd.stream': 'HBO Max'}
+
+
+def log(action, result, device=None, minutes=None, end=None, detail=None):
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with LOG.open('a') as f:
+            f.write(f'{datetime.datetime.now().isoformat(timespec="seconds")} {action} {result}\n')
+    except OSError:
+        pass
+    if action in ('open', 'lock', 'expire', 'schedule', 'schedule-skipped', 'relock', 'away', 'grace', 'schedule-add', 'schedule-delete'):
+        database('INSERT INTO log VALUES (?, ?, ?, ?, ?, ?)', (time.time(), device or '系統', action, minutes, end, detail), write=True)
+
+
+def authorized():
+    return until is not None and until > time.time()
+
+
+def display(timestamp, fmt='%H:%M'):
+    return datetime.datetime.fromtimestamp(timestamp).strftime(fmt) if timestamp is not None else None
+
+
+def load():
+    global until, last_check
+    try:
+        saved = json.loads(STATE.read_text())
+        last_check = saved.get('last_check')
+        if not isinstance(last_check, (int, float)) or isinstance(last_check, bool):
+            last_check = None
+        value = saved['until']
+        if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+            raise ValueError('invalid until')
+        until = value
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, TypeError):
+        log('state', 'invalid')
+        until = None
+
+
+def save(value):
+    HOME.mkdir(parents=True, exist_ok=True)
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=HOME, delete=False) as f:
+            name = f.name
+            json.dump({'until': value, 'last_check': last_check}, f)
+        os.replace(name, STATE)
+    finally:
+        if name and os.path.exists(name):
+            os.unlink(name)
+
+
+def command(args, deadline=None, retry=True):
+    def run(cmd):
+        timeout = min(8, max(0.01, deadline - time.monotonic())) if deadline else 8
+        try:
+            with children_lock:
+                if stop.is_set() and deadline is None:
+                    return None
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                children.add(process)
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+                return subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+                return None
+            finally:
+                with children_lock:
+                    children.discard(process)
+        except OSError:
+            return None
+    cmd = [ADB] + (args if args[0] == 'connect' else ['-s', DEVICE] + args)
+    result = run(cmd)
+    if retry and (result is None or result.returncode != 0) and (deadline is None or time.monotonic() < deadline):
+        run([ADB, 'connect', DEVICE])
+        if deadline is None or time.monotonic() < deadline:
+            result = run(cmd)
+    return result
+
+
+def read_tv(deadline=None):
+    global tv, checked_at, failed_since
+    args = ['shell', 'pm', 'list', 'packages', '-d', '--user', '0']
+    result = command(args, deadline)
+    if result is not None and result.returncode == 0 and not result.stdout.strip() and (deadline is None or time.monotonic() < deadline):
+        command(['connect', DEVICE], deadline, retry=False)
+        result = command(args, deadline)
+    with state_lock:
+        if result is None or result.returncode or not result.stdout.strip():
+            tv = 'unknown'
+            if failed_since is None:
+                failed_since = time.monotonic()
+            return False
+        tv = 'locked' if 'package:' + PACKAGE in result.stdout.splitlines() else 'open'
+        checked_at = display(time.time(), '%H:%M:%S')
+        return True
+
+
+def foreground(deadline=None):
+    result = command(['shell', 'dumpsys', 'activity', 'activities'], deadline)
+    if result is None or result.returncode != 0 or not result.stdout.strip():
+        return None
+    return any('mResumedActivity' in line and PACKAGE in line for line in result.stdout.splitlines())
+
+
+def apply(forced_open=False, deadline=None, force_lock=False, reconcile=True):
+    global last_apply, grace
+    timeout = max(0, deadline - time.monotonic()) if deadline else -1
+    if not adb_lock.acquire(timeout=timeout):
+        return False
+    try:
+        if not read_tv(deadline):
+            return False
+        with state_lock:
+            desired = 'open' if forced_open or authorized() else 'locked'
+            in_grace = grace and not forced_open and desired == 'locked'
+        if in_grace:
+            watching = foreground(deadline)
+            with state_lock:
+                if grace and not authorized():
+                    if watching is None:
+                        return False
+                    notify = watching and grace == 'pending'
+                    grace = 'watching' if watching else False
+                    if watching and not notify:
+                        return True
+                else:
+                    notify = False
+            if notify:
+                log('arrival', 'YouTube playing; grace')
+                log('grace', 'YouTube playing')
+                try:
+                    subprocess.run([NOTIFY, '-e', 'display notification "有人正在看 YouTube，要停請按立即鎖" with title "tvgate"'], timeout=8, capture_output=True)
+                except (OSError, subprocess.TimeoutExpired):
+                    log('notification', 'failed')
+                return True
+        with state_lock:
+            desired = 'open' if forced_open or authorized() else 'locked'
+            current = tv
+        if current != desired or (force_lock and desired == 'locked'):
+            log('apply', desired)
+            if desired == 'locked':
+                first = command(['shell', 'am', 'force-stop', PACKAGE], deadline)
+                second = command(['shell', 'pm', 'disable-user', '--user', '0', PACKAGE], deadline)
+            else:
+                command(['shell', 'pm', 'enable', '--user', '0', PACKAGE], deadline)
+            if not read_tv(deadline):
+                return False
+            if desired == 'locked' and tv == 'locked':
+                database('INSERT OR IGNORE INTO events VALUES (?, ?, ?, ?)', (time.time(), 'GATE_LOCK', PACKAGE, ''), write=True)
+                if reconcile: log('relock', 'locked')
+        with state_lock:
+            last_apply = time.monotonic()
+            return tv == desired
+    finally:
+        adb_lock.release()
+
+
+def arrival():
+    global grace
+    with adb_lock:
+        with state_lock:
+            if not authorized():
+                grace = 'pending'
+    fetch_now.set()
+    apply()
+
+
+def home_network():
+    override = os.environ.get('TVGATE_HOME_NET')
+    if override is not None:
+        try:
+            return Path(override).read_text().strip() == '1'
+        except OSError:
+            return False
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(('192.0.2.69', 9))
+            return sock.getsockname()[0].startswith('192.0.2.')
+    except OSError:
+        return False
+
+
+def monitor():
+    global failed_since, last_check, until, grace
+    previous_authorized = authorized()
+    away_since = None
+    away_threshold = float(os.environ.get('TVGATE_AWAY_SECONDS', '120'))
+    while not stop.wait(min(5, INTERVAL)):
+        now = time.time()
+        clock_file = os.environ.get('TVGATE_CLOCK')
+        if clock_file:
+            try: now = float(Path(clock_file).read_text())
+            except (OSError, ValueError): pass
+        at_home = home_network()
+        if not at_home and away_since is None:
+            away_since = time.monotonic()
+        if at_home and away_since is not None:
+            if time.monotonic() - away_since >= away_threshold:
+                arrival()
+            away_since = None
+        rules = get_rules()
+        with state_lock:
+            due_rules = schedule_due(rules or [], last_check if last_check is not None else now, now)
+            last_check = now
+            try:
+                save(until)
+            except OSError:
+                log('state', 'save failed')
+                due_rules = []
+            now_authorized = authorized()
+            expired = previous_authorized and not now_authorized
+            previous_authorized = now_authorized
+            due = time.monotonic() - last_apply >= INTERVAL
+            had_failure = failed_since
+        for rule, target in due_rules:
+            if now - target > 600:
+                log('schedule-skipped', display(target, '%Y-%m-%d %H:%M'), detail=display(target, '%Y-%m-%d %H:%M'))
+            elif at_home:
+                with state_lock:
+                    until = None
+                    grace = False
+                    try: save(None)
+                    except OSError: log('state', 'save failed')
+                log('schedule', 'locked')
+                apply(force_lock=True, reconcile=False)
+            else:
+                log('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+        if expired:
+            log('expire', 'expired')
+        if expired or due or had_failure is not None:
+            with adb_lock:
+                success = read_tv()
+            if success:
+                with state_lock:
+                    failed_since = None
+                apply()
+
+
+def hooks():
+    global hook
+    while not stop.is_set():
+        try:
+            hook = subprocess.Popen([HOOK], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+            for line in hook.stdout:
+                if stop.is_set():
+                    break
+                if line.strip() == 'sleep':
+                    log('away', 'sleep')
+                    ok = apply(forced_open=True, deadline=time.monotonic() + 7.8)
+                    try:
+                        hook.stdin.write(('ok' if ok else 'fail') + '\n')
+                        hook.stdin.flush()
+                    except (BrokenPipeError, OSError):
+                        pass
+                elif line.strip() == 'wake':
+                    arrival()
+            hook.wait()
+            if not stop.is_set():
+                log('hook', 'exited; restarting')
+        if url.path == '/open':
+            mins = parse_qs(url.query, keep_blank_values=True).get('min', [])
+            if len(mins) != 1 or mins[0] not in ('15', '30', '60'):
+                return self.reply(400, {'error': 'invalid min'})
+            value = time.time() + int(mins[0]) * 60
+        else:
+            value = None
+        error = None
+        with state_lock:
+            grace = False
+            try:
+                save(value)
+            except OSError as e:
+                error = str(e)
+            if error is None or value is None:
+                until = value
+        if error and value is not None:
+            return self.reply(500, {'ok': False, 'error': error})
+        log('open' if value else 'lock', 'requested', device=device, minutes=int(mins[0]) if value else None, end=display(value))
+        success = apply(deadline=time.monotonic() + 19, reconcile=False)
+        if value is not None:
+            with state_lock:
+                success = success and authorized() and tv == 'open' and until == value
+            if success:
+                return self.reply(200, {'ok': True, 'until': display(value)})
+            with state_lock:
+                unchanged = until == value and authorized()
+            note = '授權仍有效，電視恢復連線後會自動開放；要取消請按立即鎖' if unchanged else '授權已變更或取消'
+            return self.reply(200, {'ok': False, 'error': '電視未確認開放', 'until': display(value), 'note': note})
+        result = {'ok': success and not error}
+        if error or not success:
+            result['error'] = error or '電視未確認鎖定'
+        self.reply(200, result)
+
+
+def main():
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n '\\b(load|save|monitor|apply|authorized|log)\\(' tvgate/gate.py; rg -n 'os\\.environ|getenv|TVGATE_' tvgate --glob '"'!test_gate.py'"'" in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc "sed -n '1,180p' tvgate/test_gate.py; sed -n '310,370p' tvgate/test_gate.py; sed -n '500,590p' tvgate/test_gate.py; sed -n '620,710p' tvgate/test_gate.py" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+51:def log(action, result, device=None, minutes=None, end=None, detail=None):
+62:def authorized():
+70:def load():
+84:        log('state', 'invalid')
+88:def save(value):
+156:def apply(forced_open=False, deadline=None, force_lock=False, reconcile=True):
+165:            desired = 'open' if forced_open or authorized() else 'locked'
+170:                if grace and not authorized():
+180:                log('arrival', 'YouTube playing; grace')
+181:                log('grace', 'YouTube playing')
+185:                    log('notification', 'failed')
+188:            desired = 'open' if forced_open or authorized() else 'locked'
+191:            log('apply', desired)
+201:                if reconcile: log('relock', 'locked')
+213:            if not authorized():
+216:    apply()
+234:def monitor():
+236:    previous_authorized = authorized()
+257:                save(until)
+259:                log('state', 'save failed')
+261:            now_authorized = authorized()
+268:                log('schedule-skipped', display(target, '%Y-%m-%d %H:%M'), detail=display(target, '%Y-%m-%d %H:%M'))
+273:                    try: save(None)
+274:                    except OSError: log('state', 'save failed')
+275:                log('schedule', 'locked')
+276:                apply(force_lock=True, reconcile=False)
+278:                log('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+280:            log('expire', 'expired')
+287:                apply()
+299:                    log('away', 'sleep')
+300:                    ok = apply(forced_open=True, deadline=time.monotonic() + 7.8)
+310:                log('hook', 'exited; restarting')
+312:            log('hook', str(e))
+324:            db.executescript('''CREATE TABLE IF NOT EXISTS log(ts_epoch REAL, device TEXT, action TEXT, minutes INTEGER, until TEXT, detail TEXT);
+405:                log('usage', 'fetch failed')
+410:                log('usage', 'fetch failed')
+421:                    log('usage', 'db failed')
+423:            log('usage', 'fetch failed')
+493:        log('token', 'invalid file')
+533:        log('http', fmt % args)
+577:            log('token', 'unauthorized')
+582:                return self.reply(200, {'authorized': authorized(), 'until': display(until) if authorized() else None, 'tv': tv, 'tv_checked_at': checked_at, 'device': device})
+610:            log('schedule-add', clock, device=device, detail=clock)
+621:            log('schedule-delete', str(value['id']), device=device, detail=str(value['id']))
+636:                save(value)
+643:        log('open' if value else 'lock', 'requested', device=device, minutes=int(mins[0]) if value else None, end=display(value))
+644:        success = apply(deadline=time.monotonic() + 19, reconcile=False)
+647:                success = success and authorized() and tv == 'open' and until == value
+651:                unchanged = until == value and authorized()
+662:    load()
+675:    log('away', 'stop')
+676:    apply(forced_open=True, deadline=deadline)
+tvgate/gate.py:21:HOME = Path(os.environ.get('TVGATE_HOME', Path.home() / 'Library/Application Support/tvgate'))
+tvgate/gate.py:22:TOKEN = Path(os.environ.get('TVGATE_TOKEN', Path.home() / '.secrets/tvgate.tokens.json'))
+tvgate/gate.py:23:ADB = os.environ.get('ADB', 'adb')
+tvgate/gate.py:24:HOOK = os.environ.get('TVGATE_HOOK', str(Path(__file__).with_name('sleephook')))
+tvgate/gate.py:25:NOTIFY = os.environ.get('TVGATE_NOTIFY', 'osascript')
+tvgate/gate.py:26:INTERVAL = float(os.environ.get('TVGATE_INTERVAL', '30'))
+tvgate/gate.py:30:LOG = Path(os.environ.get('TVGATE_LOG', Path.home() / 'Library/Logs/tvgate.log'))
+tvgate/gate.py:220:    override = os.environ.get('TVGATE_HOME_NET')
+tvgate/gate.py:238:    away_threshold = float(os.environ.get('TVGATE_AWAY_SECONDS', '120'))
+tvgate/gate.py:241:        clock_file = os.environ.get('TVGATE_CLOCK')
+tvgate/gate.py:429:        fetch_now.wait(float(os.environ.get('TVGATE_FETCH_INTERVAL', '600')))
+tvgate/gate.py:663:    server = ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('TVGATE_PORT', '8790'))), Handler)
+tvgate/gate.py:694:    parser.add_argument('--port', type=int, default=int(os.environ.get('TVGATE_PORT', '8790')))
+tvgate/gate.py:698:    os.environ['TVGATE_PORT'] = str(args.port)
+tvgate/README.md:67:`TVGATE_HOME` 為狀態和資料庫目錄（預設 `~/Library/Application Support/tvgate`）；`TVGATE_TOKEN` 為鑰匙 JSON（預設 `~/.secrets/tvgate.tokens.json`）；`TVGATE_LOG` 可覆寫文字紀錄路徑；`ADB`、`TVGATE_HOOK`、`TVGATE_NOTIFY` 可指定程式；`TVGATE_PORT` 預設 8790；`TVGATE_INTERVAL` 預設 30 秒。
+tvgate/com.example.tvgate.plist:6:  <key>EnvironmentVariables</key><dict><key>TVGATE_PORT</key><string>8790</string><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+
+ succeeded in 0ms:
+import concurrent.futures
+import contextlib
+import datetime
+import importlib.util
+import sqlite3
+import threading
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
+sys.dont_write_bytecode = True
+import tempfile
+import time
+import unittest
+from unittest import mock
+import urllib.error
+import urllib.request
+
+HERE = Path(__file__).resolve().parent
+DEVICE = '192.0.2.69:5555'
+PACKAGE = 'com.google.android.youtube.tv'
+ENABLE = ['-s', DEVICE, 'shell', 'pm', 'enable', '--user', '0', PACKAGE]
+FORCE_STOP = ['-s', DEVICE, 'shell', 'am', 'force-stop', PACKAGE]
+DISABLE = ['-s', DEVICE, 'shell', 'pm', 'disable-user', '--user', '0', PACKAGE]
+DUMPSYS = ['-s', DEVICE, 'shell', 'dumpsys', 'activity', 'activities']
+ADB_SCRIPT = '''#!/usr/bin/env python3
+import json, os, sys, time
+from pathlib import Path
+p = Path(os.environ['TVGATE_HOME'])
+a = sys.argv[1:]
+with (p/'calls').open('a') as f: f.write(json.dumps(a)+'\\n')
+mode = (p/'mode').read_text().strip() if (p/'mode').exists() else ''
+if mode == 'hang' and 'list' in a: time.sleep(30)
+if mode == 'slow' and 'enable' in a: time.sleep(1.2)
+if mode == 'fail' or (mode == 'foreground_fail' and 'dumpsys' in a): sys.exit(1)
+if 'list' in a:
+    if mode == 'empty': sys.exit(0)
+    print('package:com.example.disabled')
+    print('package:com.google.android.youtube.tv' if (p/'locked').read_text() == '1' else 'package:com.google.android.youtube.tvmusic')
+elif 'enable' in a: (p/'locked').write_text('0')
+elif 'disable-user' in a: (p/'locked').write_text('1')
+elif 'usagestats' in a:
+    if mode == 'usage_hang': time.sleep(20)
+    if mode == 'usage_fail': sys.exit(1)
+    print((p/'usage').read_text() if (p/'usage').exists() else 'Last 24 hour events\\nIn-memory daily stats')
+elif 'dumpsys' in a:
+    if (p/'arrival_open').exists():
+        (p/'locked').write_text('0')
+        (p/'arrival_open').unlink()
+    print('mResumedActivity: '+(('com.google.android.youtube.tv' if (p/'front').read_text() == '1' else 'other')))
+'''
+HOOK_SCRIPT = '''#!/usr/bin/env python3
+import os, sys, time
+from pathlib import Path
+p=Path(os.environ['TVGATE_HOME'])
+with (p/'hookstarts').open('a') as f: f.write('start\\n')
+while True:
+    event=p/'event'
+    if event.exists():
+        msg=event.read_text(); event.unlink()
+        if msg == 'exit': sys.exit(0)
+        print(msg, flush=True)
+        if msg == 'sleep': (p/'answer').write_text(sys.stdin.readline().strip())
+    time.sleep(.03)
+'''
+NOTIFY_SCRIPT = '''#!/usr/bin/env python3
+import os
+from pathlib import Path
+(Path(os.environ['TVGATE_HOME'])/'notified').write_text('yes')
+'''
+
+
+def wait_for(predicate, timeout=5):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if predicate(): return
+        time.sleep(.05)
+    raise AssertionError('等待逾時')
+
+
+class GateTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.p = Path(self.temp.name)
+        (self.p/'locked').write_text('1')
+        (self.p/'front').write_text('0')
+        (self.p/'token').write_text(json.dumps({'爸爸': 'test-secret', '媽媽': 'other-secret'}))
+        for name, script in [('adb', ADB_SCRIPT), ('hook', HOOK_SCRIPT), ('notify', NOTIFY_SCRIPT)]:
+            (self.p/name).write_text(script)
+            (self.p/name).chmod(0o755)
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            self.port = s.getsockname()[1]
+        self.env = dict(os.environ, HOME=str(self.p), TVGATE_HOME=str(self.p), TVGATE_TOKEN=str(self.p/'token'), ADB=str(self.p/'adb'), TVGATE_HOOK=str(self.p/'hook'), TVGATE_NOTIFY=str(self.p/'notify'), TVGATE_PORT=str(self.port), TVGATE_INTERVAL='0.4', TVGATE_LOG=str(self.p/'Library/Logs/tvgate.log'), TVGATE_HOME_NET=str(self.p/'home_net'), PYTHONDONTWRITEBYTECODE='1')
+        (self.p/'home_net').write_text('1')
+        self.proc = None
+        self.start()
+
+    def start(self):
+        self.proc = subprocess.Popen([sys.executable, str(HERE/'gate.py')], env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        wait_for(lambda: self.ready())
+        wait_for(lambda: (self.p/'hookstarts').exists())
+
+    def ready(self):
+        try: return self.request('/status')[0] == 200
+        except (OSError, urllib.error.URLError): return False
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try: self.proc.wait(timeout=9)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+                self.proc.wait()
+                self.fail('gate did not stop')
+        if self.proc:
+            try: os.killpg(self.proc.pid, 0)
+            except ProcessLookupError: pass
+            else:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+                self.fail('child process left behind')
+
+    def tearDown(self):
+        try: self.stop()
+        finally: self.temp.cleanup()
+
+    def request(self, path, token='test-secret', method='POST', timeout=25, body=None):
+        headers = {} if token is None else {'X-Token': token}
+        req = urllib.request.Request('http://127.0.0.1:%d%s' % (self.port, path), data=(json.dumps(body).encode() if body is not None else b'') if method == 'POST' else None, headers=headers, method=method)
+        try: response = urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as e: response = e
+        with response: return response.status, json.load(response)
+
+    def calls(self):
+        try: return [json.loads(x) for x in (self.p/'calls').read_text().splitlines()]
+        except FileNotFoundError: return []
+
+    def event(self, event):
+        (self.p/'event').write_text(event)
+        wait_for(lambda: not (self.p/'event').exists())
+
+    def state(self): return self.request('/status')[1]
+    def locked(self): return (self.p/'locked').read_text() == '1'
+    def assert_lock_sequence(self, before):
+        commands = [a for a in self.calls()[before:] if a in (FORCE_STOP, DISABLE)]
+        self.assertTrue(any(commands[i:i+2] == [FORCE_STOP, DISABLE] for i in range(len(commands)-1)), commands)
+
+    def test_auth_and_validation(self):
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        self.assertTrue(self.request('/open?min=15')[1]['ok'])
+        initial = self.state()
+        before = len(self.calls())
+        for path in ('/open?min=15', '/lock', '/status'):
+            for token in (None, 'wrong'):
+                self.assertEqual(self.request(path, token)[0], 401)
+                current = self.state()
+                self.assertEqual((current['authorized'], current['until']), (initial['authorized'], initial['until']))
+        for path in ('/status', '/open', '/lock'):
+            self.assertEqual(self.request(path, method='GET')[0], 405)
+        self.assertEqual(self.request('/open?min=7')[0], 400)
+        self.assertFalse(any(x in ('enable', 'disable-user', 'force-stop') for a in self.calls()[before:] for x in a))
+
+    def test_open_and_lock(self):
+        before = len(self.calls())
+        self.assertTrue(self.request('/open?min=15')[1]['ok'])
+        self.assertIn(ENABLE, self.calls()[before:])
+        self.assertEqual((self.state()['authorized'], self.state()['tv']), (True, 'open'))
+        before = len(self.calls())
+        self.assertTrue(self.request('/lock')[1]['ok'])
+        self.assertEqual((self.state()['authorized'], self.state()['tv']), (False, 'locked'))
+        self.assert_lock_sequence(before)
+
+    def test_expiry(self):
+        self.stop()
+        (self.p/'state.json').write_text(json.dumps({'until': time.time()+1.5}))
+        (self.p/'locked').write_text('0')
+        before = len(self.calls())
+        (self.p/'front').write_text('1')
+        (self.p/'locked').write_text('0')
+        wait_for(self.locked)
+        self.assertFalse((self.p/'notified').exists())
+
+    def test_hook_restart(self):
+        self.event('exit')
+        wait_for(lambda: (self.p/'hookstarts').read_text().count('start') >= 2)
+        self.assertIn('restarting', (self.p/'Library/Logs/tvgate.log').read_text())
+
+    def test_restart_and_corrupt_state(self):
+        self.request('/open?min=15')
+        until = self.state()['until']
+        self.stop(); self.start()
+        self.assertTrue(self.state()['authorized'])
+        self.assertEqual(self.state()['until'], until)
+        self.stop()
+        (self.p/'state.json').write_text('bad')
+        self.start()
+        self.assertFalse(self.state()['authorized'])
+
+    def test_unwritable_open(self):
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        before = len(self.calls())
+        self.p.chmod(0o500)
+        try:
+            self.assertFalse(self.request('/open?min=15')[1]['ok'])
+            self.assertFalse(any('enable' in a for a in self.calls()[before:]))
+        finally:
+            self.p.chmod(0o700)
+
+    def test_sigterm_opens(self):
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        before = len(self.calls())
+        self.stop()
+        self.assertFalse(self.locked())
+        self.assertIn(ENABLE, self.calls()[before:])
+
+
+    def test_devices_and_revocation(self):
+        for token, name in [('test-secret', '爸爸'), ('other-secret', '媽媽')]:
+            self.assertTrue(self.request('/open?min=15', token)[1]['ok'])
+            self.assertTrue(self.request('/lock', token)[1]['ok'])
+            rows = self.request('/log')[1]['items']
+            self.assertEqual([(r['action'], r['device']) for r in rows if r['action'] in ('open', 'lock')][:2], [('lock', name), ('open', name)])
+        before = self.request('/log')[1]['items']
+        for content in ('bad', json.dumps({'爸爸': 4}), None):
+            if content is None: (self.p/'token').unlink()
+            else: (self.p/'token').write_text(content)
+            self.assertEqual(self.request('/open?min=15')[0], 401)
+        (self.p/'token').write_text(json.dumps({'爸爸': 'test-secret', '媽媽': 'other-secret'}))
+        self.assertEqual(self.request('/lock', 'wrong')[0], 401)
+        self.assertEqual(self.request('/log')[1]['items'], before)
+        (self.p/'token').write_text(json.dumps({'爸爸': 'test-secret', '媽媽': ''}))
+        self.assertEqual(self.request('/status')[0], 200)
+        self.assertEqual(self.request('/status', '')[0], 401)
+        (self.p/'token').write_text(json.dumps({'爸爸': 'test-secret'}))
+        self.assertEqual(self.request('/status', 'other-secret')[0], 401)
+        self.assertEqual(self.request('/status')[0], 200)
+
+    def test_schedule_validation_and_logs(self):
+    def test_event_log_expiry_relock_sleep_grace(self):
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        (self.p/'locked').write_text('0')
+        wait_for(self.locked)
+        self.event('sleep'); wait_for(lambda: (self.p/'answer').exists())
+        (self.p/'front').write_text('1')
+        self.event('wake'); wait_for(lambda: (self.p/'notified').exists())
+        actions = [x['action'] for x in self.request('/log')[1]['items']]
+        for name in ('relock','away','grace'): self.assertIn(name, actions)
+        self.request('/open?min=15')
+        self.stop()
+        (self.p/'state.json').write_text(json.dumps({'until': time.time()+1.5}))
+        self.start()
+        wait_for(lambda: 'expire' in [x['action'] for x in self.request('/log')[1]['items']], 8)
+
+    def test_network_return_and_tv_reconnect(self):
+        self.stop(); self.env['TVGATE_AWAY_SECONDS'] = '0.5'; self.start()
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        (self.p/'front').write_text('1')
+        (self.p/'mode').write_text('fail')
+        wait_for(lambda: self.state()['tv'] == 'unknown')
+        (self.p/'locked').write_text('0')
+        (self.p/'mode').write_text('')
+        wait_for(self.locked)
+        self.assertFalse((self.p/'notified').exists())
+        away_start = time.time()
+        (self.p/'home_net').write_text('0')
+        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check', 0) > away_start)
+        away_seen = json.loads((self.p/'state.json').read_text())['last_check']
+        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check', 0) >= away_seen + .7)
+        (self.p/'arrival_open').write_text('1')
+        (self.p/'home_net').write_text('1')
+        wait_for(lambda: (self.p/'notified').exists())
+        self.assertFalse(self.locked())
+
+    def test_schedule_locks_during_grace(self):
+        self.stop()
+        clock = self.p/'clock'
+        fixed = datetime.datetime(2026, 10, 26, 12, 0)
+        clock.write_text(str(fixed.timestamp()))
+        self.env['TVGATE_CLOCK'] = str(clock)
+        self.env['TVGATE_INTERVAL'] = '2'
+        self.start()
+        wait_for(lambda: (self.p/'state.json').exists() and json.loads((self.p/'state.json').read_text()).get('last_check') is not None)
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        (self.p/'front').write_text('1')
+        (self.p/'locked').write_text('0')
+        self.event('wake')
+        wait_for(lambda: (self.p/'notified').exists())
+        self.assertFalse(self.locked())
+        target = fixed + datetime.timedelta(minutes=1)
+        rule = {'days':[target.isoweekday()], 'time':target.strftime('%H:%M')}
+        self.assertEqual(self.request('/schedule/add', body=rule)[0], 200)
+        clock.write_text(str(target.timestamp()+1))
+        wait_for(self.locked)
+        self.assertIn('schedule', [x['action'] for x in self.request('/log')[1]['items']])
+        self.assertFalse(self.state()['authorized'])
+
+    def test_schedule_end_to_end(self):
+        self.stop()
+        now = datetime.datetime(2026, 10, 26, 12, 0)
+        target = now.timestamp()
+        clock = self.p/'clock'
+        clock.write_text(str(target + 1))
+        self.env['TVGATE_CLOCK'] = str(clock)
+        with sqlite3.connect(self.p/'tvgate.db') as db:
+            db.execute('insert into schedule(days,time) values (?,?)', (json.dumps([now.isoweekday()]),now.strftime('%H:%M')))
+        (self.p/'state.json').write_text(json.dumps({'until': time.time()+3600,'last_check':target-1}))
+        (self.p/'locked').write_text('0')
+        self.start()
+        wait_for(lambda: any(x['action']=='schedule' for x in self.request('/log')[1]['items']))
+        wait_for(self.locked)
+        self.assertFalse(self.state()['authorized'])
+        self.stop()
+        with sqlite3.connect(self.p/'tvgate.db') as db: db.execute('delete from log')
+        (self.p/'state.json').write_text(json.dumps({'until':time.time()+3600,'last_check':target-1}))
+        clock.write_text(str(target + 601))
+        self.start()
+        wait_for(lambda: any(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']))
+        self.assertTrue(self.state()['authorized'])
+        self.assertEqual(sum(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']), 1)
+        self.stop()
+        clock.write_text(str(target + 602))
+        self.start()
+        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check') == target + 602)
+        self.assertEqual(sum(x['action']=='schedule-skipped' for x in self.request('/log')[1]['items']), 1)
+
+
+
+spec = importlib.util.spec_from_file_location('gate', HERE/'gate.py')
+gate = importlib.util.module_from_spec(spec)
+    def test_schedule_cancels_grace_and_skips_old(self):
+        for age in (10, 600, 601):
+            fake_stop = mock.Mock()
+            fake_stop.wait.side_effect = [False, True]
+            rule = {'days': [1], 'time': '07:40'}
+            with mock.patch.multiple(gate, stop=fake_stop, last_check=1, until=10000, grace='watching', last_apply=time.monotonic(), failed_since=None), \
+                 mock.patch.object(gate.time, 'time', return_value=1000), \
+                 mock.patch.object(gate, 'home_network', return_value=True), \
+                 mock.patch.object(gate, 'get_rules', return_value=[rule]), \
+                 mock.patch.object(gate, 'schedule_due', return_value=[(rule,1000-age)]), \
+                 mock.patch.object(gate, 'save'), \
+                 mock.patch.object(gate, 'log') as logs, \
+                 mock.patch.object(gate, 'apply') as apply:
+                gate.monitor()
+                if age <= 600:
+                    self.assertIsNone(gate.until)
+                    self.assertFalse(gate.grace)
+                    apply.assert_called_with(force_lock=True, reconcile=False)
+                    self.assertIn('schedule', [call.args[0] for call in logs.call_args_list])
+                else:
+                    self.assertEqual(gate.until,10000)
+                    self.assertEqual(gate.grace,'watching')
+                    apply.assert_not_called()
+                    self.assertIn('schedule-skipped', [call.args[0] for call in logs.call_args_list])
+
+    def test_schedule_away_is_logged(self):
+        fake_stop = mock.Mock(); fake_stop.wait.side_effect = [False, True]
+        rule = {'days': [1], 'time': '07:40'}
+        with mock.patch.multiple(gate, stop=fake_stop, last_check=1, until=10000, grace=False, last_apply=time.monotonic(), failed_since=None), \
+             mock.patch.object(gate.time, 'time', return_value=1000), \
+             mock.patch.object(gate, 'home_network', return_value=False), \
+             mock.patch.object(gate, 'get_rules', return_value=[rule]), \
+             mock.patch.object(gate, 'schedule_due', return_value=[(rule, 999)]), \
+             mock.patch.object(gate, 'save'), \
+             mock.patch.object(gate, 'log') as logs, \
+             mock.patch.object(gate, 'apply') as apply:
+            gate.monitor()
+            apply.assert_not_called()
+            self.assertEqual(gate.until, 10000)
+            logs.assert_any_call('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+
+    def test_lock_event_requires_readback(self):
+        def read(deadline=None):
+            gate.tv = 'open'
+            return True
+        with mock.patch.multiple(gate, until=None, grace=False, tv='open'), \
+             mock.patch.object(gate, 'read_tv', side_effect=read), \
+             mock.patch.object(gate, 'command', return_value=mock.Mock(returncode=0)), \
+             mock.patch.object(gate, 'database') as db, \
+             mock.patch.object(gate, 'log'):
+            self.assertFalse(gate.apply())
+            db.assert_not_called()
+
+    def test_usage_bad_meta(self):
+        with mock.patch.object(gate, 'database', side_effect=[[], [('last_fetch', 'bad'), ('data_since', 'bad')]]):
+            result = gate.usage('day')
+        self.assertIsNone(result['data_since'])
+        self.assertIsNone(result['last_fetch'])
+
+    def test_three_minute_tv_failure_does_not_trigger_arrival(self):
+        fake_stop = mock.Mock(); fake_stop.wait.side_effect = [False, True]
+        with mock.patch.multiple(gate, stop=fake_stop, last_check=1, until=None, grace=False, last_apply=time.monotonic(), failed_since=time.monotonic()-180), \
+             mock.patch.object(gate, 'home_network', return_value=True), \
+             mock.patch.object(gate, 'get_rules', return_value=[]), \
+             mock.patch.object(gate, 'save'), \
+             mock.patch.object(gate, 'read_tv', return_value=True), \
+             mock.patch.object(gate, 'arrival') as arrival, \
+             mock.patch.object(gate, 'apply') as apply:
+            gate.monitor()
+            arrival.assert_not_called(); apply.assert_called_once()
+
+    def test_schedule_due(self):
+        ts = lambda s: datetime.datetime.strptime(s,'%Y-%m-%d %H:%M:%S').timestamp()
+        r = {'days':[1], 'time':'07:40'}
+        self.assertEqual(len(gate.schedule_due([r],ts('2026-10-26 07:39:58'),ts('2026-10-26 07:40:03'))),1)
+        self.assertEqual(gate.schedule_due([r],ts('2026-10-26 07:40:03'),ts('2026-10-26 07:40:08')),[])
+        self.assertEqual(gate.schedule_due([r],ts('2026-10-31 07:39:58'),ts('2026-10-31 07:40:03')),[])
+        sunday = {'days':[7], 'time':'23:59'}
+        self.assertEqual(len(gate.schedule_due([sunday],ts('2026-11-01 23:58:58'),ts('2026-11-02 00:00:02'))),1)
+        every = {'days':[1,2,3,4,5,6,7], 'time':'07:40'}
+        self.assertEqual(len(gate.schedule_due([every],ts('2026-10-26 07:39:58'),ts('2026-10-28 07:40:03'))),3)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('tvgate/gate.py')
+s=p.read_text()
+a=s.index('def load():'); b=s.index('\\n\\ndef save(',a)
+s=s[:a]+'''def load():
+    global until, last_check
+    until = last_check = None
+    try:
+        saved = json.loads(STATE.read_text())
+        if not isinstance(saved, dict):
+            raise ValueError('invalid state')
+        now = time.time()
+        for field in ('until', 'last_check'):
+            value = saved.get(field)
+            if value is not None:
+                try:
+                    valid = (isinstance(value, (int, float)) and not isinstance(value, bool)
+                             and math.isfinite(value) and abs(value - now) <= 400 * 86400)
+                except OverflowError:
+                    valid = False
+                if not valid:
+                    log('state', 'invalid ' + field)
+                    value = None
+            if field == 'until': until = value
+            else: last_check = value
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, TypeError):
+        log('state', 'invalid')
+
+''' + s[b:]
+s=s.replace('    previous_authorized = authorized()\\n','')
+s=s.replace('            now_authorized = authorized()\\n            expired = previous_authorized and not now_authorized\\n            previous_authorized = now_authorized\\n', '''            expired = until is not None and until <= time.time()
+            if expired:
+                until = None
+                grace = False
+                try: save(None)
+                except OSError: log('state', 'save failed')
+                log('expire', 'expired')
+''')
+s=s.replace(\"        if expired:\\n            log('expire', 'expired')\\n\",'')
+a=s.index('        now = time.time()\\n',s.index('def monitor():')); b=s.index('\\n\\n\\ndef hooks():',a)
+body=s[a:b]
+s=s[:a]+'        try:\\n'+''.join('    '+line if line.strip() else line for line in body.splitlines(keepends=True))+\"\\n        except Exception as e:\\n            log('monitor', f'iteration failed: {type(e).__name__}')\"+s[b:]
+s=s.replace('            if error is None or value is None:\\n                until = value','''            if error is None or value is None:
+                if value is not None and until is not None and until <= time.time():
+                    log('expire', 'expired')
+                until = value''')
+p.write_text(s)
+PY
+sed -n '235,305p' tvgate/gate.py" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 13ms:
+            return False
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(('192.0.2.69', 9))
+            return sock.getsockname()[0].startswith('192.0.2.')
+    except OSError:
+        return False
+
+
+def monitor():
+    global failed_since, last_check, until, grace
+    away_since = None
+    away_threshold = float(os.environ.get('TVGATE_AWAY_SECONDS', '120'))
+    while not stop.wait(min(5, INTERVAL)):
+        try:
+            now = time.time()
+            clock_file = os.environ.get('TVGATE_CLOCK')
+            if clock_file:
+                try: now = float(Path(clock_file).read_text())
+                except (OSError, ValueError): pass
+            at_home = home_network()
+            if not at_home and away_since is None:
+                away_since = time.monotonic()
+            if at_home and away_since is not None:
+                if time.monotonic() - away_since >= away_threshold:
+                    arrival()
+                away_since = None
+            rules = get_rules()
+            with state_lock:
+                due_rules = schedule_due(rules or [], last_check if last_check is not None else now, now)
+                last_check = now
+                try:
+                    save(until)
+                except OSError:
+                    log('state', 'save failed')
+                    due_rules = []
+                expired = until is not None and until <= time.time()
+                if expired:
+                    until = None
+                    grace = False
+                    try: save(None)
+                    except OSError: log('state', 'save failed')
+                    log('expire', 'expired')
+                due = time.monotonic() - last_apply >= INTERVAL
+                had_failure = failed_since
+            for rule, target in due_rules:
+                if now - target > 600:
+                    log('schedule-skipped', display(target, '%Y-%m-%d %H:%M'), detail=display(target, '%Y-%m-%d %H:%M'))
+                elif at_home:
+                    with state_lock:
+                        until = None
+                        grace = False
+                        try: save(None)
+                        except OSError: log('state', 'save failed')
+                    log('schedule', 'locked')
+                    apply(force_lock=True, reconcile=False)
+                else:
+                    log('schedule-skipped', 'Mac 不在家', detail='Mac 不在家')
+            if expired or due or had_failure is not None:
+                with adb_lock:
+                    success = read_tv()
+                if success:
+                    with state_lock:
+                        failed_since = None
+                    apply()
+        except Exception as e:
+            log('monitor', f'iteration failed: {type(e).__name__}')
+
+
+def hooks():
+    global hook
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+修正方向已確認：載入時逐欄驗證狀態，並以實際到期時間判斷紀錄；監控迴圈會在單次失敗後繼續。接著補上端對端測試，特別確認排程與三種鎖定事件都有實際寫入。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "sed -n '660,700p' tvgate/gate.py; sed -n '175,192p' tvgate/test_gate.py; sed -n '62,72p' tvgate/README.md" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+        success = apply(deadline=time.monotonic() + 19, reconcile=False)
+        if value is not None:
+            with state_lock:
+                success = success and authorized() and tv == 'open' and until == value
+            if success:
+                return self.reply(200, {'ok': True, 'until': display(value)})
+            with state_lock:
+                unchanged = until == value and authorized()
+            note = '授權仍有效，電視恢復連線後會自動開放；要取消請按立即鎖' if unchanged else '授權已變更或取消'
+            return self.reply(200, {'ok': False, 'error': '電視未確認開放', 'until': display(value), 'note': note})
+        result = {'ok': success and not error}
+        if error or not success:
+            result['error'] = error or '電視未確認鎖定'
+        self.reply(200, result)
+
+
+def main():
+    init_db()
+    load()
+    server = ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('TVGATE_PORT', '8790'))), Handler)
+    server.daemon_threads = True
+    def terminate(signum, frame):
+        stop.set()
+        threading.Thread(target=server.shutdown, daemon=True).start()
+    signal.signal(signal.SIGTERM, terminate)
+    threading.Thread(target=hooks, daemon=True).start()
+    threading.Thread(target=fetch_loop, daemon=True).start()
+    threading.Thread(target=monitor, daemon=True).start()
+    threading.Thread(target=apply, daemon=True).start()
+    server.serve_forever(poll_interval=0.1)
+    deadline = time.monotonic() + 7.8
+    log('away', 'stop')
+    apply(forced_open=True, deadline=deadline)
+    with children_lock:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+    if hook and hook.poll() is None:
+        hook.terminate()
+        try:
+            hook.wait(timeout=max(0.1, deadline - time.monotonic()))
+
+    def test_expiry(self):
+        self.stop()
+        (self.p/'state.json').write_text(json.dumps({'until': time.time()+1.5}))
+        (self.p/'locked').write_text('0')
+        before = len(self.calls())
+        self.start()
+        wait_for(lambda: self.locked(), 10)
+        self.assert_lock_sequence(before)
+        wait_for(lambda: self.state()['tv'] == 'locked')
+
+    def test_reconcile_and_music(self):
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        before = len(self.calls())
+        start = time.monotonic()
+        (self.p/'locked').write_text('0')
+        limit = 3 * float(self.env['TVGATE_INTERVAL'])
+        wait_for(self.locked, limit)
+
+先停止服務：`launchctl bootout gui/$(id -u)/com.example.tvgate`。確認 gate 和 sleephook 已結束，請熟悉 adb 的協助者依安裝前記錄恢復 YouTube 的啟用或停用狀態。若 v4 驗收失敗，保留並還原 v3 版 gate.py（git tag `tvgate-v3`）和原本的單一 token，再由協助者依 v3 文件復原服務；移除服務時可刪除 LaunchAgent、鑰匙和狀態資料。
+
+## 環境變數
+
+`TVGATE_HOME` 為狀態和資料庫目錄（預設 `~/Library/Application Support/tvgate`）；`TVGATE_TOKEN` 為鑰匙 JSON（預設 `~/.secrets/tvgate.tokens.json`）；`TVGATE_LOG` 可覆寫文字紀錄路徑；`ADB`、`TVGATE_HOOK`、`TVGATE_NOTIFY` 可指定程式；`TVGATE_PORT` 預設 8790；`TVGATE_INTERVAL` 預設 30 秒。
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('tvgate/test_gate.py'); s=p.read_text()
+s=s.replace('    def locked(self): return (self.p/\\'locked\\').read_text() == \\'1\\'\\n', '''    def locked(self): return (self.p/'locked').read_text() == '1'
+    def lock_events(self):
+        with sqlite3.connect(self.p/'tvgate.db') as db:
+            return db.execute(\"SELECT count(*) FROM events WHERE type='GATE_LOCK'\").fetchone()[0]
+    def two_cycles(self):
+        before = len(self.calls())
+        wait_for(lambda: sum('list' in a for a in self.calls()[before:]) >= 2, 8)
+''')
+s=s.replace(\"        before = len(self.calls())\\n        self.assertTrue(self.request('/lock')[1]['ok'])\\n        self.assertEqual((self.state()['authorized'], self.state()['tv']), (False, 'locked'))\\n        self.assert_lock_sequence(before)\", \"\"\"        before = len(self.calls())
+        events = self.lock_events()
+        self.assertTrue(self.request('/lock')[1]['ok'])
+        self.assertEqual(self.lock_events(), events + 1)
+        self.assertEqual((self.state()['authorized'], self.state()['tv']), (False, 'locked'))
+        self.assert_lock_sequence(before)
+        self.two_cycles()
+        self.assertNotIn('expire', [x['action'] for x in self.request('/log')[1]['items']])\"\"\",1)
+s=s.replace(\"        self.start()\\n        wait_for(lambda: self.locked(), 10)\\n        self.assert_lock_sequence(before)\\n        wait_for(lambda: self.state()['tv'] == 'locked')\", \"\"\"        events = self.lock_events()
+        self.start()
+        wait_for(lambda: self.locked(), 10)
+        wait_for(lambda: self.lock_events() == events + 1)
+        self.assert_lock_sequence(before)
+        wait_for(lambda: self.state()['tv'] == 'locked')
+        self.two_cycles()
+        self.assertEqual(sum(x['action'] == 'expire' for x in self.request('/log')[1]['items']), 1)\"\"\",1)
+marker='    def test_unwritable_open(self):\\n'
+insert='''    def test_invalid_state_and_schedule(self):
+        for content in ('[]', '\"x\"', '5', 'null', '{\"until\":1e300}',
+                        '{\"until\":\"abc\"}', '{\"last_check\":1e18}'):
+            with self.subTest(content=content):
+                self.stop()
+                (self.p/'state.json').write_text(content)
+                self.start()
+                status, state = self.request('/status')
+                self.assertEqual(status, 200)
+                self.assertFalse(state['authorized'])
+                self.assertIn('state invalid', (self.p/'Library/Logs/tvgate.log').read_text())
+                self.assertTrue(self.request('/open?min=15')[1]['ok'])
+        clock = self.p/'clock'
+        now = datetime.datetime.now().replace(second=0, microsecond=0)
+        clock.write_text(str(now.timestamp()))
+        self.stop()
+        (self.p/'state.json').write_text('{\"last_check\":1e18}')
+        self.env['TVGATE_CLOCK'] = str(clock)
+        self.start()
+        wait_for(lambda: json.loads((self.p/'state.json').read_text()).get('last_check') == now.timestamp())
+        self.assertTrue(self.request('/open?min=15')[1]['ok'])
+        target = now + datetime.timedelta(minutes=1)
+        self.request('/schedule/add', body={'days':[target.isoweekday()], 'time':target.strftime('%H:%M')})
+        clock.write_text(str(target.timestamp()+1))
+        wait_for(lambda: any(x['action'] == 'schedule' for x in self.request('/log')[1]['items']))
+        wait_for(self.locked)
+        self.two_cycles()
+        self.assertNotIn('expire', [x['action'] for x in self.request('/log')[1]['items']])
+
+    def test_open_overwrites_expired_once(self):
+        self.stop()
+        self.env['TVGATE_INTERVAL'] = '3'
+        (self.p/'state.json').write_text(json.dumps({'until': time.time()-1}))
+        self.start()
+        self.assertTrue(self.request('/open?min=15')[1]['ok'])
+        wait_for(lambda: sum(x['action'] == 'expire' for x in self.request('/log')[1]['items']) == 1)
+        self.two_cycles()
+        self.assertEqual(sum(x['action'] == 'expire' for x in self.request('/log')[1]['items']), 1)
+
+    def test_logs_do_not_contain_keys(self):
+        for key in ('test-secret', 'other-secret'):
+            self.assertTrue(self.request('/open?min=15', key)[1]['ok'])
+            self.assertTrue(self.request('/lock', key)[1]['ok'])
+        self.assertEqual(self.request('/status', 'unknown-secret')[0], 401)
+        text_log = (self.p/'Library/Logs/tvgate.log').read_text()
+        with sqlite3.connect(self.p/'tvgate.db') as db:
+            db_log = str(db.execute('SELECT * FROM log').fetchall())
+        for key in ('test-secret', 'other-secret', 'unknown-secret'):
+            self.assertNotIn(key, text_log)
+            self.assertNotIn(key, db_log)
+
+'''
+s=s.replace(marker,insert+marker)
+s=s.replace(\"        self.start()\\n        wait_for(lambda: any(x['action']=='schedule' for x in self.request('/log')[1]['items']))\\n        wait_for(self.locked)\\n        self.assertFalse(self.state()['authorized'])\", \"\"\"        events = self.lock_events()
+        self.start()
+        wait_for(lambda: any(x['action']=='schedule' for x in self.request('/log')[1]['items']))
+        wait_for(self.locked)
+        wait_for(lambda: self.lock_events() == events + 1)
+        self.assertFalse(self.state()['authorized'])
+        self.two_cycles()
+        self.assertNotIn('expire', [x['action'] for x in self.request('/log')[1]['items']])\"\"\",1)
+marker='    def test_usage_bad_meta(self):\\n'
+insert='''    def test_monitor_recovers_after_iteration_exception(self):
+        fake_stop = mock.Mock(); fake_stop.wait.side_effect = [False, False, True]
+        with mock.patch.multiple(gate, stop=fake_stop, last_check=None, until=None, grace=False,
+                                 last_apply=time.monotonic(), failed_since=None), \\\\
+             mock.patch.object(gate, 'home_network', side_effect=[RuntimeError('failure'), True]), \\\\
+             mock.patch.object(gate, 'get_rules', return_value=[]) as rules, \\\\
+             mock.patch.object(gate, 'save'), mock.patch.object(gate, 'log') as logs:
+            gate.monitor()
+            rules.assert_called_once()
+            logs.assert_any_call('monitor', 'iteration failed: RuntimeError')
+
+'''
+s=s.replace(marker,insert+marker); p.write_text(s)
+p=Path('tvgate/README.md'); s=p.read_text(); a=s.index('"'`TVGATE_HOME` 為狀態'"'); s=s[:a]+'''- "'`TVGATE_HOME`：狀態和資料庫目錄，預設 `~/Library/Application Support/tvgate`。
+- `TVGATE_TOKEN`：鑰匙 JSON，預設 `~/.secrets/tvgate.tokens.json`。
+- `TVGATE_LOG`：文字紀錄，預設 `~/Library/Logs/tvgate.log`。
+- `TVGATE_PORT`：服務埠，預設 `8790`。
+- `TVGATE_INTERVAL`：對帳間隔秒數，預設 `30`。
+- `TVGATE_HOOK`：睡眠監聽程式，預設為 gate.py 同目錄的 `sleephook`。
+- `TVGATE_NOTIFY`：通知程式，預設 `osascript`。
+- `TVGATE_HOME_NET`：測試用網路狀態檔，內容為 `1` 表示在家；預設未設定，依本機網路判斷。
+- `TVGATE_AWAY_SECONDS`：離家多久後回家觸發寬限，預設 `120` 秒。
+- `TVGATE_FETCH_INTERVAL`：使用時間抓取間隔，預設 `600` 秒。
+- `TVGATE_CLOCK`：測試用排程時鐘檔，內容為 Unix 時間；預設未設定，使用系統時間。
+- `ADB`：adb 程式，預設 `adb`。
+'"'''; p.write_text(s)
+PY" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 17ms:
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'python3 test_gate.py' in /Users/example-owner/TV-wt-tvgate4/tvgate
+codex
+程式與主要測試已補上，第一輪完整測試正在執行。測試使用獨立暫存目錄、假 adb 與假通知程式；真實服務和電視不會被操作。
+ succeeded in 85940ms:
+test_auth_and_validation (__main__.GateTest.test_auth_and_validation) ... ok
+test_concurrent_endpoints (__main__.GateTest.test_concurrent_endpoints) ... ok
+test_concurrent_lock (__main__.GateTest.test_concurrent_lock) ... ok
+test_db_corrupt (__main__.GateTest.test_db_corrupt) ... ok
+test_devices_and_revocation (__main__.GateTest.test_devices_and_revocation) ... ok
+test_empty_database_and_links (__main__.GateTest.test_empty_database_and_links) ... ok
+test_event_log_expiry_relock_sleep_grace (__main__.GateTest.test_event_log_expiry_relock_sleep_grace) ... ok
+test_expiry (__main__.GateTest.test_expiry) ... ok
+test_hook_restart (__main__.GateTest.test_hook_restart) ... ok
+test_hook_sleep_wake_and_grace (__main__.GateTest.test_hook_sleep_wake_and_grace) ... ok
+test_hung_adb_status_responsive (__main__.GateTest.test_hung_adb_status_responsive) ... ok
+test_invalid_state_and_schedule (__main__.GateTest.test_invalid_state_and_schedule) ... ok
+test_logs_do_not_contain_keys (__main__.GateTest.test_logs_do_not_contain_keys) ... ok
+test_network_return_and_tv_reconnect (__main__.GateTest.test_network_return_and_tv_reconnect) ... ok
+test_no_grace_without_wake (__main__.GateTest.test_no_grace_without_wake) ... ok
+test_open_and_lock (__main__.GateTest.test_open_and_lock) ... ok
+test_open_overwrites_expired_once (__main__.GateTest.test_open_overwrites_expired_once) ... ok
+test_read_failure (__main__.GateTest.test_read_failure) ... ok
+test_reconcile_and_music (__main__.GateTest.test_reconcile_and_music) ... ok
+test_restart_and_corrupt_state (__main__.GateTest.test_restart_and_corrupt_state) ... ok
+test_schedule_end_to_end (__main__.GateTest.test_schedule_end_to_end) ... ok
+test_schedule_locks_during_grace (__main__.GateTest.test_schedule_locks_during_grace) ... ok
+test_schedule_validation_and_logs (__main__.GateTest.test_schedule_validation_and_logs) ... ok
+test_sigterm_opens (__main__.GateTest.test_sigterm_opens) ... ok
+test_unwritable_open (__main__.GateTest.test_unwritable_open) ... ok
+test_usage_fetch_dedup_and_failure_isolated (__main__.GateTest.test_usage_fetch_dedup_and_failure_isolated) ... ok
+test_usage_hang_does_not_block (__main__.GateTest.test_usage_hang_does_not_block) ... ok
+test_wake_foreground_failure (__main__.GateTest.test_wake_foreground_failure) ... ok
+test_web_page (__main__.GateTest.test_web_page) ... ok
+test_calc_exact (__main__.PureTest.test_calc_exact) ... ok
+test_lock_event_requires_readback (__main__.PureTest.test_lock_event_requires_readback) ... ok
+test_monitor_recovers_after_iteration_exception (__main__.PureTest.test_monitor_recovers_after_iteration_exception) ... /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106533e20>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106533970>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106533d30>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106493d30>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106532b60>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106533790>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x106533880>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1065335b0>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e4040>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e4130>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e4220>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed <socket.socket [closed] fd=29, family=2, type=1, proto=6>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 400: 'Bad Request'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e44f0>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e45e0>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py:2599: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1066e46d0>
+  return tuple.__new__(cls, (args, kwargs))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_real_sample (__main__.PureTest.test_real_sample) ... ok
+test_schedule_away_is_logged (__main__.PureTest.test_schedule_away_is_logged) ... ok
+test_schedule_cancels_grace_and_skips_old (__main__.PureTest.test_schedule_cancels_grace_and_skips_old) ... ok
+test_schedule_due (__main__.PureTest.test_schedule_due) ... ok
+test_three_minute_tv_failure_does_not_trigger_arrival (__main__.PureTest.test_three_minute_tv_failure_does_not_trigger_arrival) ... ok
+test_usage_bad_meta (__main__.PureTest.test_usage_bad_meta) ... ok
+
+----------------------------------------------------------------------
+Ran 38 tests in 85.826s
+
+OK
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+第一輪 38 項測試全過，耗時 85.826 秒；測試輸出也暴露了 SQLite 連線未明確關閉的警告。我會修正測試資源釋放，並加強每個損壞狀態各自產生日誌的斷言，再重新連跑兩次。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "rg -n 'sqlite3.connect|HTTPError|urlopen' test_gate.py; git diff --stat" in /Users/example-owner/TV-wt-tvgate4/tvgate
+ succeeded in 0ms:
+133:        try: response = urllib.request.urlopen(req, timeout=timeout)
+134:        except urllib.error.HTTPError as e: response = e
+148:        with sqlite3.connect(self.p/'tvgate.db') as db:
+390:        with sqlite3.connect(self.p/'tvgate.db') as db:
+440:        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(req)
+468:        with urllib.request.urlopen(url) as response:
+474:        with urllib.request.urlopen(urllib.request.Request(url, method='HEAD')) as response:
+495:        with sqlite3.connect(self.p/'tvgate.db') as c:
+500:            with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c:
+505:        with sqlite3.connect(self.p/'tvgate.db') as c:
+512:        with sqlite3.connect(self.p/'tvgate.db') as c:
+630:        with sqlite3.connect(self.p/'tvgate.db') as db:
+643:        with sqlite3.connect(self.p/'tvgate.db') as db: db.execute('delete from log')
+ tvgate/README.md    |  95 +++++++----
+ tvgate/gate.py      | 450 ++++++++++++++++++++++++++++++++++++++++++++-----
+ tvgate/test_gate.py | 474 ++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 3 files changed, 933 insertions(+), 86 deletions(-)
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('test_gate.py'); s=p.read_text()
+s=s.replace(\"with sqlite3.connect(self.p/'tvgate.db') as db:\", \"with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as db, db:\")
+s=s.replace(\"with sqlite3.connect(self.p/'tvgate.db') as c:\", \"with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c, c:\")
+s=s.replace(\"        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(req)\\n\", \"        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(req)\\n        error.exception.close()\\n\")
+s=s.replace(\"                (self.p/'state.json').write_text(content)\\n                self.start()\", \"                (self.p/'state.json').write_text(content)\\n                log_path = self.p/'Library/Logs/tvgate.log'\\n                before_log = log_path.read_text()\\n                self.start()\")
+s=s.replace(\"                self.assertIn('state invalid', (self.p/'Library/Logs/tvgate.log').read_text())\", \"                self.assertIn('state invalid', log_path.read_text()[len(before_log):])\")
+marker='    def test_monitor_recovers_after_iteration_exception(self):\\n'
+insert='''    def test_state_fields_are_validated_independently(self):
+        now = time.time()
+        with tempfile.TemporaryDirectory() as directory, \\\\
+             mock.patch.object(gate, 'STATE', Path(directory)/'state.json'), \\\\
+             mock.patch.object(gate, 'log') as logs:
+            gate.STATE.write_text(json.dumps({'until': now + 60, 'last_check': 1e18}))
+            gate.load()
+            self.assertEqual(gate.until, now + 60)
+            self.assertIsNone(gate.last_check)
+            logs.assert_called_once_with('state', 'invalid last_check')
+            logs.reset_mock()
+            gate.STATE.write_text(json.dumps({'until': True, 'last_check': now - 60}))
+            gate.load()
+            self.assertIsNone(gate.until)
+            self.assertEqual(gate.last_check, now - 60)
+            logs.assert_called_once_with('state', 'invalid until')
+
+'''
+s=s.replace(marker,insert+marker);p.write_text(s)
+PY
+rg -n 'with .*sqlite3.connect|exception.close|before_log' test_gate.py" in /Users/example-owner/TV-wt-tvgate4/tvgate
+ succeeded in 0ms:
+148:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as db, db:
+352:                before_log = log_path.read_text()
+357:                self.assertIn('state invalid', log_path.read_text()[len(before_log):])
+392:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as db, db:
+443:        error.exception.close()
+498:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c, c:
+503:            with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c:
+508:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c, c:
+515:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as c, c:
+633:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as db, db:
+646:        with contextlib.closing(sqlite3.connect(self.p/'tvgate.db')) as db, db: db.execute('delete from log')
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'python3 test_gate.py' in /Users/example-owner/TV-wt-tvgate4/tvgate
+codex
+已把每種壞狀態的日誌檢查改成只看該次啟動新增的內容，也補了欄位互不影響的測試。修正後第一輪仍在執行，目前已通過損壞狀態與鑰匙不入日誌的測試。
+ succeeded in 86287ms:
+test_auth_and_validation (__main__.GateTest.test_auth_and_validation) ... ok
+test_concurrent_endpoints (__main__.GateTest.test_concurrent_endpoints) ... ok
+test_concurrent_lock (__main__.GateTest.test_concurrent_lock) ... ok
+test_db_corrupt (__main__.GateTest.test_db_corrupt) ... ok
+test_devices_and_revocation (__main__.GateTest.test_devices_and_revocation) ... ok
+test_empty_database_and_links (__main__.GateTest.test_empty_database_and_links) ... ok
+test_event_log_expiry_relock_sleep_grace (__main__.GateTest.test_event_log_expiry_relock_sleep_grace) ... ok
+test_expiry (__main__.GateTest.test_expiry) ... ok
+test_hook_restart (__main__.GateTest.test_hook_restart) ... ok
+test_hook_sleep_wake_and_grace (__main__.GateTest.test_hook_sleep_wake_and_grace) ... ok
+test_hung_adb_status_responsive (__main__.GateTest.test_hung_adb_status_responsive) ... ok
+test_invalid_state_and_schedule (__main__.GateTest.test_invalid_state_and_schedule) ... ok
+test_logs_do_not_contain_keys (__main__.GateTest.test_logs_do_not_contain_keys) ... ok
+test_network_return_and_tv_reconnect (__main__.GateTest.test_network_return_and_tv_reconnect) ... ok
+test_no_grace_without_wake (__main__.GateTest.test_no_grace_without_wake) ... ok
+test_open_and_lock (__main__.GateTest.test_open_and_lock) ... ok
+test_open_overwrites_expired_once (__main__.GateTest.test_open_overwrites_expired_once) ... ok
+test_read_failure (__main__.GateTest.test_read_failure) ... ok
+test_reconcile_and_music (__main__.GateTest.test_reconcile_and_music) ... ok
+test_restart_and_corrupt_state (__main__.GateTest.test_restart_and_corrupt_state) ... ok
+test_schedule_end_to_end (__main__.GateTest.test_schedule_end_to_end) ... ok
+test_schedule_locks_during_grace (__main__.GateTest.test_schedule_locks_during_grace) ... ok
+test_schedule_validation_and_logs (__main__.GateTest.test_schedule_validation_and_logs) ... ok
+test_sigterm_opens (__main__.GateTest.test_sigterm_opens) ... ok
+test_unwritable_open (__main__.GateTest.test_unwritable_open) ... ok
+test_usage_fetch_dedup_and_failure_isolated (__main__.GateTest.test_usage_fetch_dedup_and_failure_isolated) ... ok
+test_usage_hang_does_not_block (__main__.GateTest.test_usage_hang_does_not_block) ... ok
+test_wake_foreground_failure (__main__.GateTest.test_wake_foreground_failure) ... ok
+test_web_page (__main__.GateTest.test_web_page) ... ok
+test_calc_exact (__main__.PureTest.test_calc_exact) ... ok
+test_lock_event_requires_readback (__main__.PureTest.test_lock_event_requires_readback) ... ok
+test_monitor_recovers_after_iteration_exception (__main__.PureTest.test_monitor_recovers_after_iteration_exception) ... ok
+test_real_sample (__main__.PureTest.test_real_sample) ... ok
+test_schedule_away_is_logged (__main__.PureTest.test_schedule_away_is_logged) ... ok
+test_schedule_cancels_grace_and_skips_old (__main__.PureTest.test_schedule_cancels_grace_and_skips_old) ... ok
+test_schedule_due (__main__.PureTest.test_schedule_due) ... ok
+test_state_fields_are_validated_independently (__main__.PureTest.test_state_fields_are_validated_independently) ... ok
+test_three_minute_tv_failure_does_not_trigger_arrival (__main__.PureTest.test_three_minute_tv_failure_does_not_trigger_arrival) ... ok
+test_usage_bad_meta (__main__.PureTest.test_usage_bad_meta) ... ok
+
+----------------------------------------------------------------------
+Ran 39 tests in 86.233s
+
+OK
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+修正後第一輪完成：39 項全過、86.233 秒，沒有再出現資源警告。現在進行第二輪，完成後會核對真實日誌的修改時間與 Git 狀態。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'python3 test_gate.py' in /Users/example-owner/TV-wt-tvgate4/tvgate
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "rg -n '"'^def load|''^def monitor|until <= time.time|def test_(invalid_state|state_fields|monitor_recovers|open_and_lock|expiry|open_overwrites|schedule_end_to_end|lock_event_requires|logs_do_not)|''^## 環境變數'"' tvgate/gate.py tvgate/test_gate.py tvgate/README.md" in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+tvgate/README.md:65:## 環境變數
+tvgate/test_gate.py:172:    def test_open_and_lock(self):
+tvgate/test_gate.py:186:    def test_expiry(self):
+tvgate/test_gate.py:345:    def test_invalid_state_and_schedule(self):
+tvgate/test_gate.py:376:    def test_open_overwrites_expired_once(self):
+tvgate/test_gate.py:386:    def test_logs_do_not_contain_keys(self):
+tvgate/test_gate.py:626:    def test_schedule_end_to_end(self):
+tvgate/test_gate.py:733:    def test_lock_event_requires_readback(self):
+tvgate/test_gate.py:745:    def test_state_fields_are_validated_independently(self):
+tvgate/test_gate.py:762:    def test_monitor_recovers_after_iteration_exception(self):
+tvgate/gate.py:70:def load():
+tvgate/gate.py:244:def monitor():
+tvgate/gate.py:271:                expired = until is not None and until <= time.time()
+tvgate/gate.py:654:                if value is not None and until is not None and until <= time.time():
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff --check' in /Users/example-owner/TV-wt-tvgate4
+exec
+/bin/zsh -lc 'git status --porcelain --untracked-files=all' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+ succeeded in 0ms:
+ M tvgate/README.md
+ M tvgate/gate.py
+ M tvgate/test_gate.py
+
+hook: PostToolUse Completed
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+第二輪目前也已通過狀態防呆、到期紀錄與手動鎖測試；Git 差異檢查未發現空白錯誤，目前變更仍限於三個 `tvgate/` 檔案。
+ succeeded in 86497ms:
+test_auth_and_validation (__main__.GateTest.test_auth_and_validation) ... ok
+test_concurrent_endpoints (__main__.GateTest.test_concurrent_endpoints) ... ok
+test_concurrent_lock (__main__.GateTest.test_concurrent_lock) ... ok
+test_db_corrupt (__main__.GateTest.test_db_corrupt) ... ok
+test_devices_and_revocation (__main__.GateTest.test_devices_and_revocation) ... ok
+test_empty_database_and_links (__main__.GateTest.test_empty_database_and_links) ... ok
+test_event_log_expiry_relock_sleep_grace (__main__.GateTest.test_event_log_expiry_relock_sleep_grace) ... ok
+test_expiry (__main__.GateTest.test_expiry) ... ok
+test_hook_restart (__main__.GateTest.test_hook_restart) ... ok
+test_hook_sleep_wake_and_grace (__main__.GateTest.test_hook_sleep_wake_and_grace) ... ok
+test_hung_adb_status_responsive (__main__.GateTest.test_hung_adb_status_responsive) ... ok
+test_invalid_state_and_schedule (__main__.GateTest.test_invalid_state_and_schedule) ... ok
+test_logs_do_not_contain_keys (__main__.GateTest.test_logs_do_not_contain_keys) ... ok
+test_network_return_and_tv_reconnect (__main__.GateTest.test_network_return_and_tv_reconnect) ... ok
+test_no_grace_without_wake (__main__.GateTest.test_no_grace_without_wake) ... ok
+test_open_and_lock (__main__.GateTest.test_open_and_lock) ... ok
+test_open_overwrites_expired_once (__main__.GateTest.test_open_overwrites_expired_once) ... ok
+test_read_failure (__main__.GateTest.test_read_failure) ... ok
+test_reconcile_and_music (__main__.GateTest.test_reconcile_and_music) ... ok
+test_restart_and_corrupt_state (__main__.GateTest.test_restart_and_corrupt_state) ... ok
+test_schedule_end_to_end (__main__.GateTest.test_schedule_end_to_end) ... ok
+test_schedule_locks_during_grace (__main__.GateTest.test_schedule_locks_during_grace) ... ok
+test_schedule_validation_and_logs (__main__.GateTest.test_schedule_validation_and_logs) ... ok
+test_sigterm_opens (__main__.GateTest.test_sigterm_opens) ... ok
+test_unwritable_open (__main__.GateTest.test_unwritable_open) ... ok
+test_usage_fetch_dedup_and_failure_isolated (__main__.GateTest.test_usage_fetch_dedup_and_failure_isolated) ... ok
+test_usage_hang_does_not_block (__main__.GateTest.test_usage_hang_does_not_block) ... ok
+test_wake_foreground_failure (__main__.GateTest.test_wake_foreground_failure) ... ok
+test_web_page (__main__.GateTest.test_web_page) ... ok
+test_calc_exact (__main__.PureTest.test_calc_exact) ... ok
+test_lock_event_requires_readback (__main__.PureTest.test_lock_event_requires_readback) ... ok
+test_monitor_recovers_after_iteration_exception (__main__.PureTest.test_monitor_recovers_after_iteration_exception) ... ok
+test_real_sample (__main__.PureTest.test_real_sample) ... ok
+test_schedule_away_is_logged (__main__.PureTest.test_schedule_away_is_logged) ... ok
+test_schedule_cancels_grace_and_skips_old (__main__.PureTest.test_schedule_cancels_grace_and_skips_old) ... ok
+test_schedule_due (__main__.PureTest.test_schedule_due) ... ok
+test_state_fields_are_validated_independently (__main__.PureTest.test_state_fields_are_validated_independently) ... ok
+test_three_minute_tv_failure_does_not_trigger_arrival (__main__.PureTest.test_three_minute_tv_failure_does_not_trigger_arrival) ... ok
+test_usage_bad_meta (__main__.PureTest.test_usage_bad_meta) ... ok
+
+----------------------------------------------------------------------
+Ran 39 tests in 86.413s
+
+OK
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'stat -f %m ~/Library/Logs/tvgate.log' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+1793293858
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all' in /Users/example-owner/TV-wt-tvgate4
+ succeeded in 0ms:
+ M tvgate/README.md
+ M tvgate/gate.py
+ M tvgate/test_gate.py
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+已完成 WO-T3 第 2 次退修。修正後連跑兩次，**39 項測試皆通過**，分別耗時 86.233 秒及 86.413 秒；測試結束時的子程序與暫存目錄清理檢查也通過。
+
+1. **狀態防呆**：[gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/gate.py:70) 逐欄檢查型別、有限數值及 ±400 天範圍；監控迴圈接住單次例外並繼續。測試：`test_invalid_state_and_schedule`、`test_state_fields_are_validated_independently`、`test_monitor_recovers_after_iteration_exception`。
+2. **expire 紀錄**：[gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/gate.py:244) 依實際到期時間處理，`/open` 覆蓋已到期授權前先記錄。測試：`test_open_and_lock`、`test_schedule_end_to_end`、`test_expiry`、`test_open_overwrites_expired_once`。
+3. **GATE_LOCK**：在 [test_gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py:172) 補上手動鎖、到期鎖及排程鎖的資料庫筆數斷言；保留 `test_lock_event_requires_readback` 反向測試。
+4. **環境變數**：[README.md](/Users/example-owner/TV-wt-tvgate4/tvgate/README.md:65) 補齊程式讀取的變數及預設值。
+5. **鑰匙不入 log**：[test_gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py:386) 的 `test_logs_do_not_contain_keys` 檢查文字 log 與資料庫 log。
+
+`python3 test_gate.py` 兩次的測試進度輸出相同，均為：
+
+```text
+test_auth_and_validation (__main__.GateTest.test_auth_and_validation) ... ok
+test_concurrent_endpoints (__main__.GateTest.test_concurrent_endpoints) ... ok
+test_concurrent_lock (__main__.GateTest.test_concurrent_lock) ... ok
+test_db_corrupt (__main__.GateTest.test_db_corrupt) ... ok
+test_devices_and_revocation (__main__.GateTest.test_devices_and_revocation) ... ok
+test_empty_database_and_links (__main__.GateTest.test_empty_database_and_links) ... ok
+test_event_log_expiry_relock_sleep_grace (__main__.GateTest.test_event_log_expiry_relock_sleep_grace) ... ok
+test_expiry (__main__.GateTest.test_expiry) ... ok
+test_hook_restart (__main__.GateTest.test_hook_restart) ... ok
+test_hook_sleep_wake_and_grace (__main__.GateTest.test_hook_sleep_wake_and_grace) ... ok
+test_hung_adb_status_responsive (__main__.GateTest.test_hung_adb_status_responsive) ... ok
+test_invalid_state_and_schedule (__main__.GateTest.test_invalid_state_and_schedule) ... ok
+test_logs_do_not_contain_keys (__main__.GateTest.test_logs_do_not_contain_keys) ... ok
+test_network_return_and_tv_reconnect (__main__.GateTest.test_network_return_and_tv_reconnect) ... ok
+test_no_grace_without_wake (__main__.GateTest.test_no_grace_without_wake) ... ok
+test_open_and_lock (__main__.GateTest.test_open_and_lock) ... ok
+test_open_overwrites_expired_once (__main__.GateTest.test_open_overwrites_expired_once) ... ok
+test_read_failure (__main__.GateTest.test_read_failure) ... ok
+test_reconcile_and_music (__main__.GateTest.test_reconcile_and_music) ... ok
+test_restart_and_corrupt_state (__main__.GateTest.test_restart_and_corrupt_state) ... ok
+test_schedule_end_to_end (__main__.GateTest.test_schedule_end_to_end) ... ok
+test_schedule_locks_during_grace (__main__.GateTest.test_schedule_locks_during_grace) ... ok
+test_schedule_validation_and_logs (__main__.GateTest.test_schedule_validation_and_logs) ... ok
+test_sigterm_opens (__main__.GateTest.test_sigterm_opens) ... ok
+test_unwritable_open (__main__.GateTest.test_unwritable_open) ... ok
+test_usage_fetch_dedup_and_failure_isolated (__main__.GateTest.test_usage_fetch_dedup_and_failure_isolated) ... ok
+test_usage_hang_does_not_block (__main__.GateTest.test_usage_hang_does_not_block) ... ok
+test_wake_foreground_failure (__main__.GateTest.test_wake_foreground_failure) ... ok
+test_web_page (__main__.GateTest.test_web_page) ... ok
+test_calc_exact (__main__.PureTest.test_calc_exact) ... ok
+test_lock_event_requires_readback (__main__.PureTest.test_lock_event_requires_readback) ... ok
+test_monitor_recovers_after_iteration_exception (__main__.PureTest.test_monitor_recovers_after_iteration_exception) ... ok
+test_real_sample (__main__.PureTest.test_real_sample) ... ok
+test_schedule_away_is_logged (__main__.PureTest.test_schedule_away_is_logged) ... ok
+test_schedule_cancels_grace_and_skips_old (__main__.PureTest.test_schedule_cancels_grace_and_skips_old) ... ok
+test_schedule_due (__main__.PureTest.test_schedule_due) ... ok
+test_state_fields_are_validated_independently (__main__.PureTest.test_state_fields_are_validated_independently) ... ok
+test_three_minute_tv_failure_does_not_trigger_arrival (__main__.PureTest.test_three_minute_tv_failure_does_not_trigger_arrival) ... ok
+test_usage_bad_meta (__main__.PureTest.test_usage_bad_meta) ... ok
+```
+
+兩次各自的結尾：
+
+```text
+Ran 39 tests in 86.233s
+
+OK
+```
+
+```text
+Ran 39 tests in 86.413s
+
+OK
+```
+
+`stat -f %m ~/Library/Logs/tvgate.log` 前後輸出相同：
+
+```text
+1793293858
+```
+
+`git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all`：
+
+```text
+ M tvgate/README.md
+ M tvgate/gate.py
+ M tvgate/test_gate.py
+```
+
+依指示未執行真 adb、連電視或 commit；真實電視行為因此尚未實測。
+hook: Stop
+hook: Stop Completed
+tokens used
+79,291
+已完成 WO-T3 第 2 次退修。修正後連跑兩次，**39 項測試皆通過**，分別耗時 86.233 秒及 86.413 秒；測試結束時的子程序與暫存目錄清理檢查也通過。
+
+1. **狀態防呆**：[gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/gate.py:70) 逐欄檢查型別、有限數值及 ±400 天範圍；監控迴圈接住單次例外並繼續。測試：`test_invalid_state_and_schedule`、`test_state_fields_are_validated_independently`、`test_monitor_recovers_after_iteration_exception`。
+2. **expire 紀錄**：[gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/gate.py:244) 依實際到期時間處理，`/open` 覆蓋已到期授權前先記錄。測試：`test_open_and_lock`、`test_schedule_end_to_end`、`test_expiry`、`test_open_overwrites_expired_once`。
+3. **GATE_LOCK**：在 [test_gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py:172) 補上手動鎖、到期鎖及排程鎖的資料庫筆數斷言；保留 `test_lock_event_requires_readback` 反向測試。
+4. **環境變數**：[README.md](/Users/example-owner/TV-wt-tvgate4/tvgate/README.md:65) 補齊程式讀取的變數及預設值。
+5. **鑰匙不入 log**：[test_gate.py](/Users/example-owner/TV-wt-tvgate4/tvgate/test_gate.py:386) 的 `test_logs_do_not_contain_keys` 檢查文字 log 與資料庫 log。
+
+`python3 test_gate.py` 兩次的測試進度輸出相同，均為：
+
+```text
+test_auth_and_validation (__main__.GateTest.test_auth_and_validation) ... ok
+test_concurrent_endpoints (__main__.GateTest.test_concurrent_endpoints) ... ok
+test_concurrent_lock (__main__.GateTest.test_concurrent_lock) ... ok
+test_db_corrupt (__main__.GateTest.test_db_corrupt) ... ok
+test_devices_and_revocation (__main__.GateTest.test_devices_and_revocation) ... ok
+test_empty_database_and_links (__main__.GateTest.test_empty_database_and_links) ... ok
+test_event_log_expiry_relock_sleep_grace (__main__.GateTest.test_event_log_expiry_relock_sleep_grace) ... ok
+test_expiry (__main__.GateTest.test_expiry) ... ok
+test_hook_restart (__main__.GateTest.test_hook_restart) ... ok
+test_hook_sleep_wake_and_grace (__main__.GateTest.test_hook_sleep_wake_and_grace) ... ok
+test_hung_adb_status_responsive (__main__.GateTest.test_hung_adb_status_responsive) ... ok
+test_invalid_state_and_schedule (__main__.GateTest.test_invalid_state_and_schedule) ... ok
+test_logs_do_not_contain_keys (__main__.GateTest.test_logs_do_not_contain_keys) ... ok
+test_network_return_and_tv_reconnect (__main__.GateTest.test_network_return_and_tv_reconnect) ... ok
+test_no_grace_without_wake (__main__.GateTest.test_no_grace_without_wake) ... ok
+test_open_and_lock (__main__.GateTest.test_open_and_lock) ... ok
+test_open_overwrites_expired_once (__main__.GateTest.test_open_overwrites_expired_once) ... ok
+test_read_failure (__main__.GateTest.test_read_failure) ... ok
+test_reconcile_and_music (__main__.GateTest.test_reconcile_and_music) ... ok
+test_restart_and_corrupt_state (__main__.GateTest.test_restart_and_corrupt_state) ... ok
+test_schedule_end_to_end (__main__.GateTest.test_schedule_end_to_end) ... ok
+test_schedule_locks_during_grace (__main__.GateTest.test_schedule_locks_during_grace) ... ok
+test_schedule_validation_and_logs (__main__.GateTest.test_schedule_validation_and_logs) ... ok
+test_sigterm_opens (__main__.GateTest.test_sigterm_opens) ... ok
+test_unwritable_open (__main__.GateTest.test_unwritable_open) ... ok
+test_usage_fetch_dedup_and_failure_isolated (__main__.GateTest.test_usage_fetch_dedup_and_failure_isolated) ... ok
+test_usage_hang_does_not_block (__main__.GateTest.test_usage_hang_does_not_block) ... ok
+test_wake_foreground_failure (__main__.GateTest.test_wake_foreground_failure) ... ok
+test_web_page (__main__.GateTest.test_web_page) ... ok
+test_calc_exact (__main__.PureTest.test_calc_exact) ... ok
+test_lock_event_requires_readback (__main__.PureTest.test_lock_event_requires_readback) ... ok
+test_monitor_recovers_after_iteration_exception (__main__.PureTest.test_monitor_recovers_after_iteration_exception) ... ok
+test_real_sample (__main__.PureTest.test_real_sample) ... ok
+test_schedule_away_is_logged (__main__.PureTest.test_schedule_away_is_logged) ... ok
+test_schedule_cancels_grace_and_skips_old (__main__.PureTest.test_schedule_cancels_grace_and_skips_old) ... ok
+test_schedule_due (__main__.PureTest.test_schedule_due) ... ok
+test_state_fields_are_validated_independently (__main__.PureTest.test_state_fields_are_validated_independently) ... ok
+test_three_minute_tv_failure_does_not_trigger_arrival (__main__.PureTest.test_three_minute_tv_failure_does_not_trigger_arrival) ... ok
+test_usage_bad_meta (__main__.PureTest.test_usage_bad_meta) ... ok
+```
+
+兩次各自的結尾：
+
+```text
+Ran 39 tests in 86.233s
+
+OK
+```
+
+```text
+Ran 39 tests in 86.413s
+
+OK
+```
+
+`stat -f %m ~/Library/Logs/tvgate.log` 前後輸出相同：
+
+```text
+1793293858
+```
+
+`git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all`：
+
+```text
+ M tvgate/README.md
+ M tvgate/gate.py
+ M tvgate/test_gate.py
+```
+
+依指示未執行真 adb、連電視或 commit；真實電視行為因此尚未實測。

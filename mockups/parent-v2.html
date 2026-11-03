@@ -1,0 +1,397 @@
+<title>看電視時間 新樣式</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;700&family=Fredoka:wght@500;600&family=Geist+Mono:wght@400&family=Hanken+Grotesk:wght@500;600&family=IBM+Plex+Mono:wght@400&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* hallmark · v2.0.0 · shape: app screen · scope: app · themes: coral (溫暖柔和), ink (簡潔工具感), hum (活潑) · deal: seed youtube-netflix-93d8 · fonts: Google substitutes (General Sans→Hanken Grotesk, Chillax→Fredoka) + Noto Sans TC */
+/* critique: one family app screen in three materials; the signature is the minutes left, set huge; usage drawn to one scale; every figure on this page is example data */
+/* layout: phone-width screens; tabs switch them under 80rem, all three side by side above it */
+:root {
+  /* page chrome */
+  --p-bg: oklch(96% 0.004 260); --p-ink: oklch(22% 0.01 260); --p-muted: oklch(45% 0.01 260); --p-rule: oklch(86% 0.006 260); --p-card: oklch(99.5% 0.002 260); --p-focus: oklch(50% 0.17 250);
+  --cjk: "Noto Sans TC", "PingFang TC", "Heiti TC", sans-serif;
+  /* coral */
+  --c-paper: oklch(97% 0.006 55); --c-paper-2: oklch(94.5% 0.007 55); --c-ink: oklch(21% 0.012 38); --c-ink-2: oklch(29% 0.013 40); --c-muted: oklch(47% 0.013 45);
+  --c-rule: oklch(87% 0.009 55); --c-cotton: oklch(98.8% 0.0045 80); --c-desk: oklch(94.3% 0.008 64); --c-board: oklch(22% 0.011 40); --c-board-type: oklch(96.5% 0.006 70);
+  --c-accent: oklch(74% 0.125 30); --c-accent-2: oklch(54% 0.165 29); --c-paid: oklch(55.5% 0.15 33); --c-bar-2: oklch(78% 0.035 50); --c-warn: oklch(52% 0.12 70);
+  --c-edge: inset 0 1px 0 oklch(100% 0.005 80 / 0.9), inset 0 -1px 0 oklch(32% 0.03 50 / 0.07), 0 0 0 0.5px oklch(32% 0.03 50 / 0.22), 0 1px 0 oklch(32% 0.03 50 / 0.12);
+  --c-cast: 6px 5px 10px -6px oklch(32% 0.03 50 / 0.3); --c-cast-lift: 12px 10px 18px -8px oklch(32% 0.03 50 / 0.3);
+  --c-font: "Hanken Grotesk", var(--cjk); --c-fig: "Geist Mono", ui-monospace, monospace;
+  --c-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .35 0 0 0 0 .25 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* ink */
+  --i-paper: oklch(99.5% 0.003 100); --i-paper-2: oklch(97% 0.004 100); --i-paper-3: oklch(94% 0.006 100); --i-ink: oklch(16% 0 0); --i-ink-2: oklch(28% 0 0); --i-muted: oklch(44% 0 0);
+  --i-rule: oklch(89% 0.004 100); --i-accent: oklch(50% 0.095 188); --i-accent-soft: oklch(93% 0.05 190); --i-accent-soft-ink: oklch(27% 0.045 190); --i-bar-2: oklch(72% 0 0); --i-alert: oklch(48% 0.15 28);
+  --i-font: "Epilogue", var(--cjk); --i-fig: "IBM Plex Mono", ui-monospace, monospace;
+  /* hum */
+  --h-paper: oklch(97% 0.012 95); --h-paper-2: oklch(94.5% 0.018 95); --h-paper-3: oklch(91% 0.022 95); --h-ink: oklch(20% 0.014 255); --h-ink-2: oklch(29% 0.014 255); --h-muted: oklch(47% 0.014 255);
+  --h-rule: oklch(87% 0.016 95); --h-accent: oklch(87% 0.175 96); --h-accent-deep: oklch(72% 0.16 92); --h-blue: oklch(50% 0.17 250); --h-coral: oklch(70% 0.2 22); --h-coral-ink: oklch(20% 0.014 255);
+  --h-mint: oklch(82% 0.15 152); --h-mint-deep: oklch(48% 0.12 155); --h-card: oklch(98.8% 0.007 95); --h-edge: oklch(83% 0.04 88);
+  --h-font: "Fredoka", var(--cjk); --h-fig: "Fredoka", ui-rounded, sans-serif;
+  --h-shadow: 0 1px 2px oklch(20% 0.014 255 / 0.06), 0 12px 28px -14px oklch(20% 0.014 255 / 0.22);
+  --h-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .28 0 0 0 0 .1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --dur-micro: 120ms; --dur-short: 200ms; --ease: cubic-bezier(0.22, 1, 0.36, 1); --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html, body { overflow-x: clip; }
+body { background: var(--p-bg); color: var(--p-ink); font: 400 16px/1.5 var(--cjk); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--p-focus); outline-offset: 2px; transition: none; }
+.wrap { max-width: 84rem; margin: 0 auto; padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.intro { display: grid; gap: 6px; max-width: 40rem; }
+.intro h1 { margin: 0; font-size: 1.5rem; font-weight: 700; text-wrap: balance; }
+.intro p { margin: 0; color: var(--p-muted); }
+.ctl { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.ctl-group { display: grid; gap: 4px; }
+.ctl-label { font-size: 0.875rem; color: var(--p-muted); }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--p-card); border: 1px solid var(--p-rule); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 8px 14px; min-height: 40px; font-size: 0.9375rem; color: var(--p-ink); transition: background-color var(--dur-micro) var(--ease); }
+.seg button:hover { background: var(--p-bg); }
+.seg button[aria-pressed="true"] { background: var(--p-ink); color: var(--p-card); }
+.mocks { display: grid; gap: 24px; justify-items: center; }
+.mock { width: 100%; max-width: 420px; min-width: 0; border-radius: 22px; overflow: clip; border: 1px solid var(--p-rule); }
+.mock-name { font-size: 0.875rem; color: var(--p-muted); text-align: center; margin: 0 0 8px; }
+.col { width: 100%; max-width: 420px; min-width: 0; }
+@media (max-width: 79.99rem) { .col.off { display: none; } }
+@media (min-width: 80rem) { .mocks { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; } .tabs-group { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation: none !important; } }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- coral ---------- */
+.coral { background: var(--c-paper); color: var(--c-ink); font-family: var(--c-font); }
+.c-desk { background-color: var(--c-desk); background-image: radial-gradient(90% 120% at 0% 30%, var(--c-cotton), transparent 62%), var(--c-tex); padding: 18px 18px 22px; display: grid; gap: 16px; }
+.c-top { display: flex; justify-content: space-between; align-items: baseline; }
+.c-top b { font-weight: 600; font-size: 1.0625rem; }
+.c-top span { color: var(--c-muted); font-size: 0.875rem; }
+.c-sheet { position: relative; background-color: var(--c-cotton); background-image: linear-gradient(100deg, var(--c-cotton), transparent 45%), var(--c-tex); box-shadow: var(--c-edge), var(--c-cast); border-radius: 8px; padding: 18px 20px 20px; display: grid; gap: 4px; }
+.c-lab { margin: 0; color: var(--c-muted); font-weight: 500; font-size: 0.9375rem; }
+.c-big { margin: 0; display: flex; align-items: baseline; gap: 8px; line-height: 0.9; }
+.c-big .n { font-weight: 600; font-size: 5.5rem; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+.c-big .u { font-size: 1.5rem; font-weight: 500; }
+.c-line { margin: 6px 0 0; color: var(--c-ink-2); font-size: 0.9375rem; }
+.c-line + .c-line { margin-top: 0; }
+.c-stamp { position: absolute; right: 18px; top: 22px; margin: 0; font-weight: 700; font-size: 1.75rem; color: var(--c-paid); border: 3px solid var(--c-paid); border-radius: 6px; padding: 2px 10px; rotate: -8deg; opacity: 0.85; filter: url(#press); }
+.c-alert { margin: 0; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--c-warn); color: var(--c-ink); background: var(--c-paper); font-size: 0.9375rem; }
+.c-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.c-btn { min-height: 52px; border: 0; border-radius: 8px; font-weight: 600; font-size: 1.125rem; background-color: var(--c-cotton); background-image: var(--c-tex); color: var(--c-ink); box-shadow: var(--c-edge), var(--c-cast); transition: transform var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease); }
+.c-btn:hover { transform: translateY(-1px); box-shadow: var(--c-edge), var(--c-cast-lift); }
+.c-btn:active { transform: translateY(1px); }
+.c-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.c-btn small { font-size: 0.8125rem; font-weight: 500; }
+.c-zero { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; font-size: 0.9375rem; color: var(--c-ink-2); }
+.c-link { border: 0; background: none; padding: 8px 0; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--c-accent); color: var(--c-ink); }
+.c-ink-btn { border: 0; border-radius: 8px; min-height: 44px; padding: 0 16px; background: var(--c-board); color: var(--c-board-type); font-weight: 600; box-shadow: var(--c-cast); }
+.c-body { padding: 20px 18px 24px; display: grid; gap: 22px; }
+.c-h { margin: 0 0 10px; font-weight: 600; font-size: 1.125rem; }
+.c-sum { display: grid; gap: 0; border-top: 1px solid var(--c-rule); }
+.c-sum div { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--c-rule); align-items: baseline; }
+.c-sum dt { color: var(--c-muted); font-weight: 500; }
+.c-sum dd { margin: 0; color: var(--c-ink-2); font-size: 0.9375rem; }
+.c-sum .t { font-family: var(--c-fig); font-variant-numeric: tabular-nums; color: var(--c-ink); }
+.c-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.c-log li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 10px; padding: 10px 12px; background-color: var(--c-cotton); border-radius: 6px; box-shadow: var(--c-edge); font-size: 0.9375rem; }
+.c-log time { font-family: var(--c-fig); font-size: 0.8125rem; color: var(--c-muted); padding-top: 2px; }
+.c-more summary { cursor: pointer; padding: 10px 0; min-height: 44px; color: var(--c-ink); text-decoration: underline; text-decoration-color: var(--c-accent); text-underline-offset: 3px; list-style: none; }
+.c-me { margin: 0; color: var(--c-muted); font-size: 0.875rem; }
+
+/* ---------- shared chart ---------- */
+.chart { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 6px; }
+.chart .axis { position: relative; height: 132px; font-size: 0.75rem; }
+.chart .axis span { position: absolute; right: 0; translate: 0 50%; font-variant-numeric: tabular-nums; }
+.chart .plot { position: relative; height: 132px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.chart .grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed; }
+.chart .bar { position: relative; display: flex; flex-direction: column-reverse; height: 100%; justify-content: flex-start; }
+.chart .bar i { display: block; width: 100%; }
+.chart .days { grid-column: 2; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; font-size: 0.8125rem; text-align: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.coral .chart .axis, .coral .chart .days, .coral .legend { color: var(--c-muted); }
+.coral .chart .grid { border-color: var(--c-rule); }
+.coral .bar .yt, .coral .legend .yt { background: var(--c-ink-2); }
+.coral .bar .nf, .coral .legend .nf { background: var(--c-bar-2); }
+.coral .bar i:last-child { border-radius: 4px 4px 0 0; }
+.coral .days .today { color: var(--c-ink); font-weight: 600; }
+
+/* ---------- ink ---------- */
+.ink { background: var(--i-paper); color: var(--i-ink-2); font-family: var(--i-font); }
+.i-top { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 18px 12px; border-bottom: 1px solid var(--i-ink); }
+.i-top b { color: var(--i-ink); font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em; }
+.i-top span { color: var(--i-muted); font-size: 0.875rem; }
+.i-body { padding: 18px 18px 24px; display: grid; gap: 24px; }
+.i-now { display: grid; gap: 6px; }
+.i-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.i-lab { margin: 0; color: var(--i-muted); font-size: 0.9375rem; }
+.i-big { margin: 0; color: var(--i-ink); font-weight: 700; letter-spacing: -0.04em; line-height: 1; display: flex; align-items: baseline; gap: 6px; }
+.i-big .n { font-size: 4.75rem; font-variant-numeric: tabular-nums; }
+.i-big .u { font-size: 1.375rem; letter-spacing: 0; }
+.i-big.open { color: var(--i-accent); }
+.tag { display: inline-flex; align-items: center; min-height: 28px; padding: 2px 12px; border-radius: 999px; font-size: 0.875rem; font-weight: 600; }
+.tag--in { background: var(--i-accent-soft); color: var(--i-accent-soft-ink); }
+.tag--out { box-shadow: inset 0 0 0 1px var(--i-rule); color: var(--i-muted); }
+.tag--on { background: var(--i-ink); color: var(--i-paper); }
+.i-meta { margin: 0; font-size: 0.9375rem; }
+.i-alert { margin: 0; padding: 10px 12px; border-left: 3px solid var(--i-alert); background: var(--i-paper-2); color: var(--i-ink); font-size: 0.9375rem; }
+.i-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.i-btn { min-height: 48px; border: 1px solid var(--i-rule); border-radius: 10px; background: var(--i-paper-2); color: var(--i-ink); font-weight: 600; font-size: 1.0625rem; transition: border-color var(--dur-micro) var(--ease), background-color var(--dur-micro) var(--ease); }
+.i-btn:hover { border-color: var(--i-ink); }
+.i-btn:disabled { opacity: 0.5; cursor: default; }
+.i-btn--primary { background: var(--i-ink); border-color: var(--i-ink); color: var(--i-paper); }
+.i-zero { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; font-size: 0.9375rem; }
+.i-link { border: 0; background: none; padding: 8px 0; min-height: 44px; font-weight: 600; color: var(--i-ink); text-decoration: underline; text-underline-offset: 3px; }
+.i-link:hover { text-decoration-color: var(--i-accent); }
+.i-h { margin: 0 0 8px; color: var(--i-ink); font-weight: 700; font-size: 1.125rem; letter-spacing: -0.01em; }
+.i-table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.i-table th, .i-table td { text-align: right; padding: 8px 0; border-bottom: 1px solid var(--i-rule); font-weight: 400; }
+.i-table thead th { color: var(--i-muted); border-bottom: 1px solid var(--i-ink); font-size: 0.875rem; }
+.i-table th:first-child { text-align: left; color: var(--i-ink); font-weight: 600; }
+.i-table td { font-family: var(--i-fig); font-variant-numeric: tabular-nums; color: var(--i-ink); }
+.ink .chart .axis, .ink .chart .days, .ink .legend { color: var(--i-muted); }
+.ink .chart .grid { border-color: var(--i-rule); }
+.ink .bar .yt, .ink .legend .yt { background: var(--i-ink); }
+.ink .bar .nf, .ink .legend .nf { background: var(--i-bar-2); }
+.ink .days .today { color: var(--i-ink); font-weight: 600; }
+.i-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--i-ink); }
+.i-log li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--i-rule); font-size: 0.9375rem; }
+.i-log time { font-family: var(--i-fig); font-size: 0.8125rem; color: var(--i-muted); padding-top: 2px; }
+.i-log b { color: var(--i-ink); font-weight: 600; }
+.i-more summary { cursor: pointer; padding: 10px 0; min-height: 44px; font-weight: 600; color: var(--i-ink); text-decoration: underline; text-underline-offset: 3px; list-style: none; }
+.i-me { margin: 0; color: var(--i-muted); font-size: 0.875rem; }
+
+/* ---------- hum ---------- */
+.hum { background: var(--h-grain), var(--h-paper); color: var(--h-ink-2); font-family: var(--h-font); font-weight: 500; }
+.h-top { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 20px 0; }
+.h-top b { color: var(--h-ink); font-weight: 600; font-size: 1.125rem; }
+.h-top span { color: var(--h-muted); font-size: 0.875rem; }
+.h-field { margin: 14px 12px 0; padding: 20px 20px 34px; background: var(--h-grain), var(--h-accent); color: var(--h-ink); border-radius: 24px 24px 0 0; filter: drop-shadow(1.5px 2.5px 1.5px oklch(20% 0.014 255 / 0.1)) drop-shadow(6px 14px 16px oklch(20% 0.014 255 / 0.13)); display: grid; gap: 2px; }
+.h-field.done { background: var(--h-grain), var(--h-coral); color: var(--h-coral-ink); }
+.h-field.lost { background: var(--h-grain), var(--h-paper-3); }
+.h-lab { margin: 0; font-size: 1rem; }
+.h-big { margin: 0; display: flex; align-items: baseline; gap: 8px; line-height: 0.95; }
+.h-big .n { font-weight: 600; font-size: 5.75rem; letter-spacing: -0.03em; font-family: var(--h-fig); font-variant-numeric: tabular-nums; }
+.h-big .u { font-size: 1.5rem; font-weight: 600; }
+.h-line { margin: 4px 0 0; font-size: 1rem; }
+.h-body { padding: 18px 20px 26px; display: grid; gap: 22px; }
+.h-alert { margin: 0; padding: 12px 14px; border-radius: 16px; background: var(--h-card); box-shadow: inset 0 0 0 2px var(--h-coral); color: var(--h-ink); }
+.h-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.h-btn { --edge: 5px; min-height: 56px; border: 0; border-radius: 16px; font-weight: 600; font-size: 1.25rem; background: var(--h-grain), var(--h-accent); color: var(--h-ink); box-shadow: 0 var(--edge) 0 0 var(--h-accent-deep), 2px calc(var(--edge) + 4px) 10px -3px oklch(20% 0.014 255 / 0.3); transition: translate var(--dur-micro) var(--ease-spring), box-shadow var(--dur-micro) var(--ease-spring); margin-bottom: 6px; }
+.h-btn:hover { --edge: 7px; translate: 0 -2px; }
+.h-btn:active { --edge: 1px; translate: 0 4px; }
+.h-btn:disabled { opacity: 0.5; cursor: default; translate: none; }
+.h-btn--card { background: var(--h-grain), var(--h-card); box-shadow: inset 0 0 0 1px var(--h-rule), 0 var(--edge) 0 0 var(--h-edge); font-size: 1rem; min-height: 48px; padding: 0 18px; }
+.h-zero { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.h-link { border: 0; background: none; padding: 8px 0; min-height: 44px; color: var(--h-blue); text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.h-h { margin: 0 0 10px; color: var(--h-ink); font-weight: 600; font-size: 1.25rem; letter-spacing: -0.01em; }
+.h-meter { display: grid; gap: 6px; }
+.h-track { height: 18px; border-radius: 999px; background: var(--h-paper-3); box-shadow: inset 0 1px 2px oklch(20% 0.014 255 / 0.12); overflow: hidden; display: flex; }
+.h-track i { display: block; height: 100%; }
+.h-track .yt { background: var(--h-ink-2); }
+.h-track .nf { background: var(--h-mint-deep); }
+.h-meter p { margin: 0; font-size: 0.9375rem; }
+.h-pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.h-pill { background: var(--h-card); border-radius: 16px; padding: 10px 12px; box-shadow: var(--h-shadow); display: grid; gap: 2px; min-width: 0; }
+.h-pill span { font-size: 0.875rem; color: var(--h-muted); }
+.h-pill b { font-family: var(--h-fig); font-weight: 600; font-size: 1.5rem; color: var(--h-ink); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.h-pill small { font-size: 0.8125rem; color: var(--h-muted); }
+.hum .chart .axis, .hum .chart .days, .hum .legend { color: var(--h-muted); }
+.hum .chart .grid { border-color: var(--h-rule); }
+.hum .bar .yt, .hum .legend .yt { background: var(--h-ink-2); }
+.hum .bar .nf, .hum .legend .nf { background: var(--h-mint-deep); }
+.hum .bar i:last-child { border-radius: 8px 8px 0 0; }
+.hum .days .today { color: var(--h-ink); font-weight: 600; }
+.h-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.h-log li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 10px; padding: 10px 14px; background: var(--h-card); border-radius: 16px; box-shadow: var(--h-shadow); font-size: 0.9375rem; }
+.h-log time { color: var(--h-muted); font-size: 0.875rem; }
+.h-log b { color: var(--h-ink); font-weight: 600; }
+.h-more summary { cursor: pointer; padding: 10px 0; min-height: 44px; color: var(--h-blue); text-decoration: underline; text-underline-offset: 3px; font-weight: 600; list-style: none; }
+.h-me { margin: 0; color: var(--h-muted); font-size: 0.875rem; }
+.note { margin: 0; font-size: 0.875rem; }
+.coral .note { color: var(--c-accent-2); }
+.ink .note { color: var(--i-accent-soft-ink); }
+.hum .note { color: var(--h-blue); }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="press"><feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="1" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter></svg>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>家長頁新樣式：三種調性</h1>
+    <p>用 hallmark 做的 mock，所有數字都是範例。按鈕可以按，加時間後約 2 秒「電視收到」。</p>
+  </div>
+  <div class="ctl">
+    <div class="ctl-group tabs-group"><span class="ctl-label" id="lt">調性</span>
+      <div class="seg" role="group" aria-labelledby="lt" id="tabs">
+        <button type="button" data-tab="coral" aria-pressed="true">溫暖柔和</button>
+        <button type="button" data-tab="ink" aria-pressed="false">簡潔工具感</button>
+        <button type="button" data-tab="hum" aria-pressed="false">活潑</button>
+      </div>
+    </div>
+    <div class="ctl-group"><span class="ctl-label" id="ls">範例狀態</span>
+      <div class="seg" role="group" aria-labelledby="ls" id="modes">
+        <button type="button" data-mode="open" aria-pressed="true">開放中</button>
+        <button type="button" data-mode="done" aria-pressed="false">時間用完</button>
+        <button type="button" data-mode="lost" aria-pressed="false">電視失聯</button>
+      </div>
+    </div>
+  </div>
+  <div class="mocks">
+    <div class="col" data-col="coral"><p class="mock-name">溫暖柔和（Coral）</p><section class="mock coral" id="m-coral" aria-label="溫暖柔和版"></section></div>
+    <div class="col off" data-col="ink"><p class="mock-name">簡潔工具感（Ink）</p><section class="mock ink" id="m-ink" aria-label="簡潔工具感版"></section></div>
+    <div class="col off" data-col="hum"><p class="mock-name">活潑（Hum）</p><section class="mock hum" id="m-hum" aria-label="活潑版"></section></div>
+  </div>
+</div>
+
+<script>
+const CAP = 60;
+const WEEK = [['一',35,10],['二',50,0],['三',20,25],['四',45,15],['五',40,20],['六',55,30]];
+const BASE_LOG = [
+  ['今天 02:16','爸爸','把時間設成 60 分'],
+  ['今天 01:38','爸爸','加 30 分'],
+  ['昨天 21:40','電視','時間用完，鎖住 YouTube 和 Netflix'],
+  ['昨天 21:35','電視','剩 5 分，跳出提醒'],
+  ['昨天 19:02','媽媽','加 30 分'],
+  ['昨天 19:00','爸爸','加 15 分']
+];
+const S = { mode: 'open', used: [18, 4], bal: 38, pending: 0, confirm: '', note: '', log: [] };
+let timer = 0;
+
+function today() { return S.used; }
+function week() { const t = today(); return WEEK.map(r => r.slice()).concat([['今天', t[0], t[1]]]); }
+function sum(rows) { return rows.reduce((a, r) => [a[0] + r[1], a[1] + r[2]], [0, 0]); }
+function hm(m) { return m >= 60 ? Math.floor(m / 60) + ' 小時' + (m % 60 ? ' ' + (m % 60) + ' 分' : '') : m + ' 分'; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+function logRows() { return S.log.concat(BASE_LOG); }
+function status() {
+  if (S.mode === 'lost') return { tag: '未知', line: '電視 35 分鐘前回報', alert: '電視超過 30 分鐘沒回報，可能關機、斷網或 App 被關掉。' };
+  if (S.mode === 'done') return { tag: '已鎖', line: '時間用完，YouTube 和 Netflix 已鎖', alert: '' };
+  return { tag: '開放中', line: '電視在線，1 分鐘前回報', alert: '' };
+}
+function pendLine() { return S.pending ? '待電視接收 ' + S.pending + ' 分' : ''; }
+
+function chart() {
+  const rows = week(), max = 90;
+  const grid = [30, 60, 90].map(v => '<span class="grid" style="bottom:' + (v / max * 100) + '%"></span>').join('');
+  const axis = [0, 30, 60, 90].map(v => '<span style="bottom:' + (v / max * 100) + '%">' + v + '</span>').join('');
+  const bars = rows.map(r => '<div class="bar" role="img" aria-label="' + r[0] + '：YouTube ' + r[1] + ' 分，Netflix ' + r[2] + ' 分"><i class="yt" style="height:' + (r[1] / max * 100) + '%"></i><i class="nf" style="height:' + (r[2] / max * 100) + '%"></i></div>').join('');
+  const days = rows.map(r => '<span' + (r[0] === '今天' ? ' class="today"' : '') + '>' + r[0] + '</span>').join('');
+  return '<div class="chart"><div class="axis" aria-hidden="true">' + axis + '</div><div class="plot">' + grid + bars + '</div><div class="days" aria-hidden="true">' + days + '</div></div>' +
+    '<div class="legend"><span><i class="yt"></i>YouTube</span><span><i class="nf"></i>Netflix</span><span>單位：分</span></div>';
+}
+function acts(cls, extra) {
+  const dis = S.pending ? ' disabled' : '';
+  return [15, 30, 60].map(n => '<button type="button" class="' + cls + (extra && n === 30 ? ' ' + extra : '') + '" data-act="add" data-min="' + n + '"' + dis + '>+' + n + ' 分</button>').join('');
+}
+function zero(linkCls, okCls, wrapCls) {
+  if (S.confirm) return '<div class="' + wrapCls + '"><span>確定把剩餘時間歸零？電視會馬上鎖住。</span><span style="display:flex;gap:10px"><button type="button" class="' + okCls + '" data-act="zero-ok">歸零</button><button type="button" class="' + linkCls + '" data-act="zero-no">取消</button></span></div>';
+  return '<div class="' + wrapCls + '"><span>' + (S.note ? '' : '想讓他現在就停？') + '</span><button type="button" class="' + linkCls + '" data-act="zero">歸零</button></div>';
+}
+function logList(cls, moreCls, n) {
+  const rows = logRows(), li = r => '<li><time>' + esc(r[0]) + '</time><span><b>' + esc(r[1]) + '</b> ' + esc(r[2]) + '</span></li>';
+  return '<ul class="' + cls + '">' + rows.slice(0, n).map(li).join('') + '</ul>' +
+    (rows.length > n ? '<details class="' + moreCls + '"><summary>看全部紀錄（' + rows.length + ' 筆）</summary><ul class="' + cls + '">' + rows.slice(n).map(li).join('') + '</ul></details>' : '');
+}
+
+const VIEWS = {
+  coral() {
+    const st = status(), t = today(), w = sum(week());
+    return '<div class="c-desk"><div class="c-top"><b>看電視時間</b><span>範例資料</span></div>' +
+      '<div class="c-sheet"><p class="c-lab">今天還剩</p><p class="c-big"><span class="n">' + S.bal + '</span><span class="u">分</span></p>' +
+      '<p class="c-line">' + st.line + '</p>' + (S.pending ? '<p class="c-line">' + pendLine() + '</p>' : '') +
+      (S.mode === 'done' ? '<p class="c-stamp" aria-hidden="true">已鎖</p>' : '') + '</div>' +
+      (st.alert ? '<p class="c-alert">' + st.alert + '</p>' : '') +
+      '<div class="c-acts">' + acts('c-btn') + '</div>' + (S.note ? '<p class="note">' + S.note + '</p>' : '') +
+      zero('c-link', 'c-ink-btn', 'c-zero') + '</div>' +
+      '<div class="c-body"><section><h2 class="c-h">使用時間</h2><dl class="c-sum">' +
+      '<div><dt>今天</dt><dd>YouTube ' + t[0] + ' 分、Netflix ' + t[1] + ' 分</dd><span class="t">' + (t[0] + t[1]) + ' 分</span></div>' +
+      '<div><dt>本週</dt><dd>YouTube ' + hm(w[0]) + '、Netflix ' + hm(w[1]) + '</dd><span class="t">' + hm(w[0] + w[1]) + '</span></div>' +
+      '<div><dt>本月</dt><dd>YouTube 14 小時、Netflix 5 小時</dd><span class="t">19 小時</span></div></dl></section>' +
+      '<section><h2 class="c-h">這 7 天</h2>' + chart() + '</section>' +
+      '<section><h2 class="c-h">紀錄</h2>' + logList('c-log', 'c-more', 4) + '</section>' +
+      '<p class="c-me">目前登入：爸爸</p></div>';
+  },
+  ink() {
+    const st = status(), t = today(), w = sum(week());
+    const tag = S.mode === 'open' ? 'tag--in' : S.mode === 'done' ? 'tag--on' : 'tag--out';
+    return '<div class="i-top"><b>看電視時間</b><span>範例資料</span></div><div class="i-body">' +
+      '<section class="i-now"><div class="i-row"><p class="i-lab">今天還剩</p><span class="tag ' + tag + '">YouTube／Netflix ' + st.tag + '</span></div>' +
+      '<p class="i-big' + (S.mode === 'open' ? ' open' : '') + '"><span class="n">' + S.bal + '</span><span class="u">分</span></p>' +
+      '<p class="i-meta">' + st.line + '</p>' + (S.pending ? '<p class="i-meta">' + pendLine() + '</p>' : '') +
+      (st.alert ? '<p class="i-alert">' + st.alert + '</p>' : '') + '</section>' +
+      '<section style="display:grid;gap:8px"><div class="i-acts">' + acts('i-btn', 'i-btn--primary') + '</div>' + (S.note ? '<p class="note">' + S.note + '</p>' : '') +
+      zero('i-link', 'i-btn i-btn--primary', 'i-zero') + '</section>' +
+      '<section><h2 class="i-h">使用時間</h2><table class="i-table"><thead><tr><th scope="col"><span class="vh">期間</span></th><th scope="col">YouTube</th><th scope="col">Netflix</th><th scope="col">合計</th></tr></thead><tbody>' +
+      '<tr><th scope="row">今天</th><td>' + t[0] + ' 分</td><td>' + t[1] + ' 分</td><td>' + (t[0] + t[1]) + ' 分</td></tr>' +
+      '<tr><th scope="row">本週</th><td>' + (w[0] / 60).toFixed(1) + ' 時</td><td>' + (w[1] / 60).toFixed(1) + ' 時</td><td>' + ((w[0] + w[1]) / 60).toFixed(1) + ' 時</td></tr>' +
+      '<tr><th scope="row">本月</th><td>14.0 時</td><td>5.0 時</td><td>19.0 時</td></tr></tbody></table></section>' +
+      '<section><h2 class="i-h">這 7 天</h2>' + chart() + '</section>' +
+      '<section><h2 class="i-h">紀錄</h2>' + logList('i-log', 'i-more', 4) + '</section>' +
+      '<p class="i-me">目前登入：爸爸</p></div>';
+  },
+  hum() {
+    const st = status(), t = today(), w = sum(week());
+    const cls = S.mode === 'done' ? ' done' : S.mode === 'lost' ? ' lost' : '';
+    const lab = S.mode === 'done' ? '時間到了' : '今天還剩';
+    return '<div class="h-top"><b>看電視時間</b><span>範例資料</span></div>' +
+      '<div class="h-field' + cls + '" style="clip-path:' + torn() + '"><p class="h-lab">' + lab + '</p><p class="h-big"><span class="n">' + S.bal + '</span><span class="u">分</span></p>' +
+      '<p class="h-line">' + st.line + '</p>' + (S.pending ? '<p class="h-line">' + pendLine() + '</p>' : '') + '</div>' +
+      '<div class="h-body">' + (st.alert ? '<p class="h-alert">' + st.alert + '</p>' : '') +
+      '<section style="display:grid;gap:8px"><div class="h-acts">' + acts('h-btn') + '</div>' + (S.note ? '<p class="note">' + S.note + '</p>' : '') +
+      zero('h-link', 'h-btn h-btn--card', 'h-zero') + '</section>' +
+      '<section class="h-meter"><h2 class="h-h">今天看了 ' + (t[0] + t[1]) + ' 分</h2>' +
+      '<div class="h-track" role="img" aria-label="今天 YouTube ' + t[0] + ' 分，Netflix ' + t[1] + ' 分，以 60 分為滿"><i class="yt" style="width:' + Math.min(100, t[0] / CAP * 100) + '%"></i><i class="nf" style="width:' + Math.min(100, t[1] / CAP * 100) + '%"></i></div>' +
+      '<p>YouTube ' + t[0] + ' 分、Netflix ' + t[1] + ' 分（滿格 60 分）</p></section>' +
+      '<div class="h-pills"><div class="h-pill"><span>今天</span><b>' + (t[0] + t[1]) + '</b><small>分</small></div><div class="h-pill"><span>本週</span><b>' + ((w[0] + w[1]) / 60).toFixed(1) + '</b><small>小時</small></div><div class="h-pill"><span>本月</span><b>19</b><small>小時</small></div></div>' +
+      '<section><h2 class="h-h">這 7 天</h2>' + chart() + '</section>' +
+      '<section><h2 class="h-h">紀錄</h2>' + logList('h-log', 'h-more', 4) + '</section>' +
+      '<p class="h-me">目前登入：爸爸</p></div>';
+  }
+};
+function torn() {
+  let x = 0, pts = ['0 0', '100% 0'], seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const out = [];
+  while (x < 100) { out.push(x.toFixed(1) + '% calc(100% - ' + (4 + rnd() * 12).toFixed(1) + 'px)'); x += 3 + rnd() * 5; }
+  out.push('100% calc(100% - 8px)');
+  return 'polygon(' + pts.concat(out.reverse()).join(',') + ')';
+}
+function render(focus) {
+  for (const k in VIEWS) document.getElementById('m-' + k).innerHTML = VIEWS[k]();
+  if (focus) { const el = document.querySelector(focus); if (el) el.focus(); }
+}
+function setPressed(group, attr, val) { for (const b of document.querySelectorAll('#' + group + ' button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === val)); }
+
+document.getElementById('modes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  clearTimeout(timer); S.mode = b.dataset.mode; S.pending = 0; S.confirm = ''; S.note = ''; S.log = [];
+  S.bal = S.mode === 'done' ? 0 : 38; S.used = S.mode === 'done' ? [45, 15] : [18, 4];
+  setPressed('modes', 'mode', S.mode); render();
+});
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const c of document.querySelectorAll('.col')) c.classList.toggle('off', c.dataset.col !== b.dataset.tab);
+  setPressed('tabs', 'tab', b.dataset.tab);
+});
+document.querySelector('.mocks').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b || b.disabled) return;
+  const m = b.closest('.mock').id, act = b.dataset.act;
+  if (act === 'add') {
+    const n = +b.dataset.min;
+    S.pending = n; S.note = ''; S.confirm = '';
+    S.log.unshift(['剛剛', '爸爸', '加 ' + n + ' 分']);
+    render('#' + m + ' [data-act="add"][data-min="' + n + '"]');
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const want = S.bal + S.pending; S.bal = Math.min(CAP, want); S.pending = 0;
+      S.note = want > CAP ? '最多 60 分，已補到 60 分。' : '電視已收到。';
+      if (S.mode === 'done' && S.bal > 0) { S.mode = 'open'; setPressed('modes', 'mode', 'open'); }
+      render('#' + m + ' [data-act="add"][data-min="' + n + '"]');
+    }, 2000);
+  } else if (act === 'zero') { S.confirm = 'y'; render('#' + m + ' [data-act="zero-ok"]'); }
+  else if (act === 'zero-no') { S.confirm = ''; render('#' + m + ' [data-act="zero"]'); }
+  else if (act === 'zero-ok') {
+    S.confirm = ''; S.bal = 0; S.mode = 'done'; S.note = '已歸零，電視會馬上鎖住。';
+    S.log.unshift(['剛剛', '爸爸', '歸零']); setPressed('modes', 'mode', 'done');
+    render('#' + m + ' [data-act="zero"]');
+  }
+});
+render();
+</script>

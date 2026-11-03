@@ -1,0 +1,3 @@
+僅示範連結格式，以下不是有效登入連結；正式連結請在設定自己的鑰匙後用 python3 gate.py --links 產生。
+範例手機一: http://example-mac.local:8790/#t=DEMO_ONLY_NOT_A_REAL_TOKEN
+範例手機一: http://192.0.2.26:8790/#t=DEMO_ONLY_NOT_A_REAL_TOKEN

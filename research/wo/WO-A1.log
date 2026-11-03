@@ -1,0 +1,28 @@
+全部完成。回報如下。
+
+## 檔案清單（`tvagent/` 底下，只新增、沒碰別處）
+
+- `AndroidManifest.xml` — package `com.example.tvagent`，minSdk 26／targetSdk 30，無 LAUNCHER，`debuggable=true`、`allowBackup=false`；權限 INTERNET／RECEIVE_BOOT_COMPLETED／FOREGROUND_SERVICE；BootReceiver、TestReceiver（皆 exported=true）、AgentService
+- `build.sh` — Docker 映像 javac＋d8＋aapt2＋apksigner，產出 `tvagent.apk`（keystore alias `tvagent`）
+- `debug.keystore`、`tvagent.apk` — 編譯產物
+- `src/com/example/tvagent/AdbClient.java` — 純 Java adb 連線端（零 `android.*`），附 `main` 供 Docker 用
+- `src/.../AgentService.java` — 前景服務：單執行緒序列化所有 adb 動作、60 秒心跳、SELFTEST
+- `src/.../BootReceiver.java`、`TestReceiver.java` — 只啟動服務，不做 adb
+- `test/AdbClientTest.java`＋`test.sh` — 假 adbd＋測試向量，Docker 內編譯執行
+- `README.md` — 用途、安裝、讀紀錄、移除
+
+## 設計摘要（白話）
+
+- **序列化方式**：App 裡所有 adb 連線（心跳、自我測試）都排進服務內同一條單執行緒，一次只做一件事，不會打架。廣播接收器只負責叫服務起床。
+- **錯誤分類**：6 種固定類別——`connect` 連不上、`auth_timeout` 等授權超過時限（預設 60 秒，可調）、`auth_rejected` 認證中斷線、`tls_required` 對方要求 TLS（不實作，直接回報）、`protocol` 封包壞掉或亂序、`io` 其他傳輸問題。每次連線都設時限，保證不卡住。
+- **SELFTEST 流程**：先 `echo ok` 確認有授權 → 查 tkey 已在停用清單就 `SKIP` 不動 → 停用 → 查清單有 tkey → 啟用 → 查清單無 tkey → `selftest PASS`；任一步失敗都先再跑一次啟用恢復，記 `selftest FAIL <步驟>`。簽章、私鑰絕不寫進 log。
+- **一個關鍵細節**：測試向量證明了 adbd 的簽章是把 20 bytes token「當成現成摘要」直接包 DigestInfo（不能用 `SHA1withRSA`，那會再雜湊一次，結果不同）；實作時也發現真 adbd 未授權時只回 `AUTH TOKEN`（不會先回 `CNXN`），假 adbd 已照此修正。
+
+## 五個指令實際輸出
+
+1. `sh tvagent/build.sh && ls -la tvagent/tvagent.apk` → 成功，`-rw-r--r-- 20888 tvagent/tvagent.apk`（附帶一個無害的 deprecation 提示，是 pre-26 相容分支）
+2. `aapt2 dump badging … | grep -E "package:|targetSdk|launchable"` →
+   `package: name='com.example.tvagent' …`、`targetSdkVersion:'30'`，**無 launchable-activity**（grep 無此行）
+3. `sh tvagent/test.sh 2>&1 | tail -5` → `err-badcksum-kind/time`、`err-garbage-kind/time`、`ALL PASS`（全 29 項 PASS，含向量比對、兩輪認證、萬位元組多 WRTE 拼接、6 種錯誤分類＋耗時斷言）
+4. `grep -rn "disable-user\|pm enable\|youtube" tvagent/src` → 只有 `AgentService.java` 兩行（停用／啟用 `com.example.tkey` 的固定指令），無 `youtube`
+5. `git status --porcelain --untracked-files=all` → 只有 `tvagent/` 下 11 個未追蹤檔案（10 個源文件＋腳本＋keystore＋apk），`tvgate/`、`tkey/`、`memlog/` 等零變動；testdata 原封未動

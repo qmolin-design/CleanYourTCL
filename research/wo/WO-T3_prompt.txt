@@ -1,0 +1,14 @@
+你是施工工人。工作目錄：/Users/example-owner/TV-wt-tvgate4（git worktree，分支 tvgate-v4）。只改 tvgate/ 下的檔案。
+
+先完整讀 research/PLAN_v4_ui.md（整份都是規格，重點是「v3 行為修正」「新增設計」「端點」「失效表」「WO-T3」），以及 research/PLAN_v3_service.md 的「運作方式」（既有規則，除了 v4 明寫要改的，全部保留）。再讀現有 tvgate/gate.py、tvgate/test_gate.py、tvgate/README.md、tvgate/testdata/usagestats_events_sample.txt。
+
+照 WO-T3 施工：改 gate.py、test_gate.py、README.md（加網頁使用、設備連結、鑰匙輪替、限制說明、還原步驟；捷徑一節改成「也可用捷徑，header 帶各自設備鑰匙」）。HTML／CSS／JS 內嵌在 gate.py。只用 Python 3.12 標準函式庫。WO-T3 完成標準第 1 項列的每一個測試都要有，原有 14 個測試的斷言不得放寬。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate4/tvgate && python3 test_gate.py   （全過、150 秒內、無殘留子程序）
+  stat -f %m ~/Library/Logs/tvgate.log   （跑測試前後各一次，數字要相同）
+  git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all   （只有 tvgate/ 下的檔）
+
+禁止：不執行真的 adb、不連電視、不安裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、不寫 ~/Library/Logs/tvgate.log、不改 tvgate/ 以外的檔、不 commit、不 push。
+
+最後回報：每個檔改了什麼（各 2～3 行）、WO-T3 第 1 項每一條對應的測試名稱、上面三個指令的實際輸出、規格裡不確定或沒做到的地方。

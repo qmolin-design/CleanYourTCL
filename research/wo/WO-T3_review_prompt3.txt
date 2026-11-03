@@ -1,0 +1,16 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網、不要執行測試（已跑過：31 個全過）。工作目錄 /Users/example-owner/TV-wt-tvgate4。
+只讀以下內容，不要讀清單外的檔案：
+- research/PLAN_v4_ui.md（整份：規格與 WO-T3 完成標準）
+- research/PLAN_v3_service.md 的「運作方式」一節（既有規則）
+- tvgate/gate.py、tvgate/test_gate.py、tvgate/README.md
+- `git -C /Users/example-owner/TV-wt-tvgate4 diff main -- tvgate/test_gate.py`（用來確認原有 14 個測試的斷言沒有被放寬）
+
+任務：
+1. 逐條對照 WO-T3 完成標準第 1 項每個子項，指出對應測試；缺的、或寫法能假通過（沒檢查完整參數／精確數值／狀態、靠真時鐘 sleep 而可能 flaky、把錯誤吞掉）的，列出來。
+2. 原有 14 個測試的斷言有沒有被刪除或放寬（例如參數比對變寬、時間上限變大、檢查被移除）。
+3. gate.py 是否違反規格，特別是：calc 的段落結束規則、4 小時上限、min(now,last_fetch)、跨午夜切分；GATE_LOCK 事件；抓取執行緒不拿 adb_lock、不改鎖定狀態；回家觸發只有 wake 或 Mac 回到家用網路（電視重連不給寬限）；schedule_due 用時間點日期判斷週幾、last_check 先存再處理、600 秒窗口；鑰匙檔錯誤一律 401 且改檔即生效；sqlite 單一連線＋db_lock、DB 壞不影響鎖定；GET／HEAD／POST 路徑規則；網頁不含鑰匙、讀 hash 不清 hash；--links 預設 8790 且印 IP 版。
+4. 安全：鑰匙不寫進任何 log；網頁 innerHTML 是否把伺服器資料（設備名、log detail）未跳脫就插入。
+
+輸出格式：第一行只能是 PASS 或 FAIL。之後列問題，每條：檔案:行號、問題、為什麼違反規格。只有「違反規格或測試可假通過」才算 FAIL 理由；其他列「非阻擋」。繁體中文。
+
+這是第 3 輪審查（第 2 次退修後）。必須逐項確認：讀 /Users/example-owner/TV/research/wo/WO-T3_fix2_prompt.txt（允許讀取）的 1～5，以及 /Users/example-owner/TV/research/wo/WO-T3_fix1_prompt.txt 的 A1～A8、B1～B5、C1～C5 沒有退步，每項回答「做到／沒做到＋檔案:行號」。另外找出任何與 state.json、DB、鑰匙檔、meta 壞資料相關、會讓服務崩潰或 monitor 執行緒死掉的路徑。測試數現在是 39 個。

@@ -1,0 +1,24 @@
+你是施工工人，這是 WO-A1 退修第 2 次（你在這張工單的最後一次機會，再失敗就換人接手）。工作目錄：/Users/example-owner/TV-wt-tvagent（git worktree，分支 tvagent-fix3，來自 main）。只改 tvagent/src/com/example/tvagent/AdbClient.java、tvagent/test/AdbClientTest.java（只可新增測試）、tvagent/tvagent.apk（重 build）。
+
+先讀：/Users/example-owner/TV/research/wo/WO-A1_fix1_prompt.txt（上次退修）、research/PLAN_v5_spike.md 檔尾「實機發現」。
+
+實機失敗（電視 Android 11，安裝退修 1 之後的版本）：
+- agent.log：`adb=io:key error: java.security.spec.RSAPrivateKeySpec cannot be cast to java.security.spec.RSAPrivateCrtKeySpec`，SELFTEST 在認證前就失敗。
+- 電視上的金鑰檔 files/adbkey 是 App 第一次執行時自己產生的 PEM PKCS#8，Opus 已拉回 Mac 用 openssl 檢查：是完整 CRT 金鑰（publicExponent 65537、prime1…都在），格式正常。
+- 所以：Conscrypt 的 KeyFactory.getKeySpec(priv, RSAPrivateCrtKeySpec.class) 回傳的是 RSAPrivateKeySpec（不含 CRT），程式碼 AdbClient.java:220 被隱式轉型而丟 ClassCastException；備援 parsePkcs8(priv.getEncoded()) 也失敗——Conscrypt 對非 CRT 金鑰物件的 getEncoded() 很可能不含 publicExponent（為 0 或缺欄位）。
+
+要做：
+1. 公鑰（modulus、publicExponent）一律直接從金鑰檔的 DER 內容解析（parsePkcs8／parsePkcs1 對檔案位元組），不得再從 Conscrypt 的金鑰物件（getKeySpec／getEncoded／任何轉型）取得公鑰參數。私鑰物件只用於簽章（Cipher RSA/ECB/NoPadding）。
+2. 第一次產生金鑰時：用產生出來的 KeyPair 的 public（RSAPublicKey 介面在 Conscrypt 有實作，可用 getModulus/getPublicExponent；若仍不放心，產生後立刻把寫入的檔案重新讀回並解析）。產生與載入兩條路徑要得到相同公鑰。
+3. 解析失敗時錯誤訊息要具體（哪一步、哪個欄位），不得吞掉被抑制的例外。
+4. 新增測試（只新增，不改既有斷言）：模擬「私鑰物件 getKeySpec 回傳非 CRT spec、getEncoded 回傳不含 publicExponent 的內容」的情況，從 testdata/adbkey 檔載入仍要得到與 adbkey.pub 逐 byte 相同的公鑰。
+5. 用 tvagent/testdata 以外、從真電視拉回的金鑰格式不需要額外處理（同為 PEM PKCS#8 2048 位元）。
+
+完成前自己跑並貼實際輸出：
+  cd /Users/example-owner/TV-wt-tvagent && sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+  sh tvagent/test.sh 2>&1 | tail -3
+  grep -n "getKeySpec\|getEncoded()\|RSAPrivateCrtKeySpec)" tvagent/src/com/example/tvagent/AdbClient.java
+  git diff -U0 -- tvagent/test | grep -c '^-[^-]'   （應為 0）
+  git status --porcelain --untracked-files=all
+禁止：同原工單（不連電視、不執行 adb、不碰上列以外檔案、不加外部函式庫、不 commit）。
+最後回報：改了什麼、為什麼這次在 Android 上不會再失敗、上面指令的實際輸出。

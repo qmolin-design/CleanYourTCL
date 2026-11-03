@@ -1,0 +1,11 @@
+WO-U4 施工完成，改動留在工作區、沒 commit。
+
+- **新檔** `cfquota/page.mjs`：照 mock 排法 B 搬的新家長頁（c-sheet、row3 按鈕、爸媽時段卡＋不扣時間小標、u-meter、7 天圖、紀錄、頁尾）；JS 全字串串接，無反引號／`${`。
+- **改** `cfquota/lib.mjs`：舊 `page` 常數刪掉改 import；`usage()` 加 `recent`（今天−6 到今天，舊→新、缺補 0，查詢範圍擴大）；其餘邏輯未動。
+- **測** `lib.test.mjs` 加 U4-①②③；`node --test`：29/29 PASS，既有測試未動。
+- **文件** `README.md` 補 `recent` 與新版面說明。
+- **回報** `research/wo/WO-U4_report.md`（含各狀態渲染結果、diff、疑慮 4 點）；**預覽** `research/wo/WO-U4_preview.html`（單檔，頂部有 A–F 狀態切單，雙 script 皆 `node --check` 通過）。
+
+驗證方式：本機無瀏覽器，用 DOM stub 在 node 跑頁面 JS，6 種假 state（開放／已鎖封頂待接收／未知／失聯／無電視／XSS）渲染皆符合計畫，XSS 字串全跳脫，歸零確認框、note、送出中 disabled 互動流程也跑過。
+
+疑慮放回報末節：主要是無電視時「更新：—」為自選、時段中「不扣時間」出現兩次（照計畫沿用＋加小標）、真機目檢請 Opus 開預覽檔看。

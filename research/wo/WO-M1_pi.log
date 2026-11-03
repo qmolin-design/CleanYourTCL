@@ -1,0 +1,16 @@
+施工完成，工作區未 commit。摘要：
+
+**伺服器（`lib.mjs`）**
+- `adultWindow(nowS, sched, offUntil, manualUntil)`：排程壞掉視為空、手動照常；`off` 只過濾排程；手動 `[nowS, manual]` 再合併一次。省略第 4 參數＝舊結果（既有 A1-①～⑤行為不變）。
+- `adult_manual` 驗證：壞 JSON／非數字／過期／>24h 一律視為無。
+- `state.adult` 加 `manual`／`source`（合併生效＝`manual`）／`choices`（60／120 永遠給，`next` 排除手動、套 off、`>now` 且 `≤now+86400` 才給）。
+- `on`（until 伺服器算，`next` 無效→400，事件 `adult-on`）與 `kid`（刪手動＋該關才寫 off＋事件同一個 batch；冪等；最後寫入者勝）。
+
+**頁面（`page.mjs`）**：整張爸媽卡刪除；「紀錄」後加「模式」區，mock 的 `.mode`／`.seg`／`.dur` 與 V 文字；`modeAsk`／`modeBusy` 旗標保證送出中或展開中 refresh 不重繪、按鈕鎖住。
+
+**驗收**
+- `node --test`：35/35 PASS（既有 29 全過，含 A1-①～⑪）。
+- 四態截圖 `research/wo/m1_{kid,ask,adult_manual,adult_sched}.png`，`scrollWidth` 四張皆 390。
+- 報告 `research/wo/WO-M1_report.md`（changed files、情境路由、測試對照、`git diff --stat`、3 個疑慮）。
+
+**要 Owner 看的疑慮**（詳見報告）：① A1-⑥ 的 exact `deepEqual` 被迫同步加三新鍵——不加則測試必紅，這是斷言同步非放寬，但字面碰了「API 測試不可改」；② 午夜 `until` 顯示「到 24:00」（跟 mock）而非「到明天 00:00」，要改是一行的事。

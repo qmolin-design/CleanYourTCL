@@ -1,0 +1,19 @@
+你是接手施工者（前一位工人已做滿 3 次）。工作目錄：/Users/example-owner/TV-wt-tvgate5（git worktree，分支 tvgate-v4fix，來自 main）。只改 tvgate/gate.py、tvgate/test_gate.py、tvgate/README.md。
+規格：research/PLAN_v4_ui.md、research/PLAN_v3_service.md 的「運作方式」。禁止：不執行真 adb、不連電視、不裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、~/Library/Logs/tvgate.log、不 commit。
+
+問題（大腦審定時發現，在 main 上 test_hook_sleep_wake_and_grace 連續 3 次失敗；前一個工作樹偶然通過）：
+- 測試競態：送 `sleep` 後，測試把假電視設成 locked=0、front=1，再送 `wake`；這段空檔中 monitor（0.4 秒週期）先對帳把 YouTube 鎖回（log 依序出現 `relock locked`、`arrival YouTube playing; grace`），所以 test_gate.py:275 `assertFalse(self.locked())` 失敗。
+- 背後的真 bug：Owner 的 Mac 開著 Power Nap（pmset powernap 1）。闔蓋休眠期間 Mac 會「暗喚醒」，程序短暫執行但不會收到 NSWorkspace didWakeNotification。目前 gate.py 在 `sleep` 之後仍會對帳、到期鎖、排程切斷 → 會在 Mac「不在」期間把 YouTube 鎖回，違反 Owner 裁定「Mac 不在＝開放」。
+
+要做：
+1. gate.py：收到 sleephook 的 `sleep`（不論回 ok 或 fail）→ 進入「休眠中」狀態；休眠中 monitor 不呼叫任何會鎖電視的動作（對帳停回、到期鎖、排程切斷都不做），使用時間抓取也暫停。排程時間點落在休眠中 → 不切，記 `schedule-skipped`、detail「Mac 休眠」。授權在休眠中到期 → 不鎖，等 `wake` 後照常處理（記 expire、套用，前景是 YouTube 就走回家寬限）。收到 `wake` → 離開休眠中，照現有回家處理。SIGTERM 行為不變。休眠中狀態只在記憶體，不存檔（服務重啟＝醒著）。
+2. test_gate.py：把 test_hook_sleep_wake_and_grace 的競態段改成確定性：送 `sleep`（ok）→ 把假電視設成 locked=0、front=1 → 等至少 3 個對帳週期（用 wait_for 等 calls 增加或等時間，但斷言要在確定 monitor 跑過之後）→ 斷言仍未鎖、沒有 relock → 送 `wake` → 斷言進入寬限（通知被呼叫、未鎖、log 有 grace）→ front=0 → 一個週期內鎖回。
+   新增測試：休眠中授權到期 → 不鎖、沒有 expire；wake 後 → expire 1 筆並鎖（前景非 YouTube）。休眠中排程時間點到 → 不切、`schedule-skipped` detail 含「Mac 休眠」。
+3. README 限制段補一句：Mac 休眠（含 Power Nap 暗喚醒）期間服務不會鎖電視。
+4. 其他測試的斷言不得放寬。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate5/tvgate && for i in 1 2 3 4 5; do python3 test_gate.py 2>&1 | tail -1; done   （5 次都 OK）
+  stat -f %m ~/Library/Logs/tvgate.log   （前後相同）
+  git -C /Users/example-owner/TV-wt-tvgate5 status --porcelain --untracked-files=all   （只有上述三個檔）
+最後回報：改了什麼、新測試名稱、上面指令的實際輸出。

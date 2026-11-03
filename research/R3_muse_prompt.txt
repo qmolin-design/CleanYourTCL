@@ -1,0 +1,17 @@
+【你的題目：方案 C 自建輕量機制（iPhone → 家中常駐服務 → ADB 控制 YouTube）技術可行性】
+輸出檔：/Users/example-owner/TV/research/R3_selfhost_adb_MUSE.md
+查資料用 webfetch 工具。websearch 工具目前後端會回 403，不要依賴它；要搜尋就用 webfetch 抓 https://html.duckduckgo.com/html/?q=<關鍵字>（或 https://www.bing.com/search?q=<關鍵字>），GitHub 專案用 webfetch 抓 README 與 https://api.github.com/repos/<owner>/<repo>（看最後更新、是否 archived）。
+只寫你實際用 webfetch 讀到內容的 URL。
+
+要查：
+1. 網路 ADB 在 Android TV 11 的現況：Android TV 11 是用「網路偵錯（adb tcpip 5555）」還是 Android 11 的「無線偵錯（配對碼）」？重開機後是否要重新開啟？RSA 授權「一律允許」是否持久？TCL 機種有無回報重開機後網路 ADB 被關閉。
+2. 用 `pm disable-user --user 0 com.google.android.youtube.tv`（與 `pm enable`）、`am force-stop`、`pm suspend`／`cmd package suspend`（Android 7+ 的 suspend 機制，App 圖示變灰、無法開啟）鎖 YouTube 的差異：
+   - 哪個在重開機後保持狀態？
+   - 哪個需要 root？在 adb shell（uid shell）權限下可不可以執行？
+   - 停用/暫停後：遙控器 YouTube 快捷鍵、Google Assistant 語音「播放 YouTube」、Chromecast built-in（iPhone YouTube App 投放）各會怎樣？投放是否會失敗（因為投放的接收端就是 YouTube TV App）？
+   - YouTube Kids（com.google.android.youtube.tvkids）與第三方播放器（SmartTube 等）、內建瀏覽器開 youtube.com 如何處理。
+3. 「單次 N 分鐘授權」邏輯：核准 → enable → 計時 → 到期 am force-stop + disable。要求：從核准起算、不暫停、電視關機/重開也照算、到期時電視關機則下次開機要能被鎖回、狀態以服務端為準。服務端斷線時電視停在什麼狀態（若授權期間服務掛掉，YouTube 會一直開著 → 需要什麼保護，例如開機自檢、定期 reconcile）。電視待機（Android TV 常見的假待機）時 ADB 能否連上。
+4. 家中常駐服務的選項與成本：現有 Mac 常駐、樹莓派、NAS（Docker）、Home Assistant（有 Android TV / ADB 整合：androidtv integration、ADB Server add-on）、甚至路由器。比較：硬體成本、耗電、維護難度。Home Assistant 能不能用 iPhone HA App 的按鈕＋timer helper 直接做到「單次 30 分鐘」而不寫程式？
+5. iPhone 端：iOS 捷徑（Shortcuts）呼叫 HTTP API；在外遠端操作的方式（Tailscale、HA Cloud Nabu Casa 月費、Cloudflare Tunnel）與資安注意（ADB 埠絕不可對外開放、API 要有 token）。
+6. 防繞過：孩子能否自己進設定 → 應用程式 → 啟用 YouTube？（disable-user 的 App 在 Android TV 設定裡是否可被一般使用者按「啟用」→ 這是關鍵風險，請查清楚；suspend 是否不可由使用者解除）。恢復原廠設定會清掉一切的風險。
+7. 最後列出：「不必開發 Android TV App 就能做到」與「做不到 / 需額外手段」的清單。

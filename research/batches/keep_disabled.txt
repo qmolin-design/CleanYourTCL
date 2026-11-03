@@ -1,0 +1,15 @@
+com.tcl.bi
+com.tcl.overseasappshow
+com.tcl.messagebox
+com.tcl.waterfall.overseas
+com.tcl.esticker
+com.google.android.feedback
+com.google.android.partnersetup
+com.google.android.tvrecommendations
+com.tcl.tv.tclhome_passive
+com.tcl.copydatatotv
+com.tcl.MultiScreenInteraction_TV
+com.amazon.amazonvideo.livingroom
+com.google.android.videos
+com.google.android.youtube.tvmusic
+com.google.android.play.games

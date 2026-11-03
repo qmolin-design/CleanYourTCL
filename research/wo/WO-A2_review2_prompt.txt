@@ -1,0 +1,4 @@
+你是獨立審查者（唯讀），複審 git worktree /Users/example-owner/TV-wt-a2（分支 adult-a2）WO-A2 的 fix1。不要改檔、不要 commit、不准 adb／wrangler。
+修正工單：/Users/example-owner/TV/research/wo/WO-A2_fix1_prompt.txt（先讀，說明兩個 bug）。工人回報：worktree 內 research/wo/WO-A2_report.md 檔尾「fix1」。diff：git diff -- tvagent/src tvagent/test。
+要審：①兩個 bug 是否確實修好（追 heartbeat 全段：重開機後第一跳、不在時段時每跳、時段中、時段剛結束、斷網中 adultEnd 已過期等情境，freeToWall 是否都正確）；②是否有其他會讓小孩少扣或多扣的路徑（含 clock=jump）；③新測試⑫⑬⑭是否有意義、既有測試沒放寬；④自己跑 sh tvagent/test.sh。
+輸出：第一行 PASS 或 FAIL，逐條發現（檔案:行號＋說明＋嚴重度），最後「建議」。繁體中文。

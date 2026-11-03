@@ -1,0 +1,26 @@
+你是施工工人，這是 WO-T1 的退修（第 2 次施工）。工作目錄：/Users/example-owner/TV-wt-tvgate（git worktree，分支 tvgate）。只改 tvgate/ 下的檔案。
+規格仍是 research/PLAN_v3_service.md 的「運作方式」「失效時的行為」「Owner 裁定」「WO-T1」四節；原工單規則與禁止事項不變（不執行真 adb、不連電視、不裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、不 commit）。
+兩位審核員的完整意見：/Users/example-owner/TV/research/wo/WO-T1_review2.md（GEMINI）、/Users/example-owner/TV/research/wo/WO-T1_review_dsf.md（DEEPSEEK）。先讀完。
+
+大腦裁定必須修的項目：
+A. test_gate.py
+ 1. assert_lock_sequence 與所有「收到某指令」的檢查，只看該步驟之後新增的呼叫（先記 before=len(calls)），並比對完整參數：鎖＝['-s','192.0.2.69:5555','shell','am','force-stop','com.google.android.youtube.tv'] 接著 ['-s','192.0.2.69:5555','shell','pm','disable-user','--user','0','com.google.android.youtube.tv']；開＝['-s','192.0.2.69:5555','shell','pm','enable','--user','0','com.google.android.youtube.tv']。用在 test_expiry、test_open_and_lock、test_reconcile_and_music、test_concurrent_lock、test_hook_sleep_wake_and_grace（sleep 那段要驗 enable 完整參數）、test_sigterm_opens。
+ 2. test_read_failure：empty 與 exit 1 兩種情況各自獨立（各自先讓 tv=open 或 locked 的成功讀取成立，再切故障模式，等 tv 變 unknown），並各自驗 /open 回 ok=false 且含 until。
+ 3. test_open_and_lock、test_concurrent_lock：/lock 後斷言 /status 的 tv == 'locked'（不只看假 adb 狀態檔）。
+ 4. test_reconcile_and_music：停回要在 3 個對帳週期內（以 TVGATE_INTERVAL 計）完成，用時間上限斷言。
+ 5. 寬限中 /lock：先清掉通知紀錄、送 wake（前景＝YouTube）、等到「通知被呼叫」且確認 2 個週期後仍未鎖（證明寬限成立），再送 /lock，斷言 1 秒內鎖且 /status tv=locked、authorized=false。
+ 6. test_auth_and_validation：/lock 與 /status 也測錯 token／缺 token → 401；401 後 /status（正確 token）的 authorized、until 沒變；GET /open、GET /lock → 405。
+ 7. test_restart_and_corrupt_state：重開後 until 與重開前相同。
+B. gate.py
+ 1. 重新連線改成 `adb connect 192.0.2.69:5555`（connect 不帶 -s；其他裝置指令照舊一律帶 -s）。
+ 2. foreground() 讀取失敗（exit≠0、逾時、空輸出）＝「不知道」：回家觸發時與寬限中遇到「不知道」，這一輪不鎖也不通知，下一輪再判斷；只有確定前景不是 YouTube 才鎖。加一個測試涵蓋：wake 時 dumpsys 失敗 → 不鎖；之後 dumpsys 恢復且前景非 YouTube → 鎖。
+C. com.example.tvgate.plist：加 StandardOutPath、StandardErrorPath 為 /Users/example-owner/Library/Logs/tvgate.out、/Users/example-owner/Library/Logs/tvgate.err。
+
+不必修（大腦已駁回或接受）：monitor 重複讀兩次、/open 19 秒 deadline、README 安裝路徑。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate/tvgate && python3 test_gate.py   （全過、90 秒內、無殘留子程序）
+  swiftc -o "$TMPDIR/sleephook" sleephook.swift
+  plutil -lint com.example.tvgate.plist
+  git -C /Users/example-owner/TV-wt-tvgate status --porcelain --untracked-files=all  （只有 tvgate/ 下的檔）
+最後回報：每項（A1～A7、B1、B2、C）改在哪、上面四個指令的實際輸出末幾行。

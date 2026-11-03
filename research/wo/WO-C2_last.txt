@@ -1,0 +1,215 @@
+WO-C2 已施工並產生 [tvagent.apk](/Users/example-owner/TV-wt-c2/tvagent/tvagent.apk)。測試、建置、簽章與檔案範圍檢查通過；完成標準 3 有一項**輸出格式差異**：`aapt2` 顯示 `application: label='看電視時間'`，沒有印出指定的 `application-label:` 行，因此不能宣稱七項逐字全過。
+
+改動檔案：
+
+- 修改：`tvagent/AndroidManifest.xml`、`README.md`、`src/com/example/tvagent/AgentService.java`、`test.sh`、`tvagent.apk`
+- 新增：`src/com/example/tvagent/Quota.java`、`NoticeActivity.java`、`KickReceiver.java`、`test/QuotaTest.java`
+- 刪除：`src/com/example/tvagent/TestReceiver.java`
+
+**1. 測試：exit 0**
+
+```text
+PASS vector-pubkey
+PASS vector-sig
+PASS vector-pubkey-nul
+PASS vector-loadOrGenerate-pubkey
+PASS opaque-priv-pubkey
+PASS direct-priv-pubkey
+PASS conscrypt-broken-object-throws
+PASS conscrypt-broken-error-specific
+PASS conscrypt-file-pubkey-matches-pub
+PASS generate-writes-file
+PASS generate-load-same-pubkey
+PASS round1-fake-clean
+PASS round1-echo
+PASS round1-sent-pubkey
+PASS round1-key-parsed
+PASS round1-time
+PASS round2-fake-clean
+PASS round2-echo
+PASS round2-no-pubkey
+PASS big-fake-clean
+PASS big-concat
+PASS truncated-throws
+PASS truncated-time
+PASS err-connect-kind
+PASS err-connect-time
+PASS err-authtimeout-kind
+PASS err-authtimeout-time
+PASS err-disconnect-kind
+PASS err-disconnect-time
+PASS err-stls-kind
+PASS err-stls-time
+PASS err-badmagic-kind
+PASS err-badmagic-time
+PASS err-badcksum-kind
+PASS err-badcksum-time
+PASS err-garbage-kind
+PASS err-garbage-time
+PASS wl-keep
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+PASS wl-broken-pipe
+ALL PASS
+PASS usage 60 and end state
+PASS usage screen off
+PASS usage other resumed
+PASS usage initial
+PASS usage shutdown startup
+PASS usage bounds
+PASS clock jump
+PASS clock tolerance boot
+PASS consume limited
+PASS consume new date
+PASS sync sorted and dedup
+PASS sync repeated empty
+PASS sync reset
+PASS sync initial
+PASS sync capped
+PASS sync cap decrease
+PASS decide unknown
+PASS decide unlock
+PASS decide end lock
+PASS decide warn once
+PASS decide warn reset
+PASS alarm 20
+PASS alarm 2
+PASS alarm 330
+PASS alarm 302
+PASS alarm 3000
+PASS alarm background
+PASS save load
+PASS load garbage
+PASS load bad number
+PASS retry after unsaved sync
+ALL PASS
+```
+
+**2. 建置：exit 0**
+
+```text
+Note: src/com/example/tvagent/NoticeActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+```
+
+**3. APK badging 與 Manifest：實際輸出**
+
+```text
+package: name='com.example.tvagent' versionCode='2' versionName='2' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+sdkVersion:'26'
+targetSdkVersion:'30'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+uses-permission: name='android.permission.PACKAGE_USAGE_STATS'
+application: label='看電視時間' icon=''
+application-debuggable
+feature-group: label=''
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+other-activities
+other-receivers
+other-services
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales:
+densities:
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: manifest (line=2)
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=2
+    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="2" (Raw: "2")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=34
+    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="14" (Raw: "14")
+    A: package="com.example.tvagent" (Raw: "com.example.tvagent")
+    A: platformBuildVersionCode=34
+    A: platformBuildVersionName=14
+      E: uses-sdk (line=3)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=26
+        A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=30
+      E: uses-permission (line=4)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.INTERNET" (Raw: "android.permission.INTERNET")
+      E: uses-permission (line=5)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.RECEIVE_BOOT_COMPLETED" (Raw: "android.permission.RECEIVE_BOOT_COMPLETED")
+      E: uses-permission (line=6)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.FOREGROUND_SERVICE" (Raw: "android.permission.FOREGROUND_SERVICE")
+      E: uses-permission (line=7)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.PACKAGE_USAGE_STATS" (Raw: "android.permission.PACKAGE_USAGE_STATS")
+      E: application (line=8)
+        A: http://schemas.android.com/apk/res/android:label(0x01010001)="看電視時間" (Raw: "看電視時間")
+        A: http://schemas.android.com/apk/res/android:debuggable(0x0101000f)=true
+        A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false
+          E: service (line=9)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".AgentService" (Raw: ".AgentService")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=false
+          E: receiver (line=10)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".BootReceiver" (Raw: ".BootReceiver")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+              E: intent-filter (line=10)
+                  E: action (line=10)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.action.BOOT_COMPLETED" (Raw: "android.intent.action.BOOT_COMPLETED")
+          E: receiver (line=11)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".KickReceiver" (Raw: ".KickReceiver")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+              E: intent-filter (line=11)
+                  E: action (line=11)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.example.tvagent.KICK" (Raw: "com.example.tvagent.KICK")
+          E: receiver (line=12)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".AlarmReceiver" (Raw: ".AlarmReceiver")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=false
+          E: activity (line=13)
+            A: http://schemas.android.com/apk/res/android:theme(0x01010000)=@0x0103000a
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".NoticeActivity" (Raw: ".NoticeActivity")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+            A: http://schemas.android.com/apk/res/android:excludeFromRecents(0x01010017)=true
+```
+
+**4. 簽章：`git cat-file -e` 成功；兩版 digest 相同；`old.apk` 已刪除**
+
+```text
+Signer #1 certificate DN: CN=tvagent
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+Signer #1 certificate SHA-1 digest: 1c7d25e3910e0cfa2b33d9cff10a848c6d8bde0c
+Signer #1 certificate MD5 digest: 3250af7a975204457a63833c6887546f
+Signer #1 certificate DN: CN=tvagent
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+Signer #1 certificate SHA-1 digest: 1c7d25e3910e0cfa2b33d9cff10a848c6d8bde0c
+Signer #1 certificate MD5 digest: 3250af7a975204457a63833c6887546f
+```
+
+**5. keystore 與 testdata**
+
+```text
+exit=0
+```
+
+**6. 原始碼 grep**
+
+```text
+tvagent/src/com/example/tvagent/AgentService.java:19:    static final String DISABLE = "pm disable-user --user 0 com.google.android.youtube.tv";
+exit=1
+tvagent/src/com/example/tvagent/NoticeActivity.java:12:        String kind = getIntent().getStringExtra("kind");
+tvagent/src/com/example/tvagent/AgentService.java:46:        if (intent != null) intent.getStringExtra("reason");
+```
+
+其中 `exit=1` 是 `tkey`／`SELFTEST` 搜尋無符合項。
+
+**7. Git 狀態**
+
+```text
+ M tvagent/AndroidManifest.xml
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ D tvagent/src/com/example/tvagent/TestReceiver.java
+ M tvagent/test.sh
+ M tvagent/tvagent.apk
+?? tvagent/src/com/example/tvagent/KickReceiver.java
+?? tvagent/src/com/example/tvagent/NoticeActivity.java
+?? tvagent/src/com/example/tvagent/Quota.java
+?? tvagent/test/QuotaTest.java
+```
+
+規格疑問／保守選擇：完成標準要求的 `application-label:` 字面輸出與本次 `aapt2` 實際輸出不同；Manifest 與 badging 均顯示正確名稱，依工單保留無 `res/`、不改 `build.sh` 的做法。
+
+未連電視、未執行 adb、未 commit 或 push；因此實機的 UsageStats、鎖定與 Cloudflare 同步尚未驗證。

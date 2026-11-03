@@ -1,0 +1,16 @@
+【你的題目：需求 A 電視瘦身工具與卡頓診斷】
+輸出檔：/Users/example-owner/TV/research/R2_debloat_DEEPSEEK.md
+查資料用 webfetch 工具。websearch 工具目前後端會回 403，不要依賴它；要搜尋就用 webfetch 抓 https://html.duckduckgo.com/html/?q=<關鍵字>（或 https://www.bing.com/search?q=<關鍵字>），GitHub 專案用 webfetch 抓 README 與 https://api.github.com/repos/<owner>/<repo>（看最後更新、是否 archived）。
+只寫你實際用 webfetch 讀到內容的 URL。
+
+要查：
+1. CleanYourTV、tv-debloat、UAD-NG（Universal Android Debloater Next Generation）、Projectivy Launcher，各自：
+   - 本質是什麼（ADB 腳本／GUI 停用工具／替代桌面）、運作方式（pm disable-user、pm uninstall --user 0、只換 launcher）。
+   - 是否真的降低 RAM 與背景 CPU，還是只換首頁外觀（Projectivy 換桌面後，原 TCL launcher 與推薦服務是否仍在背景跑？要搭配停用原 launcher 嗎？停用原 launcher 的風險）。
+   - 是否支援 Android TV 11、是否有 TCL（尤其 RT2851／RT51M 平台、P715/P615/P725 系列）的清單或使用回報；哪些套件被回報停用後造成問題（開不了機、遙控器失效、HDMI-CEC、訊號源、OTA 失效等）。
+   - 維護狀態（最後更新、是否 archived）、授權、需要什麼前置（開發者選項、網路 ADB）。
+   - 還原方式（pm enable、cmd package install-existing、恢復原廠）與還原限制。
+2. 「停用（disable-user）」vs「為使用者 0 解除安裝（uninstall --user 0）」vs 真解除安裝：差異、可逆性、OTA 更新後會不會回來、恢復原廠能否救回。給建議：本案應以哪種為主。
+3. TCL Android TV 常見預載套件類別（TCL 推薦／廣告／遙測／TCL Channel／T-Cast 等，用 com.tcl.* 等套件名舉例），標出「通常可安全停用」「不要碰」（Wi-Fi、藍牙遙控器、HDMI/TvInput、Google Play 服務、Widevine/DRM、系統更新、輸入法、TV Settings）兩類，並強調須在本機用 `pm list packages` 實際比對，不可照抄。
+4. 卡頓診斷：列出可在 ADB shell 執行的唯讀診斷指令（例如 dumpsys meminfo、cat /proc/meminfo、df -h /data、dumpsys cpuinfo、top -n 1、dumpsys activity processes、dumpsys diskstats、cmd package list packages -3、logcat 的 lowmemorykiller 訊息等），每個指令說明看什麼、什麼數值代表問題（例如可用 RAM 長期低於多少、/data 剩餘空間低於多少會造成卡頓、eMMC 老化徵兆）。只列出指令與判讀，不執行。
+5. 其他非工具的改善手段：清快取、關閉動畫縮放、關閉自動更新/背景 App、停用推薦頻道、恢復原廠，各自效果與風險。

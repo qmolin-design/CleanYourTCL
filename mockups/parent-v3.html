@@ -1,0 +1,276 @@
+<title>看電視時間 新樣式</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400&family=Hanken+Grotesk:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* hallmark · v2.0.0 · shape: app screen · scope: app · theme: coral (by request, round 2) · fonts: Google substitutes (General Sans→Hanken Grotesk) + Noto Sans TC */
+/* critique: Owner notes applied: framed screens, TV status as an icon, update time in the sheet corner, two button layouts, Hum-style usage and log in Coral material, layered week chart */
+/* layout: two phone-width screens (button layout A / B); tabs switch them under 60rem, side by side above it */
+:root {
+  --p-bg: oklch(95.5% 0.006 60); --p-ink: oklch(22% 0.012 40); --p-muted: oklch(46% 0.012 45); --p-rule: oklch(86% 0.008 55); --p-card: oklch(99.3% 0.003 70); --p-focus: oklch(54% 0.17 30);
+  --cjk: "Noto Sans TC", "PingFang TC", "Heiti TC", sans-serif;
+  --c-paper: oklch(97% 0.006 55); --c-paper-2: oklch(94.5% 0.007 55); --c-paper-3: oklch(91.5% 0.009 55);
+  --c-ink: oklch(21% 0.012 38); --c-ink-2: oklch(29% 0.013 40); --c-muted: oklch(47% 0.013 45);
+  --c-rule: oklch(87% 0.009 55); --c-cotton: oklch(98.8% 0.0045 80); --c-desk: oklch(94.3% 0.008 64);
+  --c-board: oklch(22% 0.011 40); --c-board-type: oklch(96.5% 0.006 70);
+  --c-accent: oklch(74% 0.125 30); --c-accent-2: oklch(54% 0.165 29); --c-paid: oklch(55.5% 0.15 33);
+  --c-ok: oklch(56% 0.11 150); --c-warn: oklch(55% 0.13 65);
+  /* chart: today strong, past days softer; YouTube a light cocoa, Netflix a peach */
+  --c-yt: oklch(60% 0.06 50); --c-yt-soft: oklch(72% 0.045 55); --c-nf: oklch(74% 0.11 35); --c-nf-soft: oklch(85% 0.06 40); --c-today-band: oklch(92% 0.02 50);
+  --c-edge: inset 0 1px 0 oklch(100% 0.005 80 / 0.9), inset 0 -1px 0 oklch(32% 0.03 50 / 0.07), 0 0 0 0.5px oklch(32% 0.03 50 / 0.22), 0 1px 0 oklch(32% 0.03 50 / 0.12);
+  --c-cast: 6px 5px 10px -6px oklch(32% 0.03 50 / 0.3); --c-cast-lift: 12px 10px 18px -8px oklch(32% 0.03 50 / 0.3);
+  --c-soft: 0 1px 2px oklch(32% 0.03 50 / 0.06), 0 10px 22px -14px oklch(32% 0.03 50 / 0.28);
+  --c-frame: 0 1px 2px oklch(32% 0.03 50 / 0.06), 0 6px 16px -8px oklch(32% 0.03 50 / 0.16);
+  --c-groove: inset 1px 1.5px 2px oklch(32% 0.03 50 / 0.16), inset -1px -1px 0 oklch(100% 0.005 80 / 0.9), 0 0 0 0.5px oklch(32% 0.03 50 / 0.2);
+  --c-font: "Hanken Grotesk", var(--cjk); --c-fig: "Geist Mono", ui-monospace, monospace;
+  --c-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .35 0 0 0 0 .25 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --dur-micro: 120ms; --dur-short: 200ms; --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html, body { overflow-x: clip; }
+body { background: var(--p-bg); color: var(--p-ink); font: 400 16px/1.5 var(--cjk); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--p-focus); outline-offset: 2px; transition: none; }
+.wrap { max-width: 60rem; margin: 0 auto; padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.intro { display: grid; gap: 6px; max-width: 40rem; }
+.intro h1 { margin: 0; font-size: 1.5rem; font-weight: 700; text-wrap: balance; }
+.intro p { margin: 0; color: var(--p-muted); }
+.ctl { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.ctl-group { display: grid; gap: 4px; }
+.ctl-label { font-size: 0.875rem; color: var(--p-muted); }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--p-card); border: 1px solid var(--p-rule); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 8px 14px; min-height: 40px; font-size: 0.9375rem; transition: background-color var(--dur-micro) var(--ease); }
+.seg button:hover { background: var(--p-bg); }
+.seg button[aria-pressed="true"] { background: var(--p-ink); color: var(--p-card); }
+.mocks { display: grid; gap: 24px; justify-items: center; }
+.col { width: 100%; max-width: 420px; min-width: 0; }
+.mock-name { font-size: 0.875rem; color: var(--p-muted); text-align: center; margin: 0 0 8px; }
+@media (max-width: 59.99rem) { .col.off { display: none; } }
+@media (min-width: 60rem) { .mocks { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } .tabs-group { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation: none !important; } }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* the screen */
+.mock { width: 100%; border-radius: 22px; overflow: clip; border: 1px solid var(--c-rule); box-shadow: var(--c-frame); background: var(--c-paper); color: var(--c-ink); font-family: var(--c-font); }
+.c-desk { background-color: var(--c-desk); background-image: radial-gradient(90% 120% at 0% 30%, var(--c-cotton), transparent 62%), var(--c-tex); padding: 16px 18px 22px; display: grid; gap: 14px; }
+.c-top { display: flex; justify-content: space-between; align-items: center; min-height: 36px; }
+.c-top b { font-weight: 600; font-size: 1.0625rem; }
+.tv { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 10px; background: var(--c-cotton); box-shadow: var(--c-edge); }
+.tv svg { width: 24px; height: 24px; display: block; }
+.tv .frame { fill: none; stroke: var(--c-ink-2); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.tv .screen { fill: var(--c-ok); opacity: 0.85; }
+.tv.lost .screen { fill: var(--c-paper-3); opacity: 1; }
+.tv .cut { stroke: var(--c-warn); stroke-width: 2; stroke-linecap: round; }
+.c-sheet { position: relative; background-color: var(--c-cotton); background-image: linear-gradient(100deg, var(--c-cotton), transparent 45%), var(--c-tex); box-shadow: var(--c-edge), var(--c-cast); border-radius: 8px; padding: 14px 18px 18px; display: grid; gap: 4px; }
+.c-sheet-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.c-lab { margin: 0; color: var(--c-muted); font-weight: 500; font-size: 0.9375rem; }
+.c-upd { margin: 0; color: var(--c-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.c-upd.late { color: var(--c-warn); font-weight: 500; }
+.c-big { margin: 0; display: flex; align-items: baseline; gap: 8px; line-height: 0.9; }
+.c-big .n { font-weight: 600; font-size: 5.5rem; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+.c-big .u { font-size: 1.5rem; font-weight: 500; }
+.c-line { margin: 6px 0 0; color: var(--c-ink-2); font-size: 0.9375rem; }
+.c-line + .c-line { margin-top: 0; }
+.c-stamp { position: absolute; right: 18px; bottom: 18px; margin: 0; font-weight: 700; font-size: 1.625rem; color: var(--c-paid); border: 3px solid var(--c-paid); border-radius: 6px; padding: 2px 10px; rotate: -8deg; opacity: 0.85; filter: url(#press); }
+.c-alert { margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--c-warn); background: var(--c-cotton); font-size: 0.9375rem; }
+.c-acts { display: grid; gap: 10px; }
+.c-acts.row4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.c-acts.row3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.c-acts.row3 .zero { grid-column: 1 / -1; min-height: 44px; }
+.c-btn { min-height: 52px; border: 0; border-radius: 8px; font-weight: 600; font-size: 1.0625rem; background-color: var(--c-cotton); background-image: var(--c-tex); color: var(--c-ink); box-shadow: var(--c-edge), var(--c-cast); transition: transform var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease); }
+.c-btn:hover { transform: translateY(-1px); box-shadow: var(--c-edge), var(--c-cast-lift); }
+.c-btn:active { transform: translateY(1px); }
+.c-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.c-btn.zero { color: var(--c-accent-2); background-color: var(--c-paper-2); }
+.c-confirm { display: grid; gap: 10px; padding: 12px 14px; border-radius: 8px; background: var(--c-cotton); box-shadow: var(--c-edge); }
+.c-confirm p { margin: 0; }
+.c-confirm div { display: flex; gap: 10px; }
+.c-ink-btn { border: 0; border-radius: 8px; min-height: 44px; padding: 0 18px; background: var(--c-board); color: var(--c-board-type); font-weight: 600; box-shadow: var(--c-cast); }
+.c-plain { border: 0; background: none; min-height: 44px; padding: 0 12px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--c-accent); }
+.note { margin: 0; font-size: 0.875rem; color: var(--c-accent-2); }
+.c-body { padding: 20px 18px 24px; display: grid; gap: 24px; }
+.c-h { margin: 0 0 10px; font-weight: 600; font-size: 1.125rem; }
+
+/* usage, Hum layout in Coral material */
+.u-meter { display: grid; gap: 8px; }
+.u-track { height: 16px; border-radius: 999px; background: var(--c-paper-2); box-shadow: var(--c-groove); overflow: hidden; display: flex; }
+.u-track i { display: block; height: 100%; }
+.u-track .yt { background: var(--c-yt); }
+.u-track .nf { background: var(--c-nf); }
+.u-meter p { margin: 0; font-size: 0.9375rem; color: var(--c-ink-2); }
+.u-pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+.u-pill { background-color: var(--c-cotton); background-image: var(--c-tex); border-radius: 12px; padding: 10px 12px; box-shadow: var(--c-edge), var(--c-soft); display: grid; gap: 2px; min-width: 0; }
+.u-pill span { font-size: 0.875rem; color: var(--c-muted); }
+.u-pill b { font-weight: 600; font-size: 1.625rem; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.u-pill small { font-size: 0.8125rem; color: var(--c-muted); }
+
+/* week chart */
+.chart { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 6px; }
+.chart .axis { position: relative; height: 150px; font-size: 0.75rem; color: var(--c-muted); }
+.chart .axis span { position: absolute; right: 0; translate: 0 50%; font-variant-numeric: tabular-nums; }
+.chart .plot { position: relative; height: 150px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.chart .grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--c-rule); }
+.chart .band { position: absolute; top: -4px; bottom: 0; right: 0; width: calc((100% - 48px) / 7 + 6px); translate: 3px 0; border-radius: 8px 8px 0 0; background: var(--c-today-band); }
+.chart .bar { position: relative; display: flex; flex-direction: column-reverse; height: 100%; }
+.chart .bar i { display: block; width: 100%; }
+.chart .bar i.nf { border-radius: 4px 4px 0 0; }
+.chart .bar i.yt:last-of-type { border-radius: 4px 4px 0 0; }
+.chart .bar .yt { background: var(--c-yt-soft); }
+.chart .bar .nf { background: var(--c-nf-soft); }
+.chart .bar.today .yt { background: var(--c-yt); }
+.chart .bar.today .nf { background: var(--c-nf); }
+.chart .bar em { font-style: normal; font-size: 0.6875rem; color: var(--c-muted); text-align: center; font-family: var(--c-fig); padding-bottom: 2px; }
+.chart .bar.today em { color: var(--c-ink); }
+.chart .days { grid-column: 2; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; font-size: 0.8125rem; text-align: center; color: var(--c-muted); }
+.chart .days .today { color: var(--c-ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; margin-top: 10px; color: var(--c-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .yt { background: var(--c-yt); }
+.legend .nf { background: var(--c-nf); }
+
+/* log, Hum layout in Coral material */
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.log li { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); gap: 10px; padding: 11px 14px; background-color: var(--c-cotton); background-image: var(--c-tex); border-radius: 12px; box-shadow: var(--c-edge), var(--c-soft); font-size: 0.9375rem; }
+.log time { color: var(--c-muted); font-size: 0.875rem; }
+.log b { font-weight: 600; }
+.more summary { cursor: pointer; padding: 10px 0; min-height: 44px; text-decoration: underline; text-decoration-color: var(--c-accent); text-underline-offset: 3px; list-style: none; }
+.more .log { margin-top: 4px; }
+.c-me { margin: 0; color: var(--c-muted); font-size: 0.875rem; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="press"><feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="1" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter></svg>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>家長頁新樣式：溫暖柔和第 2 版</h1>
+    <p>數字都是範例。左右兩個只差按鈕排法：一排四個，或三個加一個。加時間後約 2 秒「電視收到」。</p>
+  </div>
+  <div class="ctl">
+    <div class="ctl-group tabs-group"><span class="ctl-label" id="lt">按鈕排法</span>
+      <div class="seg" role="group" aria-labelledby="lt" id="tabs">
+        <button type="button" data-tab="a" aria-pressed="true">一排四個</button>
+        <button type="button" data-tab="b" aria-pressed="false">三個加一個</button>
+      </div>
+    </div>
+    <div class="ctl-group"><span class="ctl-label" id="ls">範例狀態</span>
+      <div class="seg" role="group" aria-labelledby="ls" id="modes">
+        <button type="button" data-mode="open" aria-pressed="true">開放中</button>
+        <button type="button" data-mode="done" aria-pressed="false">時間用完</button>
+        <button type="button" data-mode="lost" aria-pressed="false">電視失聯</button>
+      </div>
+    </div>
+  </div>
+  <div class="mocks">
+    <div class="col" data-col="a"><p class="mock-name">排法 A：一排四個</p><section class="mock" id="m-a" data-layout="row4" aria-label="排法 A"></section></div>
+    <div class="col off" data-col="b"><p class="mock-name">排法 B：三個加一個</p><section class="mock" id="m-b" data-layout="row3" aria-label="排法 B"></section></div>
+  </div>
+</div>
+
+<script>
+const CAP = 60;
+const WEEK = [['一',35,10],['二',50,0],['三',20,25],['四',45,15],['五',40,20],['六',55,30]];
+const BASE_LOG = [
+  ['今天 02:16','爸爸','把時間設成 60 分'],
+  ['今天 01:38','爸爸','加 30 分'],
+  ['昨天 21:40','電視','時間用完，鎖住 YouTube 和 Netflix'],
+  ['昨天 21:35','電視','剩 5 分，跳出提醒'],
+  ['昨天 19:02','媽媽','加 30 分'],
+  ['昨天 19:00','爸爸','加 15 分']
+];
+const S = { mode: 'open', used: [18, 4], bal: 38, pending: 0, confirm: '', note: '', log: [] };
+let timer = 0;
+
+function week() { return WEEK.map(r => r.slice()).concat([['今天', S.used[0], S.used[1]]]); }
+function sum(rows) { return rows.reduce((a, r) => [a[0] + r[1], a[1] + r[2]], [0, 0]); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+function tvIcon() {
+  const lost = S.mode === 'lost', label = lost ? '電視失聯' : '電視在線';
+  return '<span class="tv' + (lost ? ' lost' : '') + '" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<rect class="screen" x="4" y="5.5" width="16" height="10" rx="1"/><rect class="frame" x="2.5" y="4" width="19" height="13" rx="2"/><path class="frame" d="M8 20.5h8M12 17v3.5"/>' +
+    (lost ? '<path class="cut" d="M4 3l16 17"/>' : '') + '</svg></span>';
+}
+function sheet() {
+  const upd = S.mode === 'lost' ? '<p class="c-upd late">更新：35 分鐘前</p>' : '<p class="c-upd">更新：1 分鐘前</p>';
+  const line = S.mode === 'done' ? '時間用完，YouTube 和 Netflix 已鎖' : S.mode === 'lost' ? '電視沒有回報，狀態不明' : 'YouTube 和 Netflix 開放中';
+  return '<div class="c-sheet"><div class="c-sheet-top"><p class="c-lab">今天還剩</p>' + upd + '</div>' +
+    '<p class="c-big"><span class="n">' + S.bal + '</span><span class="u">分</span></p>' +
+    '<p class="c-line">' + line + '</p>' + (S.pending ? '<p class="c-line">待電視接收 ' + S.pending + ' 分</p>' : '') +
+    (S.mode === 'done' ? '<p class="c-stamp" aria-hidden="true">已鎖</p>' : '') + '</div>' +
+    (S.mode === 'lost' ? '<p class="c-alert">電視超過 30 分鐘沒回報，可能關機、斷網或 App 被關掉。</p>' : '');
+}
+function acts(layout) {
+  if (S.confirm) return '<div class="c-confirm"><p>確定把剩餘時間歸零？電視會馬上鎖住。</p><div><button type="button" class="c-ink-btn" data-act="zero-ok">歸零</button><button type="button" class="c-plain" data-act="zero-no">取消</button></div></div>';
+  const dis = S.pending ? ' disabled' : '';
+  return '<div class="c-acts ' + layout + '">' + [15, 30, 60].map(n => '<button type="button" class="c-btn" data-act="add" data-min="' + n + '"' + dis + '>+' + n + (layout === 'row3' ? ' 分' : '') + '</button>').join('') +
+    '<button type="button" class="c-btn zero" data-act="zero">歸零</button></div>' + (S.note ? '<p class="note">' + S.note + '</p>' : '');
+}
+function usage() {
+  const t = S.used, w = sum(week());
+  return '<section class="u-meter"><h2 class="c-h">今天看了 ' + (t[0] + t[1]) + ' 分</h2>' +
+    '<div class="u-track" role="img" aria-label="今天 YouTube ' + t[0] + ' 分，Netflix ' + t[1] + ' 分，以 60 分為滿"><i class="yt" style="width:' + Math.min(100, t[0] / CAP * 100) + '%"></i><i class="nf" style="width:' + Math.min(100, t[1] / CAP * 100) + '%"></i></div>' +
+    '<p>YouTube ' + t[0] + ' 分、Netflix ' + t[1] + ' 分（滿格 60 分）</p>' +
+    '<div class="u-pills"><div class="u-pill"><span>今天</span><b>' + (t[0] + t[1]) + '</b><small>分</small></div><div class="u-pill"><span>本週</span><b>' + ((w[0] + w[1]) / 60).toFixed(1) + '</b><small>小時</small></div><div class="u-pill"><span>本月</span><b>19</b><small>小時</small></div></div></section>';
+}
+function chart() {
+  const rows = week(), max = 100;
+  const grid = [30, 60, 90].map(v => '<span class="grid" style="bottom:' + v + '%"></span>').join('');
+  const axis = [0, 30, 60, 90].map(v => '<span style="bottom:' + v + '%">' + v + '</span>').join('');
+  const bars = rows.map(r => '<div class="bar' + (r[0] === '今天' ? ' today' : '') + '" role="img" aria-label="' + r[0] + '：YouTube ' + r[1] + ' 分，Netflix ' + r[2] + ' 分">' +
+    '<i class="yt" style="height:' + r[1] / max * 100 + '%"></i>' + (r[2] ? '<i class="nf" style="height:' + r[2] / max * 100 + '%"></i>' : '') + '<em aria-hidden="true">' + (r[1] + r[2]) + '</em></div>').join('');
+  const days = rows.map(r => '<span' + (r[0] === '今天' ? ' class="today"' : '') + '>' + r[0] + '</span>').join('');
+  return '<section><h2 class="c-h">這 7 天</h2><div class="chart"><div class="axis" aria-hidden="true">' + axis + '</div><div class="plot"><span class="band" aria-hidden="true"></span>' + grid + bars + '</div><div class="days" aria-hidden="true">' + days + '</div></div>' +
+    '<div class="legend"><span><i class="yt"></i>YouTube</span><span><i class="nf"></i>Netflix</span><span>單位：分，淡色是過去幾天</span></div></section>';
+}
+function log() {
+  const rows = S.log.concat(BASE_LOG), n = 4, li = r => '<li><time>' + esc(r[0]) + '</time><span><b>' + esc(r[1]) + '</b> ' + esc(r[2]) + '</span></li>';
+  return '<section><h2 class="c-h">紀錄</h2><ul class="log">' + rows.slice(0, n).map(li).join('') + '</ul>' +
+    (rows.length > n ? '<details class="more"><summary>看全部紀錄（' + rows.length + ' 筆）</summary><ul class="log">' + rows.slice(n).map(li).join('') + '</ul></details>' : '') + '</section>';
+}
+function view(layout) {
+  return '<div class="c-desk"><div class="c-top"><b>看電視時間</b>' + tvIcon() + '</div>' + sheet() + acts(layout) + '</div>' +
+    '<div class="c-body">' + usage() + chart() + log() + '<p class="c-me">目前登入：爸爸</p></div>';
+}
+function render(focus) {
+  for (const m of document.querySelectorAll('.mock')) m.innerHTML = view(m.dataset.layout);
+  if (focus) { const el = document.querySelector(focus); if (el) el.focus(); }
+}
+function setPressed(group, attr, val) { for (const b of document.querySelectorAll('#' + group + ' button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === val)); }
+
+document.getElementById('modes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  clearTimeout(timer); S.mode = b.dataset.mode; S.pending = 0; S.confirm = ''; S.note = ''; S.log = [];
+  S.bal = S.mode === 'done' ? 0 : 38; S.used = S.mode === 'done' ? [45, 15] : [18, 4];
+  setPressed('modes', 'mode', S.mode); render();
+});
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const c of document.querySelectorAll('.col')) c.classList.toggle('off', c.dataset.col !== b.dataset.tab);
+  setPressed('tabs', 'tab', b.dataset.tab);
+});
+document.querySelector('.mocks').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b || b.disabled) return;
+  const m = '#' + b.closest('.mock').id, act = b.dataset.act;
+  if (act === 'add') {
+    const n = +b.dataset.min;
+    S.pending = n; S.note = '';
+    S.log.unshift(['剛剛', '爸爸', '加 ' + n + ' 分']);
+    render(m + ' [data-act="add"][data-min="' + n + '"]');
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const want = S.bal + S.pending; S.bal = Math.min(CAP, want); S.pending = 0;
+      S.note = want > CAP ? '最多 60 分，已補到 60 分。' : '電視已收到。';
+      if (S.mode === 'done' && S.bal > 0) { S.mode = 'open'; setPressed('modes', 'mode', 'open'); }
+      render(m + ' [data-act="add"][data-min="' + n + '"]');
+    }, 2000);
+  } else if (act === 'zero') { S.confirm = 'y'; render(m + ' [data-act="zero-ok"]'); }
+  else if (act === 'zero-no') { S.confirm = ''; render(m + ' [data-act="zero"]'); }
+  else if (act === 'zero-ok') {
+    clearTimeout(timer); S.confirm = ''; S.pending = 0; S.bal = 0; S.mode = 'done'; S.note = '已歸零，電視會馬上鎖住。';
+    S.log.unshift(['剛剛', '爸爸', '歸零']); setPressed('modes', 'mode', 'done');
+    render(m + ' [data-act="zero"]');
+  }
+});
+render();
+</script>

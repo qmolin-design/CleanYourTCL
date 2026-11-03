@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>電視桌布編輯器</title>
+<style>
+  :root { --bg:#16191d; --panel:#1f242a; --line:#323a43; --text:#e8ecef; --dim:#9aa5b1; --accent:#5aa9ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; }
+  .wrap { display:flex; gap:16px; padding:16px; align-items:flex-start; }
+  .stage { flex:1; min-width:0; }
+  canvas#view { width:100%; aspect-ratio:16/9; display:block; border-radius:8px; background:#000; cursor:grab; touch-action:none; }
+  canvas#view.drag { cursor:grabbing; }
+  .hint { color:var(--dim); font-size:13px; margin-top:8px; }
+  .side { width:300px; flex:none; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  h1 { font-size:17px; margin:0 0 10px; }
+  h2 { font-size:13px; color:var(--dim); font-weight:600; margin:16px 0 6px; letter-spacing:.05em; }
+  label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:6px 0; }
+  input[type=range] { width:150px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  button, .file { background:#2c343d; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button:hover, .file:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#06121f; border-color:var(--accent); font-weight:600; width:100%; padding:10px; margin-top:8px; }
+  .file input { display:none; }
+  .seg button.on { border-color:var(--accent); color:var(--accent); }
+  .drop { outline:3px dashed var(--accent); outline-offset:-3px; }
+  @media (max-width: 900px) { .wrap { flex-direction:column; } .side { width:100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <canvas id="view" width="1920" height="1080"></canvas>
+    <div class="hint">拖曳照片移動、滾輪（或下方滑桿）縮放。虛線之間是不會被時鐘和 App 列擋住的區域。照片只在這台電腦處理，不會上傳。</div>
+  </div>
+  <div class="side">
+    <h1>電視桌布編輯器</h1>
+    <div class="row">
+      <label class="file">選照片…<input type="file" id="file" accept="image/*"></label>
+      <button id="fit">放進安全區</button>
+      <button id="cover">填滿全螢幕</button>
+    </div>
+
+    <h2>照片</h2>
+    <label>縮放 <input type="range" id="zoom" min="10" max="400" value="100"></label>
+    <label>邊緣羽化 <input type="range" id="feather" min="0" max="150" value="40"></label>
+    <label>圓角 <input type="range" id="radius" min="0" max="120" value="0"></label>
+    <label>亮度 <input type="range" id="fgBright" min="50" max="130" value="100"></label>
+
+    <h2>背景</h2>
+    <div class="row seg" id="bgMode">
+      <button data-v="blur" class="on">同圖霧化</button>
+      <button data-v="color">純色</button>
+    </div>
+    <label>霧化程度 <input type="range" id="blur" min="4" max="60" value="30"></label>
+    <label>背景亮度 <input type="range" id="bgBright" min="10" max="120" value="55"></label>
+    <label>純色 <input type="color" id="color" value="#22303c"></label>
+
+    <h2>預覽</h2>
+    <label>顯示電視介面 <input type="checkbox" id="overlay" checked></label>
+    <label><span>App 列不透明度 <b id="dockVal"></b></span> <input type="range" id="dock" min="30" max="100" step="5" value="60"></label>
+    <label>顯示安全區虛線 <input type="checkbox" id="guides" checked></label>
+
+    <button class="primary" id="export">匯出 JPG（1920×1080）</button>
+    <div class="hint">匯出的檔案會存到「下載」資料夾，跟 Claude 說檔名，它會幫你上傳到電視。</div>
+  </div>
+</div>
+<script>
+const W = 1920, H = 1080, SAFE_TOP = 210, SAFE_BOTTOM = 760;   // 時鐘下緣、App 列上緣（實機截圖量的）
+const BLOCKERS = [[113, 54, 665, 197], [1398, 117, 1808, 201], [138, 621, 482, 690], [113, 765, 1806, 951], [844, 1062, 1116, 1080]];   // 時鐘、按鈕、App 名稱、App 列、App 庫頁籤
+const ZONE_LABELS = [
+  [238, '上 0–210px（19.4%）：時鐘 x113–665、按鈕 x1398–1808，中間 x665–1398 空'],
+  [560, '中 210–760px（50.9%，1920×550 ≈ 3.5:1）：不會被蓋到；左下 App 名稱 x138–482 y621–690'],
+  [990, '下 760–1080px（29.6%）：App 列 y765–951（17.2%）；其下 951–1080 可見'],
+];
+const view = document.getElementById('view'), ctx = view.getContext('2d');
+const $ = id => document.getElementById(id);
+const overlay = new Image(); overlay.src = 'tv-overlay.png'; overlay.onload = draw;
+let img = null, name = 'wallpaper', x = 0, y = 0, scale = 1, bgMode = 'blur';
+
+function load(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  name = file.name.replace(/\.[^.]+$/, '');
+  const im = new Image();
+  im.onload = () => { img = im; fitSafe(); };
+  im.src = URL.createObjectURL(file);
+}
+function setScale(s) { scale = s; $('zoom').value = Math.round(s * 100); }
+function fitSafe() {
+  if (!img) return;
+  const s = Math.min((SAFE_BOTTOM - SAFE_TOP) / img.height, W / img.width);
+  setScale(s); x = (W - img.width * s) / 2; y = SAFE_TOP; draw();
+}
+function fitCover() {
+  if (!img) return;
+  const s = Math.max(W / img.width, H / img.height);
+  setScale(s); x = (W - img.width * s) / 2; y = (H - img.height * s) / 2; draw();
+}
+
+// 模糊：先縮小再放大（各家瀏覽器都支援，不靠 ctx.filter）
+function blurred(src, amount) {
+  const small = document.createElement('canvas');
+  const k = Math.max(4, Math.round(amount));
+  small.width = Math.max(2, Math.round(W / k)); small.height = Math.max(2, Math.round(H / k));
+  const s = small.getContext('2d');
+  const c = Math.max(W / src.width, H / src.height);
+  s.imageSmoothingQuality = 'high';
+  s.drawImage(src, (small.width - src.width * c / k) / 2, (small.height - src.height * c / k) / 2, src.width * c / k, src.height * c / k);
+  return small;
+}
+
+function render(target, withPreview) {
+  const g = target.getContext('2d');
+  g.save(); g.clearRect(0, 0, W, H);
+  if (bgMode === 'color' || !img) {
+    g.fillStyle = $('color').value; g.fillRect(0, 0, W, H);
+  } else {
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(blurred(img, +$('blur').value), 0, 0, W, H);
+    g.fillStyle = `rgba(0,0,0,${1 - Math.min(1, $('bgBright').value / 100)})`; g.fillRect(0, 0, W, H);
+    if ($('bgBright').value > 100) { g.fillStyle = `rgba(255,255,255,${($('bgBright').value - 100) / 100})`; g.fillRect(0, 0, W, H); }
+  }
+  if (img) g.drawImage(photoLayer(), 0, 0);
+  if (withPreview) {
+    if ($('overlay').checked && overlay.complete && overlay.naturalWidth) {
+      // App 列底色：電視端 dock_opacity 只調這條色帶，圖示維持不透明（幾何量自實機截圖）
+      const op = $('dock').value / 100;
+      g.beginPath(); g.roundRect(114, 766, 1692, 184, 52);
+      g.fillStyle = `rgba(20,20,22,${op})`; g.fill();
+      g.lineWidth = 2; g.strokeStyle = `rgba(110,120,130,${0.5 * op})`; g.stroke();
+      g.drawImage(overlay, 0, 0, W, H);
+    }
+    if ($('guides').checked) {
+      g.setLineDash([16, 12]); g.lineWidth = 3; g.strokeStyle = 'rgba(90,169,255,.9)';
+      for (const ly of [SAFE_TOP, SAFE_BOTTOM]) { g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke(); }
+      // 會擋圖的元件外框（實機截圖量的）
+      g.setLineDash([6, 6]); g.lineWidth = 2; g.strokeStyle = 'rgba(255,200,80,.9)';
+      for (const [bx, by, bx2, by2] of BLOCKERS) g.strokeRect(bx, by, bx2 - bx, by2 - by);
+      g.setLineDash([]);
+      g.font = '600 26px -apple-system, "PingFang TC", sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
+      for (const [ty, text] of ZONE_LABELS) {
+        const tw = g.measureText(text).width;
+        g.fillStyle = 'rgba(10,20,35,.75)'; g.fillRect(W - 24 - tw - 16, ty - 22, tw + 32, 44);
+        g.fillStyle = '#9fd0ff'; g.fillText(text, W - 24, ty);
+      }
+    }
+  }
+  g.restore();
+}
+
+// 照片層：羽化用陰影模糊做遮罩（跨瀏覽器），再套圓角與亮度
+function photoLayer() {
+  const w = img.width * scale, h = img.height * scale, f = +$('feather').value, r = +$('radius').value;
+  const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+  const l = layer.getContext('2d');
+  l.imageSmoothingQuality = 'high';
+  l.drawImage(img, x, y, w, h);
+  const b = +$('fgBright').value / 100;
+  if (b !== 1) {
+    l.globalCompositeOperation = 'source-atop';
+    l.fillStyle = b < 1 ? `rgba(0,0,0,${1 - b})` : `rgba(255,255,255,${b - 1})`;
+    l.fillRect(x, y, w, h);
+  }
+  const mask = document.createElement('canvas'); mask.width = W; mask.height = H;
+  const m = mask.getContext('2d');
+  const inset = f * 0.9, off = 10000;
+  m.shadowColor = '#000'; m.shadowBlur = f; m.shadowOffsetX = off;
+  m.beginPath();
+  m.roundRect(x + inset - off, y + inset, Math.max(1, w - 2 * inset), Math.max(1, h - 2 * inset), Math.max(0, r - inset / 2));
+  m.fill();
+  l.globalCompositeOperation = 'destination-in';
+  l.drawImage(mask, 0, 0);
+  return layer;
+}
+
+function draw() { render(view, true); }
+
+// 拖曳與縮放（以游標為中心）
+let dragging = null;
+const toCanvas = e => { const r = view.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+view.addEventListener('pointerdown', e => { if (!img) return; dragging = toCanvas(e); view.setPointerCapture(e.pointerId); view.classList.add('drag'); });
+view.addEventListener('pointermove', e => { if (!dragging) return; const p = toCanvas(e); x += p[0] - dragging[0]; y += p[1] - dragging[1]; dragging = p; draw(); });
+view.addEventListener('pointerup', () => { dragging = null; view.classList.remove('drag'); });
+function zoomAt(s, cx, cy) { if (!img) return; x = cx - (cx - x) * s / scale; y = cy - (cy - y) * s / scale; setScale(s); draw(); }
+view.addEventListener('wheel', e => { if (!img) return; e.preventDefault(); const [cx, cy] = toCanvas(e); zoomAt(Math.min(4, Math.max(0.1, scale * Math.exp(-e.deltaY / 500))), cx, cy); }, { passive: false });
+$('zoom').addEventListener('input', e => zoomAt(e.target.value / 100, W / 2, (SAFE_TOP + SAFE_BOTTOM) / 2));
+
+$('file').addEventListener('change', e => load(e.target.files[0]));
+document.body.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drop'); });
+document.body.addEventListener('dragleave', () => document.body.classList.remove('drop'));
+document.body.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('drop'); load(e.dataTransfer.files[0]); });
+$('fit').onclick = fitSafe; $('cover').onclick = fitCover;
+for (const id of ['feather', 'radius', 'fgBright', 'blur', 'bgBright', 'color', 'overlay', 'guides']) $(id).addEventListener('input', draw);
+const showDock = () => { $('dockVal').textContent = `${$('dock').value}%（透明 ${100 - $('dock').value}%）`; draw(); };
+$('dock').addEventListener('input', showDock); showDock();
+document.querySelectorAll('#bgMode button').forEach(b => b.onclick = () => {
+  bgMode = b.dataset.v; document.querySelectorAll('#bgMode button').forEach(o => o.classList.toggle('on', o === b)); draw();
+});
+$('export').onclick = () => {
+  if (!img) { alert('先選一張照片'); return; }
+  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  render(out, false);
+  out.toBlob(blob => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `tv-${name}.jpg`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }, 'image/jpeg', 0.9);
+};
+draw();
+</script>
+</body>
+</html>

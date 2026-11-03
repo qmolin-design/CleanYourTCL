@@ -1,0 +1,6 @@
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/base.apk
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/split_config.ar.apk
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/split_config.armeabi_v7a.apk
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/split_config.tr.apk
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/split_config.xhdpi.apk
+package:/data/app/~~OzUMZKHYRRfi-gx3x0HVWQ==/com.amazon.amazonvideo.livingroom-f-bAtCkZJ3lTE_lOAXFhkg==/split_config.zh.apk

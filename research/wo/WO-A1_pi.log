@@ -1,0 +1,6 @@
+WO-A1 施工完成。留在工作區，未 commit／未動電視端與雲端。
+
+- **改了 4 檔**（計畫允許範圍內）：`lib.mjs`（`adultWindow` 純函式、`adult_left_s`、`state.adult`、`POST /tv/api/adult`、`eventText` 新兩種、家長頁行＋按鈕）、`lib.test.mjs`（12 個新測試）、`schema.sql`（`adult_sched` 初值）、`README.md`（爸媽時段一節）。
+- **驗收**：`cd cfquota && node --test` → **26 tests／26 pass／0 fail**（原有 14 個 untouched 全過）；page `<script>` 另抽出 `node --check` 通過。
+- **報告**：`research/wo/WO-A1_report.md`（改動、測試↔①–⑪對照、驗收輸出、diff --stat、4 點疑慮）。
+- **疑慮摘要**：`adult` 物件多加了計畫沒寫的 `from`（頁面顯示完整起訖需要）；eventText 用 `（週一）`、頁面用 `（一）` 是按計畫原文各做各的；`off` 冪等用「先讀現值」而非單純依賴 `changes()`；過期的 `adult_off_until` 列不自動刪（查詢以 `now < off_until` 為準，無害）。

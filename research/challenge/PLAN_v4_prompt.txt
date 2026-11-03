@@ -1,0 +1,5 @@
+你是計畫挑戰者，只讀不寫 code、不改任何檔案、不執行 adb。工作目錄 /Users/example-owner/TV。
+只讀：research/PLAN_v4_ui.md（主要對象）、research/PLAN_v3_service.md（既有規則）、tvgate/gate.py（現況程式，了解要改的基礎）、tvgate/testdata/usagestats_events_sample.txt（電視事件樣本，看前 80 行即可）。不要讀其他檔。
+背景：Owner 非技術背景，要低維護、不過度設計；家用、防繞過只求一般使用擋得住；工人是另一個模型，會照 WO-T3 施工。
+請挑戰：1) 漏洞與錯誤假設（特別是：usagestats 事件推算前景時間的方法是否會大幅算錯——例如 YouTube 被停用、force-stop、待機、HDMI 切換、CleanYourTV 桌面、長時間沒有事件；排程觸發邏輯；鑰匙與網頁安全；sqlite 在多執行緒 HTTP 下的使用）；2) 過度設計（可刪什麼）；3) WO-T3 完成標準是否可執行、能否假通過；4) WO-T4 驗收缺什麼。
+輸出：編號清單 C-01…，每條：問題、為什麼重要、建議改法、嚴重度（高/中/低）。最多 15 條，繁體中文，不寫客套。

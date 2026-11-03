@@ -1,0 +1,1 @@
+批次 2 結果（21:25）：5 個 disable-user 重開後全部被復活。enabled 值：videos=1（被明確設為 ENABLED）、MultiScreen=0（被重設 DEFAULT）；存活的 1a 為 3（DISABLED_USER）；原廠停用的 freeview/wuaki/gallery 為 2（DISABLED，shell 無法設此值）。結論：復活器針對特定名單，與 uid 無關。電視現況＝批次 2 前的原廠狀態。

@@ -1,0 +1,11 @@
+com.google.android.feedback before: No operations.
+Default mode: allow
+com.google.android.partnersetup before: No operations.
+Default mode: allow
+com.google.android.tvrecommendations before: No operations.
+Default mode: allow
+com.tcl.tv.tclhome_passive before: No operations.
+Default mode: allow
+com.tcl.copydatatotv before: No operations.
+Default mode: allow
+# 還原：cmd appops set <pkg> RUN_ANY_IN_BACKGROUND allow

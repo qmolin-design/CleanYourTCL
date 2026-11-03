@@ -1,0 +1,10 @@
+你是唯讀程式審查員。只看下面列出的檔案，不要讀清單外的檔案，不要修改任何東西。
+- 工單：/Users/example-owner/TV/research/wo/WO-G2_prompt.txt（看「要做的事」「禁止事項」「完成標準」）
+- 變更：/Users/example-owner/TV/research/wo/WO-G2.diff（AgentService.java、test、test.sh 的 diff，以及新檔 Whitelist.java 全文）
+審查重點：
+1. （第 2 版：三個 dumpsys 都加了 2>/dev/null，wlStatus 改取最後非空行，因 shell: v1 會合併 stderr）shell 指令引號是否正確（在 adb shell 的 sh 裡跑，名單包在單引號內）、grep 是否只在名單含 com.example.tvagent 時成功、keep/set/fail 邏輯是否正確。
+2. 名單常數是否與工單完全一致（9 個、順序相同）。
+3. echo 失敗時是否記 wl=skip、不跑名單；名單指令例外是否用同樣格式記錄；心跳 log 是否一定寫出。
+4. 是否違反禁止事項（心跳間隔、鬧鐘、selftest、AdbClient 協定、新權限）。
+5. 測試是否真的涵蓋 keep、set、fail、空字串、亂碼。
+輸出第一行必須是 PASS 或 FAIL，接著列理由（FAIL 要寫具體行與修法）。

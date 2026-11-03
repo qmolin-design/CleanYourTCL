@@ -1,0 +1,11 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-a1（分支 adult-a1）施工。工作目錄只在 /Users/example-owner/TV-wt-a1，不要動其他資料夾。
+
+任務：依 /Users/example-owner/TV-wt-a1/research/PLAN_adult.md 的「WO-A1」一節施工（先完整讀「做法」「定義」與「WO-A1」三節，以及檔尾「挑戰裁定」表；正文是裁定後的版本）。該節列出的「動到」檔案就是你唯一能改的檔案；「完成標準」的每一條都要做到並自己跑過；「禁止」的每一條都不能違反。另一張工單（電視 App／Worker）由別人同時施工，不要碰它的檔案。
+
+規則：
+- 不要 git commit、不要 push、不要 merge，改完留在工作區。
+- 絕對不准跑 adb、wrangler deploy、wrangler d1 execute --remote 或任何會碰到電視或雲端的指令。
+- 不要改計畫檔、不要改既有測試讓它變寬鬆；現有測試全部要照過。
+- 風格照現有程式（精簡、不加不必要的抽象）。
+- 驗收指令：cd cfquota && node --test（Node 25）；最後在 worktree 根目錄跑 git diff --stat。
+- 完成後在 /Users/example-owner/TV-wt-a1/research/wo/WO-A1_report.md 寫：改了什麼（每檔一兩行）、新增了哪些測試（對應完成標準編號）、驗收指令的最後輸出（PASS/FAIL 統計）、git diff --stat 結果、你覺得有疑慮的地方。

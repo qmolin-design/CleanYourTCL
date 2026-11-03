@@ -1,0 +1,25 @@
+你是施工工人。工作目錄：/Users/example-owner/TV-wt-tvgate（git worktree，分支 tvgate）。只在這個目錄的 tvgate/ 子目錄新增檔案。
+
+先完整讀 research/PLAN_v3_service.md 的「運作方式」「失效時的行為」「Owner 裁定」「WO-T1」四節——那是規格，照做，不要改規格、不要加規格沒有的功能。
+
+要交的檔案（全部新增在 tvgate/）：
+- gate.py：服務本體，只用 Python 3.12 標準函式庫。
+- sleephook.swift：休眠／喚醒通知子程序（NSWorkspace willSleep／didWake），stdout 印 sleep／wake，sleep 後等 stdin 一行回覆最多 10 秒。
+- com.example.tvgate.plist：launchd 設定（RunAtLoad、KeepAlive），程式路徑用 /Users/example-owner/TV/tvgate/gate.py，PATH 要含 /opt/homebrew/bin（adb 在那）。
+- test_gate.py：WO-T1 完成標準第 1 項列的每一個案例都要有，用 assert 或 unittest 皆可，不要第三方套件。
+- README.md：繁體中文，給非技術 Owner：安裝步驟、還原步驟、5 個 iPhone 捷徑（開放 15／30／60、立即鎖、查狀態）怎麼在「捷徑」App 設定（取得 URL 內容、方法 POST、標頭 X-Token）。
+
+可設定的環境變數（測試靠這些，正式環境用預設值）：TVGATE_HOME、ADB、TVGATE_HOOK、TVGATE_NOTIFY、TVGATE_PORT、對帳週期（名稱自訂，寫進 README）。token 檔路徑預設 ~/.secrets/tvgate.token，也要能用環境變數換掉。
+
+完成前自己跑過：
+  cd /Users/example-owner/TV-wt-tvgate/tvgate && python3 test_gate.py    （全過、60 秒內、沒有殘留子程序）
+  swiftc -o "$TMPDIR/sleephook" sleephook.swift
+  plutil -lint com.example.tvgate.plist
+  git -C /Users/example-owner/TV-wt-tvgate status --porcelain   （只有 tvgate/ 下的新檔）
+
+禁止：
+- 不執行真的 adb、不連電視（192.0.2.69）、不安裝任何套件、不 launchctl load／bootstrap。
+- 不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents。
+- 不改 tvgate/ 以外的檔，不 git commit、不 push。
+
+最後回報：每個檔案做了什麼（各一行）、上面四個指令的實際輸出最後幾行、規格裡你不確定或沒做到的地方。

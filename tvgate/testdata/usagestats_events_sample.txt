@@ -1,0 +1,9 @@
+Last 24 hour events (timeRange="2024/01/15 12:00 – 2024/01/16 12:00" )
+    time="2024-01-15 11:59:59" type=DEVICE_STARTUP package=android flags=0x0
+    time="2024-01-15 11:59:59" type=UNKNOWN_TYPE_33 package=android flags=0x0
+    time="2024-01-15 12:00:00" type=ACTIVITY_RESUMED package=com.google.android.youtube.tv class=com.example.VideoActivity flags=0x0
+    time="2024-01-15 12:02:00" type=ACTIVITY_RESUMED package=com.netflix.ninja class=com.example.NetflixActivity flags=0x0
+    time="2024-01-15 12:05:00" type=ACTIVITY_RESUMED package=com.google.android.youtube.tv class=com.example.VideoActivity flags=0x0
+    time="2024-01-15 12:08:00" type=SCREEN_NON_INTERACTIVE package=android flags=0x0
+In-memory events (timeRange="2024/01/15 12:08 – 2024/01/16 12:08" )
+    time="2024-01-15 12:09:00" type=ACTIVITY_RESUMED package=com.example.ignored class=com.example.IgnoredActivity flags=0x0

@@ -1,0 +1,413 @@
+[0m
+> build · deepseek-v4.1-flash
+[0m→ [0mRead 00_REQUIREMENT.md 
+[0m⚙ [0mexecute {"code":"const r = await tools.mem.get_profile({ domain: \"work\" });\nreturn r;"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=%22tv-debloat%22+android+tv+github+script 
+[0m% [0mWebFetch https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation 
+[0m% [0mWebFetch https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/README.md 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=CleanYourTV+android+tv+debloat+github 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/README.md 
+[0m% [0mWebFetch https://www.bing.com/search?q=%22tv-debloat%22+github+android+tv+adb 
+[0m% [0mWebFetch https://api.github.com/repos/Gathin23/cleanyourtv 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"const [uad, cy] = await Promise.all([\n  fetch(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/resources/assets/uad_lists.json\").then(r=>r.text()),\n  fetch(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/README.md\").then(r=>r.text()),\n]);\nconst out = {};\nout.uadLen = uad.length;\nlet j = null; try { j = JSON.parse(uad); } catch(e) { out.uadParseErr = String(e); }\nif (j) {\n  const keys = Object.keys(j);\n  out.uadType = Array.isArray(j) ? \"array\" : \"object\";\n  const entries = Array.isArray(j) ? j : Object.values(j);\n  out.uadCount = entries.length;\n  out.sample = JSON.stringify(entries[0]).slice(0,400);\n  const tcl = entries.filter(e => JSON.stringify(e).toLowerCase().includes(\"tcl\"));\n  out.tclCount = tcl.length;\n  out.tcl = tcl.map(e => ({id:e.id, list:e.list, desc:(e.description||\"\").slice(0,120), rem:e.removal, deps:e.dependencies}));\n}\nout.cyLen = cy.length;\nconst lines = cy.split(\"\\n\").filter(l => /P715|P615|P725|RT2851|R851|TCL/i.test(l));\nout.cyMatches = lines.slice(0,120);\nreturn out;"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u); if(!r.ok) return {u, status:r.status}; return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst urls = [\n \"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-43p615/debloat.txt\",\n \"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-43p615/README.md\",\n \"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-50j7000a/debloat.txt\",\n \"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-50j7000a/README.md\",\n];\nconst res = await Promise.all(urls.map(g));\nconst dir = await g(\"https://api.github.com/repos/Gathin23/cleanyourtv/contents/examples\");\nconst out = res.map(r => ({u:r.u, status:r.status, len:r.text?.length, text:r.text}));\nlet folders = [];\ntry { const j = JSON.parse(dir.text); folders = j.map(x=>x.name).filter(n=>/p715|p61|p72|rt2851|ep68/i.test(n)); } catch(e){ folders = [\"ERR \"+dir.status]; }\nreturn {folders, out};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"research\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst r1 = await g(\"https://api.github.com/search/issues?q=repo:Gathin23/cleanyourtv+P715&per_page=30\");\nlet out1 = {status:r1.status};\ntry { const j = JSON.parse(r1.text); out1.total = j.total_count; out1.items = j.items?.map(i=>({n:i.number, t:i.title, s:i.state, u:i.html_url, body:(i.body||\"\").slice(0,600)})); } catch(e){ out1.raw = r1.text?.slice(0,300); }\nreturn out1;"} 
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/Getting-started 
+[0m% [0mWebFetch https://lite.duckduckgo.com/lite/?q=tv-debloat+github+android+tv 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"research\",\"Accept\":\"application/vnd.github+json\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [s1, s2, s3] = await Promise.all([\n  g(\"https://api.github.com/search/repositories?q=tv-debloat&per_page=10\"),\n  g(\"https://api.github.com/repos/seun-novodev/android-tv-debloat-toolkit\"),\n  g(\"https://api.github.com/search/issues?q=repo:Universal-Debloater-Alliance/universal-android-debloater-next-generation+%22android+tv%22&per_page=10\"),\n]);\nconst p = (t)=>{try{return JSON.parse(t)}catch(e){return {err:\"parse\", raw:t?.slice(0,200)}}};\nconst a=p(s1.text), b=p(s2.text), c=p(s3.text);\nreturn {\n  repos: a.items?.map(r=>({full:r.full_name, desc:(r.description||\"\").slice(0,100), pushed:r.pushed_at, archived:r.archived, stars:r.stargazers_count, lic:r.license?.spdx_id})),\n  toolkit: {full:b.full_name, desc:b.description, created:b.created_at, pushed:b.pushed_at, archived:b.archived, stars:b.stargazers_count, lic:b.license?.spdx_id, homepage:b.homepage, open:b.open_issues_count},\n  uadTvIssues: c.items?.map(i=>({n:i.number,t:i.title,s:i.state,u:i.html_url}))\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"research\",\"Accept\":\"application/vnd.github+json\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [i670, c670, rd] = await Promise.all([\n  g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670\"),\n  g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670/comments?per_page=30\"),\n  g(\"https://api.github.com/repos/seun-novodev/android-tv-debloat-toolkit/readme\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst a=p(i670.text), b=p(c670.text), d=p(rd.text);\nlet readme=null;\nif(d?.content){ readme = Buffer.from(d.content,\"base64\").toString(\"utf8\"); }\nreturn {\n  issue670: a && {title:a.title, state:a.state, created:a.created_at, closed:a.closed_at, body:(a.body||\"\").slice(0,1500)},\n  comments: b?.map(x=>({u:x.user?.login, at:x.created_at, body:(x.body||\"\").slice(0,700)})),\n  readme: readme?.slice(0, 6000)\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"research\",\"Accept\":\"application/vnd.github+json\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [i670, c670, rd] = await Promise.all([\n  g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670\"),\n  g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670/comments?per_page=30\"),\n  g(\"https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/README.md\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst a=p(i670.text), b=p(c670.text);\nreturn {\n  issue670: a && {title:a.title, state:a.state, created:a.created_at, closed:a.closed_at, body:(a.body||\"\").slice(0,1500)},\n  comments: b?.map(x=>({u:x.user?.login, at:x.created_at, body:(x.body||\"\").slice(0,800)})),\n  readmeStatus: rd.status,\n  readme: rd.text?.slice(0, 7000)\n};"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://play.google.com/store/apps/details?id=com.spocky.projengmenu&hl=en_US 
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst urls=[\n\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/restore.md\",\n\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/firmware-updates.md\",\n];\nconst res = await Promise.all(urls.map(g));\nreturn res.map(r=>({u:r.u,status:r.status,len:r.text?.length,text:r.text?.slice(0,7000)}));"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Projectivy+Launcher+TCL+%E5%81%9C%E7%94%A8+%E5%8E%9F%E7%94%9F+launcher+%E8%83%8C%E6%99%AF 
+[0m% [0mWebFetch https://xdaforums.com/t/app-android-tv-projectivy-launcher.4436549/ 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"research\",\"Accept\":\"application/vnd.github+json\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [i500,i415,s] = await Promise.all([\n g(\"https://api.github.com/repos/spocky/miproja1/issues/500\"),\n g(\"https://api.github.com/repos/spocky/miproja1/issues/415\"),\n g(\"https://api.github.com/search/issues?q=repo:spocky/miproja1+TCL+launcher&per_page=20&sort=updated\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst a=p(i500.text), b=p(i415.text), c=p(s.text);\nreturn {\n  i500: a && {t:a.title,s:a.state,created:a.created_at,body:(a.body||\"\").slice(0,1200)},\n  i415: b && {t:b.title,s:b.state,created:b.created_at,body:(b.body||\"\").slice(0,1200)},\n  search: c && {total:c.total_count, items:c.items?.map(i=>({n:i.number,t:i.title,s:i.state,at:i.updated_at}))}\n};"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=%2255P715%22+debloat+OR+disable+android+tv 
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [tk, core, adb] = await Promise.all([\n g(\"https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/run_toolkit.py\"),\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-core/src/core.rs\"),\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-core/src/adb.rs\"),\n]);\nfunction grep(t, re, n=40){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,180)); if(out.length>=n) break; } return out; }\nreturn {\n  tkStatus: tk.status, tkLen: tk.text?.length,\n  tkPm: grep(tk.text, /uninstall|disable-user|pm |enable|install-existing/i, 40),\n  corePm: grep(core.text, /uninstall|disable|enable/i, 30),\n  adbPm: grep(adb.text, /uninstall|disable|shell/i, 20),\n};"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/Usage 
+[0m✗ [0mWebFetch https://www.mojeek.com/search?q=%2255P715%22+TCL+debloat failed
+[91m[1mError: [0mStatusCode: non 2xx status code (403 GET https://www.mojeek.com/search?q=%2255P715%22+TCL+debloat)
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [ls, pm] = await Promise.all([\n g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/contents/crates/uad-core/src\"),\n g(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/cmds/pm/src/com/android/commands/pm/Pm.java\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst j=p(ls.text);\nfunction grep(t, re, n=40){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,200)); if(out.length>=n) break; } return out; }\nreturn {\n  files: j?.map(x=>x.name),\n  pmStatus: pm.status, pmLen: pm.text?.length,\n  pmGrep: grep(pm.text, /\"disable-user\"|\"uninstall\"|\"install-existing\"|\"enable\"|disableUser|case \"uninstall\"/, 40)\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [pm, uadAdb, uadLib] = await Promise.all([\n g(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/cmds/pm/src/com/android/commands/pm/Pm.java\"),\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-core/src/adb.rs\"),\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-core/src/lib.rs\"),\n]);\nfunction grep(t, re, n=30){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,200)); if(out.length>=n) break; } return out; }\nreturn {\n  pmStatus: pm.status,\n  pmGrep: grep(pm.text, /disable-user|install-existing|\"uninstall\"|--user/, 30),\n  uadUninstall: grep(uadAdb.text, /uninstall|disable|enable/, 30),\n  libUninstall: grep(uadLib.text, /uninstall|disable|enable/, 30),\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst t = await g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/git/trees/main?recursive=1\");\nconst j = JSON.parse(t.text);\nconst rs = j.tree.filter(x=>x.path.endsWith(\".rs\")).map(x=>x.path);\nconst atobOK = (()=>{ try { return atob(\"aGk=\")===\"hi\"; } catch(e){ return String(e); } })();\nreturn {count: rs.length, rs, atobOK, truncated: j.truncated};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u, b64){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); const t = await r.text(); return {u, status:r.status, text: b64 ? atob(t) : t}; } catch(e){ return {u, err:String(e)}; } }\nfunction grep(t, re, n=40){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,200)); if(out.length>=n) break; } return out; }\nconst [help, lst, pm] = await Promise.all([\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-gui/src/helpers.rs\"),\n g(\"https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/crates/uad-cli/src/commands.rs\"),\n g(\"https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/cmds/pm/src/com/android/commands/pm/Pm.java?format=TEXT\", true),\n]);\nreturn {\n  guiHelpers: grep(help.text, /uninstall|disable|enable|pm /, 30),\n  cliCmds: grep(lst.text, /uninstall|disable|enable/, 30),\n  pmStatus: pm.status, pmLen: pm.text?.length,\n  pmGrep: grep(pm.text, /disable-user|install-existing|case \"uninstall\"|clear-package-data/, 30),\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst r = await g(\"https://api.github.com/repos/aosp-mirror/platform_frameworks_base/contents/cmds/pm/src/com/android/commands/pm\");\nreturn {status:r.status, body:r.text?.slice(0,800)};"} 
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/FAQ 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://developer.android.com/tools/dumpsys 
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nfunction grep(t, re, n=25){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,220)); if(out.length>=n) break; } return out; }\nconst [sm, launcher, faq, why] = await Promise.all([\n g(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/core/java/android/os/storage/StorageManager.java\"),\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/launcher.md\"),\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/faq.md\"),\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/why-not-other-tools.md\"),\n]);\nreturn {\n  smStatus: sm.status,\n  smGrep: grep(sm.text, /getStorageLowBytes|LOW_BYTES|lowBytes|CRITICAL/, 20),\n  launcherStatus: launcher.status,\n  launcherProjectivy: grep(launcher.text, /Projectivy|FLauncher|other launcher|RAM/i, 15),\n  faqStatus: faq.status,\n  faqProjectivy: grep(faq.text, /Projectivy|launcher|apps only|Apps only/i, 15),\n  whyStatus: why.status, whyHead: why.text?.slice(0,1500)\n};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [sm, pmdir] = await Promise.all([\n g(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/os/storage/StorageManager.java\"),\n g(\"https://api.github.com/repos/aosp-mirror/platform_frameworks_base/contents/cmds/pm/src/com/android/commands/pm\"),\n]);\nconst lines = sm.text?.split(\"\\n\").slice(1485,1530).join(\"\\n\");\nreturn {smStatus: sm.status, snippet: lines, pmdirStatus: pmdir.status, pmdir: pmdir.text?.slice(0,500)};"} 
+[0m% [0mWebFetch https://source.android.com/docs/core/perf/lmkd 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Projectivy+Launcher+RAM+usage+vs+stock+launcher+android+tv+memory 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=%22V8-R851T02-LF1V715%22 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst rd = await g(\"https://raw.githubusercontent.com/mbcrump/shield-projectivy-debloat/main/BENCHMARKS.md\");\nreturn {status: rd.status, len: rd.text?.length, text: rd.text?.slice(0,6000)};"} 
+[0m% [0mWebFetch https://developer.android.com/training/tv/playback/memory 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst r = await g(\"https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187\");\nif(!r.text) return r;\nconst txt = r.text.replace(/<script[\\s\\S]*?<\\/script>/g,\" \").replace(/<style[\\s\\S]*?<\\/style>/g,\" \").replace(/<[^>]+>/g,\" \").replace(/&quot;/g,'\"').replace(/&#0?39;/g,\"'\").replace(/&amp;/g,\"&\").replace(/\\s+/g,\" \");\nconst idx = txt.indexOf(\"V715\");\nreturn {status:r.status, len:txt.length, around: txt.slice(Math.max(0,idx-1500), idx+2500)};"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://r.jina.ai/https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function jina(u){ try { const r = await fetch(\"https://r.jina.ai/\"+u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst r = await jina(\"https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-176\");\nif(!r.text) return r;\nconst t = r.text;\nconst i = t.indexOf(\"performance drop\");\nconst j = t.indexOf(\"V715\");\nreturn {status:r.status, len:t.length, perfIdx:i, ctx: i>=0 ? t.slice(Math.max(0,i-2000), i+1500) : t.slice(Math.max(0,j-800), j+1200)};"} 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=%22V8-R851T02-LF1V715%22+%22performance%22+slow 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function jina(u){ try { const r = await fetch(\"https://r.jina.ai/\"+u, {headers:{\"User-Agent\":\"Mozilla/5.0\",\"X-Return-Format\":\"markdown\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst r = await jina(\"https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187\");\nconst t = r.text||\"\";\nconst i = t.indexOf(\"P8M was running\");\nreturn {status:r.status, len:t.length, i, tail: t.slice(-3000)};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function jina(u){ const r = await fetch(\"https://r.jina.ai/\"+u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return r.text(); }\nconst t = await jina(\"https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187\");\nconst i = t.indexOf(\"P8M was running\");\nreturn {ctx: t.slice(i-800, i+3500)};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"const r = await fetch(\"https://r.jina.ai/https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187\", {headers:{\"User-Agent\":\"Mozilla/5.0\"}});\nconst t = await r.text();\nconst i = t.indexOf(\"V616\");\nreturn {len:t.length, i, ctx: i>0 ? t.slice(Math.max(0,i-2500), i+2500) : t.slice(0,1200)};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"try {\nconst r = await fetch(\"https://r.jina.ai/https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187\", {headers:{\"User-Agent\":\"Mozilla/5.0\",\"x-no-cache\":\"true\"}});\nconst t = await r.text();\nconst i = t.indexOf(\"V616\");\nreturn {len:t.length, i, ctx: i>0 ? t.slice(Math.max(0,i-1800), i+2200) : \"not found\"};\n} catch(e){ return String(e); }"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\",\"Accept\":\"application/vnd.github+json\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [a,b,c] = await Promise.all([\n g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/994\"),\n g(\"https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/887\"),\n g(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/services/core/java/com/android/server/storage/DiskStatsService.java\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst A=p(a.text), B=p(b.text);\nfunction grep(t, re, n=20){ if(!t) return null; const out=[]; const lines=t.split(\"\\n\"); for(let i=0;i<lines.length;i++){ if(re.test(lines[i])) out.push((i+1)+\": \"+lines[i].trim().slice(0,160)); if(out.length>=n) break; } return out; }\nreturn {\n  i994: A && {t:A.title, body:(A.body||\"\").slice(0,800)},\n  i887: B && {t:B.title, body:(B.body||\"\").slice(0,800)},\n  diskStatus: c.status,\n  diskGrep: grep(c.text, /percentile|latency|fstrim|write|fsync/i, 15),\n};"} 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=google+tv+create+kids+profile+support.google.com+Family+Link+Android+TV 
+> build · deepseek-v4.1-flash
+[0m% [0mWebFetch https://support.google.com/families/answer/10491112?hl=en 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [n, ls] = await Promise.all([\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-50dp660.txt\"),\n g(\"https://api.github.com/repos/Gathin23/cleanyourtv/contents/docs/devices\"),\n]);\nconst p=(t)=>{try{return JSON.parse(t)}catch(e){return null}};\nconst j=p(ls.text);\nreturn {status:n.status, len:n.text?.length, text:n.text?.slice(0,3500), files:j?.map(x=>x.name).filter(x=>/tcl|rt|beyond/i.test(x))};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"async function g(u){ try { const r = await fetch(u, {headers:{\"User-Agent\":\"Mozilla/5.0\"}}); return {u, status:r.status, text: await r.text()}; } catch(e){ return {u, err:String(e)}; } }\nconst [a,b,c] = await Promise.all([\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv-rt2851.md\"),\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv4-uk-ar05.md\"),\n g(\"https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-50dp660.txt\"),\n]);\nreturn {rt2851:{status:a.status,len:a.text?.length,text:a.text?.slice(0,5000)}, ar05:{status:b.status,len:b.text?.length,text:b.text?.slice(0,3500)}, dp660rest: c.text?.slice(900,4200)};"} 
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"const r = await fetch(\"https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/run_toolkit.py\");\nconst t = await r.text();\nconst lines = t.split(\"\\n\");\nconst hits = [];\nlines.forEach((l,i)=>{ if(/com\\.tcl|SAFE_PACKAGES|ADVANCED_PACKAGES|uninstall|CRITICAL/.test(l)) hits.push((i+1)+\": \"+l.trim().slice(0,150)); });\nreturn {len:t.length, hits: hits.slice(0,45)};"} 
+> build · deepseek-v4.1-flash
+[0m← [0mWrite R2_debloat_DEEPSEEK.md
+Created file successfully: R2_debloat_DEEPSEEK.md
+> build · deepseek-v4.1-flash
+[0m⚙ [0mexecute {"code":"const r = await fetch(\"https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/os/storage/StorageManager.java\");\nconst t = await r.text();\nconst lines = t.split(\"\\n\").map((l,i)=>[i+1,l]).filter(([i,l])=>/DEFAULT_STORAGE_THRESHOLD_PERCENT_LOW|DEFAULT_THRESHOLD_MAX_BYTES|DEFAULT_FULL_THRESHOLD_BYTES/.test(l));\nreturn lines.map(([i,l])=>i+\": \"+l.trim());"} 
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -59,9 +59,9 @@
+ | 運作方式 | Android 6+：disable = `pm disable-user --user <u> <pkg>` + `pm am force-stop` + `pm clear`；uninstall = `pm uninstall --user <u> <pkg>`；還原 = `cmd package install-existing --user <u> <pkg>`。UI 上可切換 disable/uninstall 模式 [官方文件] |
+ | 是否真省 RAM | 是——它會把套件「凍結」，重開機後不會被喚醒（官方說法）；但只在**你選對套件**時有效 |
+ | Android TV 11 | 可用（Android 6+ 即可）；但**沒有電視/機型清單**，清單是「以套件為單位」的通用資料庫，TCL 條目多半來自 TCL **手機** |
+ | TCL 專屬支援 | 無 P715/P615 條目；有 TCL 手機套件條目（如 TGuard、NXTVISION）。有 Android TV 社群回報的踩雷：`setupwraith`、`tvlauncher` |
+-| 維護 | 活躍：4,457★→9,624★、`pushed_at` 2026-10-26、未 archived、GPL-3.0、277 open issues |
++| 維護 | 活躍：9,624★、`pushed_at` 2026-10-26、未 archived、GPL-3.0、277 open issues |
+ | 前置 | 開開發者選項＋USB 偵錯；可 USB 或網路 ADB |
+ | 還原 | Snapshot（Backup/Restore）；或逐一套件 restore。**沒有「一鍵回到出廠」** |
+ 
+ **關鍵警告（官方文件自己寫的）**：套件清單裡的 **"Recommended" 不是真的推薦**（原文：「Recommended IS NOT ACTUALLY RECOMMENDED」，是舊專案遺留）。另外官方明講：**uninstall 比 disable 危險**——相依 App 仍會嘗試喚醒不存在的套件，造成耗電與不穩；而且 uninstall 會把「已更新的 APK」一起移除。[官方文件]
+
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -246,9 +246,9 @@
+ ### 5.3 儲存空間（很容易被忽略的卡頓源）
+ 
+ | 指令 | 看什麼 | 判讀 |
+ |---|---|---|
+-| `df -h /data` | 可用空間與使用率 | **Android 的「低儲存」門檻是 `min(分割區 10%, 500 MB)`**（AOSP `StorageManager.getStorageLowBytes()`）。16 GB 機種 → 門檻就是 **500 MB**。低於此，系統會開始砍快取、Play 安裝失敗、App 寫入變慢。[官方文件] <https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/os/storage/StorageManager.java> |
++| `df -h /data` | 可用空間與使用率 | **Android 的「低儲存」門檻是 `min(分割區 5%, 500 MB)`**（AOSP `StorageManager.getStorageLowBytes()`，`DEFAULT_STORAGE_THRESHOLD_PERCENT_LOW = 5`、上限 500 MB；OEM 可用 `sys_storage_threshold_*` 覆寫）。16 GB 機種 → 5% 約 550 MB，取上限後門檻就是 **500 MB**。低於此，系統會開始砍快取、Play 安裝失敗、App 寫入變慢。[官方文件] <https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/os/storage/StorageManager.java> |
+ | `dumpsys diskstats` | 各分割區 I/O 延遲百分位（p50/p95/p99）、fsync 次數 | p95/p99 延遲與同機歷史相比明顯惡化＝儲存媒體老化。[推測/待驗證：此服務是否在本韌體存在需先 `dumpsys -l \| grep disk`] |
+ | `cmd package list packages -3` | 使用者自行安裝的 App | 第三方愈多，背景復活源愈多 |
+ 
+ **實務數據點**：CleanYourTV 在某台 TCL（V8-T221T01-LF1V121）記錄「**安裝任何東西前需要 500 MB 可用空間**，用 `pm trim-caches` 清」；另一台則記錄「`/data` 幾乎滿 → 安裝被擋；RAM 太低時 TGuard 會在安裝中途殺掉 Play」。這兩條同時說明：**空間不足與 RAM 不足會互相放大。**[社群實測]
+
+> build · deepseek-v4.1-flash
+[0m$ [0mcd /Users/example-owner/TV/research && grep -n "10%\|★\|4,457\|recommended" R2_debloat_DEEPSEEK.md | head -30 && wc -l R2_debloat_DEEPSEEK.md
+63:| 維護 | 活躍：9,624★、`pushed_at` 2026-10-26、未 archived、GPL-3.0、277 open issues |
+83:| 維護 | 極活躍：44,579★、`pushed_at` 2026-10-29、180 open issues、未 archived；MIT（GitHub API 顯示 `NOASSERTION`，README 寫 MIT） |
+93:> 名稱說明：「tv-debloat」在社群不是單一專案。我查到兩個：(a) `seun-novodev/android-tv-debloat-toolkit`（788★，最常被叫這個名字）；(b) `chrissy-dev/debloat-tlc-android-tv`（32★，**已 archived**，2024-11 後未動）。以下指 (a)。
+113:| 本質 | **第三方 Android TV 桌面（launcher）**，不是瘦身工具；閉源、免費＋付費解鎖。1M+ 下載、4.4★/3.12K 評論、Play 最後更新 2026-10-01 [官方文件] |
+241:| `dumpsys cpuinfo` | 各 process 的 `%CPU`（開機累計） | 單一 App 長期 > 10% 就是異常。實例：`com.google.android.katniss` 常駐熱字吃 **28% 單核**，`pm revoke ... RECORD_AUDIO` 後降到 0.4%。[社群實測] |
+311:6. `/data` 實際可用空間與分割區大小（換算 10%/500 MB 門檻）。
+     332 R2_debloat_DEEPSEEK.md
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -307,9 +307,9 @@
+ 2. 這台是不是也用 `com.google.android.tvlauncher`（priority 2）當首頁；`cmd package resolve-activity -c android.intent.category.HOME` 的實際結果。
+ 3. `ro.adb.secure` 與 5555 埠行為：同 client type 的 50J7000A 是「開 USB 偵錯就開 5555」，本機是否相同（決定要不要無線配對）。
+ 4. `com.realtek.advancesetting` 是否存在（決定 `setupwraith` 的危險程度）。
+ 5. `MemAvailable` 基準值：停用前後各量一次，驗證是否也能拿到 +150 MB 等級的改善。
+-6. `/data` 實際可用空間與分割區大小（換算 10%/500 MB 門檻）。
++6. `/data` 實際可用空間與分割區大小（換算 5%/500 MB 門檻）。
+ 7. `dumpsys diskstats` 是否存在、p95/p99 數值常態為何（eMMC 老化判斷）。
+ 8. 停用 `com.tcl.overseasappshow` 後，重開機是否真的不再復活其他促銷套件。
+ 9. 停用 `com.google.android.tvrecommendations` 後，首頁與 YouTube/Netflix 的「recommendation row」是否正常消失（不是壞掉）。
+ 10. 撤銷 katniss 麥克風權限後，遙控器語音鍵與 YouTube 語音搜尋的實際行為。
+
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -54,9 +54,9 @@
+ ### 2.1 UAD-NG（Universal Android Debloater Next Generation）
+ 
+ | 項目 | 內容 |
+ |---|---|
+-| 本質 | Rust 寫的**桌面 GUI**（Linux/Windows/macOS x86-64），透過 ADB 改套件狀態；非腳本、非 App |
++| 本質 | Rust 寫的**桌面 GUI**（Linux/Windows/macOS），透過 ADB 改套件狀態；非腳本、非 App。注意：官方 FAQ 說 Linux/Windows 執行檔只支援 **x86-64**，ARM（含 Apple Silicon）要自行編譯 |
+ | 運作方式 | Android 6+：disable = `pm disable-user --user <u> <pkg>` + `pm am force-stop` + `pm clear`；uninstall = `pm uninstall --user <u> <pkg>`；還原 = `cmd package install-existing --user <u> <pkg>`。UI 上可切換 disable/uninstall 模式 [官方文件] |
+ | 是否真省 RAM | 是——它會把套件「凍結」，重開機後不會被喚醒（官方說法）；但只在**你選對套件**時有效 |
+ | Android TV 11 | 可用（Android 6+ 即可）；但**沒有電視/機型清單**，清單是「以套件為單位」的通用資料庫，TCL 條目多半來自 TCL **手機** |
+ | TCL 專屬支援 | 無 P715/P615 條目；有 TCL 手機套件條目（如 TGuard、NXTVISION）。有 Android TV 社群回報的踩雷：`setupwraith`、`tvlauncher` |
+
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -300,8 +300,78 @@
+ 6. **全程留紀錄**：每個 `pm disable-user` 都對應一行 `pm enable`，存成純文字檔（CleanYourTV 的 `~/.cleanyourtv` 紀錄做法可直接借用）。
+ 
+ ---
+ 
++## 附錄：本文引用的來源（全部以 webfetch／HTTP 實際讀取）
++
++> 上文提到的檔名（例如 `examples/tcl-43p615/debloat.txt`）對應下表 URL。
++
++**AOSP / Google 官方**
++
++| 主題 | URL |
++|---|---|
++| dumpsys（meminfo、procstats、gfxinfo 欄位定義） | <https://developer.android.com/tools/dumpsys> |
++| Android TV 記憶體指南（LMK、direct reclaim、Launcher 延遲） | <https://developer.android.com/training/tv/playback/memory> |
++| lmkd（Android 11 的 PSI 機制、low-RAM 參數） | <https://source.android.com/docs/core/perf/lmkd> |
++| 儲存低水位 `getStorageLowBytes()`（5% / 上限 500 MB） | <https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/os/storage/StorageManager.java> |
++| Google TV 兒童設定檔（僅 Google TV） | <https://support.google.com/families/answer/10491112> |
++
++**UAD-NG**
++
++| 主題 | URL |
++|---|---|
++| README（定位、detached fork、隱私） | <https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/README.md> |
++| 專案狀態（9,624★、GPL-3.0、未 archived、pushed 2026-10-26） | <https://api.github.com/repos/Universal-Debloater-Alliance/universal-android-debloater-next-generation> |
++| FAQ（disable vs uninstall、實際指令、原廠會還原、Recommended 警語） | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/FAQ> |
++| Getting started（前置、ADB、ARM 需自編） | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/Getting-started> |
++| Usage（snapshot、只顯示 system 套件） | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/Usage> |
++| 套件資料庫（5,382 筆，TCL 僅 17 筆且皆為手機） | <https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/resources/assets/uad_lists.json> |
++| #670 uninstall 導致相依 App 亂叫 | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670> |
++| #887 `tvlauncher` 移除風險（ZTE 會回復原廠設定） | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/887> |
++| #994 **Realtek**：移除 `setupwraith` → `com.realtek.advancesetting` 崩、音量無法調 | <https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/994> |
++
++**CleanYourTV**
++
++| 主題 | URL |
++|---|---|
++| README（流程、Home 保護、還原、OTA、支援範圍） | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/README.md> |
++| 專案狀態（44,579★、未 archived、pushed 2026-10-29） | <https://api.github.com/repos/Gathin23/cleanyourtv> |
++| TCL 77 份清單索引 | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/README.md> |
++| 43P615（RTD2851、Android TV 11、AR06）清單與 DO-NOT-DISABLE | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-43p615/debloat.txt> |
++| 50J7000A（**TCL-AP-RT2851-S1**、V674、MemAvailable 495→655 MB） | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-50j7000a/debloat.txt> |
++| 還原機制與限制 | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/restore.md> |
++| OTA 後套件復活、`check.py --fix` | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/firmware-updates.md> |
++| RT2851 遙控器 T 鍵／Netflix 鍵、HDMI passthrough | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv-rt2851.md> |
++| BeyondTV4 AR05（katniss 28% CPU、`com.tcl.system.server` 開機復活套件） | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv4-uk-ar05.md> |
++| 50DP660 裝置註記（NVM reset 導致 MAC/Widevine/ESN 遺失、原廠後 GMS 過舊） | <https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-50dp660.txt> |
++
++**android-tv-debloat-toolkit（「tv-debloat」）**
++
++| 主題 | URL |
++|---|---|
++| 專案狀態（788★、MIT、未 archived、自述不活躍） | <https://api.github.com/repos/seun-novodev/android-tv-debloat-toolkit> |
++| README（Windows-only、Safe/Advanced、FLauncher） | <https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/README.md> |
++| 原始碼（只做 `pm disable-user`；`com.tcl.tv` 標 ⚠️） | <https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/run_toolkit.py> |
++
++**Projectivy Launcher**
++
++| 主題 | URL |
++|---|---|
++| Play 商店（版本/更新日/評分/開發者說明） | <https://play.google.com/store/apps/details?id=com.spocky.projengmenu> |
++| XDA 開發者原帖（Override stock launcher 機制、freeze 需 root、已知問題） | <https://xdaforums.com/t/app-android-tv-projectivy-launcher.4436549/> |
++| #500 TCL 75T7B：HOME 被搶回原 launcher | <https://github.com/spocky/miproja1/issues/500> |
++| #415 TCL C855：Android 14 開機不自動進 Projectivy | <https://github.com/spocky/miproja1/issues/415> |
++
++**其他實測**
++
++| 主題 | URL |
++|---|---|
++| Shield Android 11 前後對照（MemAvailable +163.6 MiB、338→334 行程） | <https://raw.githubusercontent.com/mbcrump/shield-projectivy-debloat/main/BENCHMARKS.md> |
++| P715 收到 RT51 V715 更新包（同機型佐證） | <https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-176> |
++| P8M：Android 9（V616）→ V715 後明顯變慢（二手摘要，見「查不到」） | <https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187> |
++
++---
++
+ ## 待實機驗證清單
+ 
+ 1. `pm list packages` 實際清單 vs §4 的清單——**這台到底有沒有 `com.tcl.tvpassthrough`、`com.tcl.dashboard`、`com.tcl.tvweishi`、`com.tcl.bootadservice`**。
+ 2. 這台是不是也用 `com.google.android.tvlauncher`（priority 2）當首頁；`cmd package resolve-activity -c android.intent.category.HOME` 的實際結果。
+
+> build · deepseek-v4.1-flash
+[0m→ [0mRead R2_debloat_DEEPSEEK.md [90m[limit=120][0m
+> build · deepseek-v4.1-flash
+[0m→ [0mRead R2_debloat_DEEPSEEK.md [90m[offset=121, limit=110][0m
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -203,10 +203,10 @@
+ | **`com.google.android.tungsten.setupwraith`** | 設定精靈；**Realtek 機器上 `com.realtek.advancesetting` 要跟它要 provider** | **UAD-NG issue #994 實測：停用後 `com.realtek.advancesetting` FATAL EXCEPTION，系統音效設定崩、喇叭音量無法調整**。本機是 Realtek，**列為絕對不要碰** |
+ | `com.google.android.gms` / `com.android.vending` | Play 服務／商店 | 串流 App 全掛 |
+ | `com.google.android.apps.mediashell` | Chromecast | 投放失效 |
+ | `com.google.android.tv.remote.service` | 手機遙控 | 手機 App 遙控失效 |
+-| `com.tcl.tvweishi`、`com.tcl.appmarket2` | TCL 衛士／應用商店 | 部分機型是更新與安裝通路；**本案不要停** |
+-| Manual/DRM 相關 | 任何含 `widevine`、`drm`、`mediadrm` 名稱者 | Netflix/Disney+ 黑畫面或授權失敗 |
++| `com.tcl.tvweishi`、`com.tcl.appmarket2` | TCL 衛士／應用商店 | 部分機型是更新與安裝通路（推測）；**本案不要停** |
++| DRM／播放授權相關 | 任何含 `widevine`、`drm`、`mediadrm` 名稱者 | Netflix/Disney+ 黑畫面或授權失敗 |
+ 
+ **兩份清單互相矛盾的地方（正是「不可照抄」的證明）**
+ 
+ | 套件 | CleanYourTV（43P615/50J7000A） | debloat-toolkit |
+
+> build · deepseek-v4.1-flash
+[0m→ [0mRead R2_debloat_DEEPSEEK.md [90m[limit=90, offset=231][0m
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -262,9 +262,9 @@
+ | `dumpsys -l` | 確認這台到底有哪些服務可查（不同 TCL 韌體差很多） |
+ | `logcat -b crash -d` | 有沒有常駐 crash loop（crash loop 本身就是卡頓源） |
+ | `dumpsys package <pkg> \| grep -E "versionName\|firstInstallTime\|lastUpdateTime"` | 判斷是不是「某次 Play 更新後才開始卡」 |
+ 
+-### 5.5 判讀流程（建議順序）
++### 5.5 判讀流程（建議順序；門檻為經驗法則，非官方數字）
+ 
+ 1. 剛開機閒置 2 分鐘 → 記錄 `MemAvailable`、`dumpsys meminfo` 的 Free RAM、`dumpsys procstats --hours 1`。
+ 2. 正常使用 2 小時（開 Netflix／YouTube／四季）→ 再量一次。
+ 3. `MemAvailable` 掉超過 40% 且回不來 → 記憶體壓力（往 §4.1 找促銷／telemetry）。
+
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -284,9 +284,9 @@
+ | 限制背景執行 | `cmd appops set <pkg> RUN_ANY_IN_BACKGROUND ignore` | 對「被系統開機復活」的套件有效，且**不動套件狀態**——AR05 那台就是用這招處理 7 個被 `com.tcl.system.server` 復活的 App [社群實測] | 中：可能讓該 App 的通知／更新失效 |
+ | 撤銷麥克風權限 | `pm revoke com.google.android.katniss android.permission.RECORD_AUDIO` | 實測 28% → 0.4% 單核；**本題最划算的一招**（如果不用語音搜尋） | 語音搜尋失效（可 `pm grant` 還原） |
+ | 停用推薦列 | 停 `com.google.android.tvrecommendations` + TCL 促銷套件 | 首頁變乾淨，少幾個背景服務 | 低（可還原） |
+ | 關閉自動更新 | Play Store→設定→自動更新應用程式改「不要自動更新」 | 避免「更新後突然變卡」；也避免更新把停用的東西帶回來 | 中：安全性更新停滯（本案可接受） |
+-| 恢復原廠 | 設定→重設 | 一次性清乾淨；可解「怎麼停都怪」 | **高**：①所有停用全部復活（要重做）②TCL 舊機有實測紀錄：NVM reset 後若沒做「原廠＋USB 重刷」，**Wi-Fi MAC、Widevine keybox、Netflix ESN 會一直是空的**（50DP660 機型）③舊映像的 GMS/WebView 太舊會導致無法登入 Google、Netflix -121 |
++| 恢復原廠 | 設定→重設 | 一次性清乾淨；可解「怎麼停都怪」 | **高**：①所有停用全部復活（要重做）②TCL 舊機有實測紀錄：NVM reset 後若沒做「原廠＋USB 重刷」，**Wi-Fi MAC、Widevine keybox、Netflix ESN 會一直是空的**（50DP660，Android 8 舊機）③同機案例：原廠後預載的 GMS/WebView 太舊，會導致無法登入 Google、Netflix -121（本機是 Android 11，風險較低但未驗證） |
+ | 換 launcher | Projectivy / CleanYourTV launcher | 首頁乾淨、可能少一支行程 | 中：TCL 會搶 HOME（見 §2.4） |
+ 
+ ---
+ 
+
+> build · deepseek-v4.1-flash
+[0m→ [0mRead R2_debloat_DEEPSEEK.md [90m[offset=355][0m
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -391,9 +391,9 @@
+ ## 查不到／不確定
+ 
+ - **沒有 55P715 專屬清單**：CleanYourTV 77 份 TCL 清單裡沒有 P715；UAD-NG 沒有任何電視機型清單；debloat-toolkit 是泛 TCL 固定清單。本文所有套件名都是「同板推定」，不是本機實測。
+ - **沒有 P715 的 RAM 實測數字**：495→655 MB 是 50J7000A（同 client type、V674、AR04），不是 P715/V715。
+-- **Projectivy 在 TCL Android TV 11（非 Google TV）的行為沒有直接回報**：現有 TCL 回報集中在 Google TV 12/14（75T7B、C855、R646）。它在 Android TV 11 + `tvlauncher` 上會不會搶 HOME，屬推測。
++- **Projectivy 在 TCL Android TV 11（非 Google TV）的行為沒有直接回報**：現有 TCL 回報集中在較新的機種（75T7B 報 Android TV 12、C855 報 Android 14、R646）。它在 Android TV 11 + `tvlauncher` 上會不會搶 HOME，屬推測。
+ - **Projectivy 本身的 RAM 足跡沒有可靠數字**：唯一量化是 Shield 上的「整包 profile」（+163.6 MiB），無法分離出 launcher 單獨貢獻。「stock 450 MB → Projectivy 140 MB」這種說法只出現在某個第三方 toolkit 的宣傳文字，**未經證實，我不採用**。
+ - **eMMC 老化的量化門檻查不到官方或可信社群數據**：`dumpsys diskstats` 的百分位要跟「這台自己的歷史」比才有意義，沒有絕對值。
+ - **`MemAvailable < 300 MB` 這類門檻是我的推論**，不是 Google 官方數字；官方只描述機制（LMK、direct reclaim），沒有給 consumer 端門檻。
+ - **disable 後是否影響 Widevine/Netflix ESN**：查不到直接證據；已知的 ESN 遺失案例來自「NVM reset + 未重刷」，不是 debloat。
+
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -24,9 +24,9 @@
+ | 項目 | 值 | 意義 |
+ |---|---|---|
+ | OS | Android TV 11（API 30） | **不是 Google TV**。沒有 Google TV 首頁（`launcherx`）、沒有 Google TV 的 kids profile／Family Link 監控 |
+ | TCL 層 | TV+OS V5.2.0 | TCL 自家 UI／服務層，套件以 `com.tcl.*` 為主 |
+-| 平台 | TCL-AP-RT2851-S1（Realtek RTD2851 / `rtd285o`） | 與 50J7000A、55EP640、50P615、43P615 同族；32-bit `armeabi-v7a`、2 GB RAM |
++| 平台 | TCL-AP-RT2851-S1（Realtek RTD2851 / `rtd285o`） | 與 50J7000A、55EP640、50P615、43P615 同族；依 50J7000A（同 client type）推定為 32-bit `armeabi-v7a`、2 GB RAM |
+ | 韌體 | V8-R851T02-LF1V715.000032 | RT51 世代 Android 11 build；XDA 上 P715 用戶收到的正是「RT51 V715」更新包 |
+ 
+ **Android TV 11 與 Google TV 的差別（本題必分清）**
+ 
+
+> build · deepseek-v4.1-flash
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -115,9 +115,9 @@
+ | 是否真省 RAM | **只換桌面本身幾乎不省**。省的是「原 launcher 這支行程」，但 TCL 的推薦列／促銷／telemetry 是別支套件，照跑。若要省，**必須另外停用** `com.google.android.tvrecommendations`、`com.tcl.tv.tclhome_passive`、`com.tcl.waterfall.overseas`、`com.tcl.bi` 等 |
+ | 有數據嗎 | 唯一的量化實驗是 NVIDIA Shield（Android 11）上的「整包 profile」：停用原 launcher＋recommendations＋backdrop＋GameStream 並改用 Projectivy 後 MemAvailable **1,035,036 → 1,202,528 KiB（+163.6 MiB）**、行程 338→334。作者自己聲明「不能證明開機速度、流暢度或 CPU 表現」[社群實測，型號不同] |
+ | Android TV 11 | 支援（4.00 起相容到 5.1.1+）[官方文件] |
+ | TCL 相容性 | **有 TCL 專屬問題**：TCL 韌體會攔 HOME intent／恢復 launcher 優先權，導致「過一陣子跳回原 launcher」；Android 14 的 TCL 會變成「開機後要按一次 Home 才進 Projectivy」。回報型號為 75T7B（Android TV 12 / G10 / rtd6748）、C855（Android TV 14）、R646 [社群實測，型號不同] |
+-| 其他實務問題 | 待機後整個 launcher 被系統終止（#354）；明明已開無障礙仍跳「請啟用無障礙」（#377，TCL R646）；喚醒後數分鐘無反應的評論（Play 評論，2026-08） |
++| 其他實務問題 | 待機後整個 launcher 被系統終止（#354）；明明已開無障礙仍跳「請啟用無障礙」（#377，TCL R646）——兩者僅依 issue 標題，未細讀內容；喚醒後數分鐘無反應的評論（Play 評論，2026-08） |
+ | 前置 | 側載 APK 或 Play 安裝；建議搭配 `pm disable-user com.google.android.tvlauncher` 才穩 |
+ | 還原 | 解除安裝＋`cmd package set-home-activity com.google.android.tvlauncher`；若曾停用原 launcher，要 `pm enable` |
+ 
+ **停用原 launcher 的風險（本機適用）**
+
+[0m← [0mEdit R2_debloat_DEEPSEEK.md
+Index: R2_debloat_DEEPSEEK.md
+===================================================================
+--- R2_debloat_DEEPSEEK.md
++++ R2_debloat_DEEPSEEK.md
+@@ -359,8 +359,9 @@
+ | Play 商店（版本/更新日/評分/開發者說明） | <https://play.google.com/store/apps/details?id=com.spocky.projengmenu> |
+ | XDA 開發者原帖（Override stock launcher 機制、freeze 需 root、已知問題） | <https://xdaforums.com/t/app-android-tv-projectivy-launcher.4436549/> |
+ | #500 TCL 75T7B：HOME 被搶回原 launcher | <https://github.com/spocky/miproja1/issues/500> |
+ | #415 TCL C855：Android 14 開機不自動進 Projectivy | <https://github.com/spocky/miproja1/issues/415> |
++| 其他 issue（#354 待機被終止、#377 R646 無障礙提示；僅讀標題） | <https://github.com/spocky/miproja1/issues> |
+ 
+ **其他實測**
+ 
+ | 主題 | URL |
+
+> build · deepseek-v4.1-flash
+報告已寫入 `/Users/example-owner/TV/research/R2_debloat_DEEPSEEK.md`（402 行）。
+
+**幾個關鍵發現（都有實讀來源）：**
+
+1. **同平台實測數字找到了**：CleanYourTV 的 `tcl-50j7000a` 清單，client type 就是 `TCL-AP-RT2851-S1`（V674/AR04），停 25 個套件後 MemAvailable **495 → 655 MB**，重開機後維持、HDMI 正常。這是全網最接近你這台的量化證據；**但沒有 55P715 專屬清單**，這點報告裡明講。
+
+2. **「換桌面」≠ 瘦身**：TCL 的推薦列／促銷／telemetry 是獨立套件（`tclhome_passive`、`waterfall`、`bi`、`tvrecommendations`），Projectivy 的 override 模式甚至是「攔截原 launcher 啟動」，代表原 launcher 還在跑。要省 RAM 必須先停套件。
+
+3. **Realtek 專屬地雷**：UAD-NG issue #994 實測，停用 `setupwraith` 會讓 `com.realtek.advancesetting` FATAL EXCEPTION、**喇叭音量無法調整**。你這是 RT2851，我列為絕對不要碰。
+
+4. **建議一律 `pm disable-user`**：UAD-NG 官方文件自己寫「非 Recommended 等級用 disable、uninstall 已知會造成不穩定」，且 disable 一行就能還原。
+
+5. **卡頓可能不是 bloat**：XDA 有 P8M 用戶回報升到同一個 V715 後明顯變慢；另一台同世代機器量到 `katniss` 熱字常駐吃 28% 單核，撤麥克風權限後降到 0.4%——所以報告的執行順序是「先量三個數字，再動套件」。
+
+6. **Android TV 11 ≠ Google TV**：兒童設定檔／Family Link 監控是 Google TV 專屬（Google 官方頁面佐證），需求 B 那條路在這台不成立。
+
+限制與不確定處都列在最後一節（含 XDA 那條只能算二手摘要、Projectivy 在 TCL Android TV 11 無直接回報、eMMC 老化無量化門檻）。

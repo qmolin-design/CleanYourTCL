@@ -1,0 +1,2 @@
+B2 碼錶（Owner 10-29 20:50，各量 1 次）：YouTube 5s、Netflix 28s、HBO Max 8s、四季 13s；Home、Disney+ 未量。
+Owner：App 白名單加入 Spotify（com.spotify.tv.android）。

@@ -1,0 +1,13 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網、不要執行 build 或測試（已跑過 ALL PASS）。工作目錄 /Users/example-owner/TV-wt-tvagent。
+只讀以下內容，不要讀清單外的檔案：
+- /Users/example-owner/TV/research/wo/WO-A1_fix3_prompt.txt（本次工單：實機錯誤與要做 1～5）
+- `git -C /Users/example-owner/TV-wt-tvagent diff -- tvagent/src tvagent/test`
+- tvagent/src/com/example/tvagent/AdbClient.java（對照前後文）
+
+任務：
+1. 要做 1～4 逐項「做到／沒做到＋檔案:行號」。
+2. 追蹤 App 在電視上的實際執行路徑（AgentService 呼叫 AdbClient.withKeyFile → 載入或產生金鑰 → 送公鑰／簽章）：這條路徑上是否還有任何地方對 Conscrypt 的私鑰物件呼叫 getKeySpec、getEncoded、或轉型成 RSA*CrtKey／RSAPrivateCrtKeySpec？公鑰的 n、e 是否確定來自檔案 DER 或 KeyFactory.generatePublic(RSAPublicKeySpec) 產生的公鑰（RSAPublicKey 介面）？
+3. 既有金鑰檔（電視上已存在，PEM PKCS#8 完整 CRT）載入路徑，與第一次產生路徑，是否都不會丟例外。
+4. 測試斷言未放寬（diff 中 test 沒有刪行）。
+
+輸出：第一行只能是 PASS 或 FAIL。之後列問題，每條：檔案:行號、問題、理由。只有違反工單、在 Android Conscrypt 上仍會失敗、測試放寬才算 FAIL；其他列「非阻擋」。繁體中文。

@@ -1,0 +1,6 @@
+upd（21:40～21:55，Owner「先把 TCL 更新程式停掉」）：
+- pm disable-user com.tcl.versionUpdateApp → 重開：更新程式自己被重設回 enabled=0，但 live1 10 個＋1a 5 個全部維持停用（首次成功）。
+- 嘗試停用元件 SystemUpdateReceiver（BOOT_COMPLETED／tcl boot_t1，priority 1000）→ SecurityException：shell 不能改 system uid App 的元件狀態，未生效。
+- 之後連續重開 2 次：15 個仍全部停用。更新程式 stopped=false、未執行；為何不再復原，機制未確認（推測：whitelist 還原只在特定條件觸發）。
+- 若日後又被復原：先 pm disable-user com.tcl.versionUpdateApp 再重開（已證實可打斷一次）。
+- 10-29 21:52 冷開機（Owner 拔插頭 30 秒）：開機 2.5 分檢查，15 個全部維持停用，未被還原；更新程式 enabled=0（DEFAULT）。MemAvailable 579MB、SwapFree 397MB（開機 2 分）。

@@ -1,0 +1,32 @@
+你是施工工人，這是 WO-T3 的退修（第 2 次施工）。工作目錄：/Users/example-owner/TV-wt-tvgate4（分支 tvgate-v4）。只改 tvgate/ 下的檔案。
+規格仍是 research/PLAN_v4_ui.md；原工單規則與禁止事項不變（不執行真 adb、不連電視、不裝套件、不 launchctl、不讀寫 ~/Library/Application Support/tvgate、~/.secrets、~/Library/LaunchAgents、~/Library/Logs/tvgate.log、不 commit）。
+審核意見原文：/Users/example-owner/TV/research/wo/WO-T3_review_gemini.md、/Users/example-owner/TV/research/wo/WO-T3_review_dsf.md。大腦實際畫面截圖：/Users/example-owner/TV/research/wo/WO-T3_page_run1.png（430px 寬，右側被切掉）。先讀完。
+
+大腦裁定必須修：
+A. 測試（不可用固定 sleep 等背景工作；一律 wait_for 一個可觀察的條件，例如假 adb 的 calls 出現第 N 次 usagestats、或文字 log 出現某行）
+ 1. 去重：等第二次 usagestats 抓取確實發生後，用 `SELECT count(*) FROM events` 斷言筆數不變（不是只比分鐘數）。
+ 2. dumpsys 失敗不影響鎖定：前景設成 YouTube、沒有授權、tv 已是 locked；觸發一次失敗的 usagestats 抓取（用縮短的抓取週期環境變數或其他非 wake 的方式，不可經由 wake），等 calls 出現該次抓取且文字 log 有失敗紀錄後，斷言 /status tv 仍為 locked、沒有 grace、沒有通知、/log 沒有 grace。
+ 3. --links：給 --links 子程序一個測試挑的空閒埠（TVGATE_PORT 或 --port），斷言子程序 5 秒內結束、結束後該埠沒有人監聽；並斷言每個設備那兩行帶的是它自己的鑰匙（三把不同）。
+ 4. 所有用到「今天」「現在」的測試改用固定、遠離午夜的時間（注入時鐘或用 calc／schedule 純函式），不受執行時刻影響。
+ 5. 排程 600 秒邊界補測 age==600（觸發）與 601（skipped）。
+ 6. 「重開不回補」要能區分 last_check 有恢復：例如重開前 last_check 在規則時間之前、重開時已超過 600 秒 → 預期 schedule-skipped 1 筆；若 last_check 沒恢復（改成 now）則 0 筆。斷言 1 筆。
+ 7. 刪掉 test_schedule_end_to_end 裡多餘的 start()/stop()；GEMINI 非阻擋 1、2 的固定 sleep 改 wait_for。
+ 8. 暫存目錄改回系統暫存（tempfile 預設位置，不放 tvgate/ 底下）。
+B. gate.py
+ 1. GATE_LOCK 事件只在鎖定讀回確認成功後寫入。
+ 2. 排程時間點在 600 秒內但 Mac 不在家用網路 → 不切、記 schedule-skipped，detail 註明「Mac 不在家」。
+ 3. 鑰匙檔：值為空字串的那一項忽略（其他設備照常）；整份不是 dict 或讀檔失敗才全部 401。
+ 4. meta 的 last_fetch／data_since 不是數字 → 當作 null，不得 500。
+ 5. data_since 改為 DB 中最早一筆事件的時間（目前是第一次抓取時間，與週／月實際涵蓋的資料不一致）。
+C. 網頁（手機 375px 寬不得出現左右捲動）
+ 1. 全頁 `box-sizing:border-box`；卡片寬度不超過畫面；按鈕列可換行（flex-wrap）；長字串可斷行（overflow-wrap:anywhere）。
+ 2. 前景時間每列對齊：App 名稱固定欄寬｜橫條｜分鐘數（用 grid），橫條起點對齊。
+ 3. 排程顯示用中文星期：連續的寫成「週一～週五」，不連續的寫「週一、三、五」；勾選框標籤也用中文。
+ 4. 紀錄的時間顯示改成「MM-DD HH:MM」。
+ 5. 測試 test_web_page 加斷言：HTML 含 `box-sizing` 與 `flex-wrap`。
+
+完成前自己跑：
+  cd /Users/example-owner/TV-wt-tvgate4/tvgate && python3 test_gate.py   （全過、150 秒內、無殘留子程序；連跑兩次都要過）
+  stat -f %m ~/Library/Logs/tvgate.log   （前後相同）
+  git -C /Users/example-owner/TV-wt-tvgate4 status --porcelain --untracked-files=all   （只有 tvgate/ 下的檔，且沒有 tvgate/tmp* 目錄）
+最後回報：A1～A8、B1～B5、C1～C5 各改在哪、上面三個指令的實際輸出。

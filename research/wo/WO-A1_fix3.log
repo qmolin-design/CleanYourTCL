@@ -1,0 +1,45 @@
+退修 2 完成。以下是最終回報。
+
+## 改了什麼（只動 3 個允許的檔案）
+
+**`tvagent/src/com/example/tvagent/AdbClient.java`**
+1. **生產路徑不再碰金鑰物件**：`loadOrGenerateKey` 讀檔時先 `pemToDer` 取 DER 位元組，私鑰照舊給 `KeyFactory`，**公鑰改走新增的 `publicKeyFromDer(der)` → `parsePkcs8/parsePkcs1` 直接从檔案位元組解出 modulus／publicExponent**。刪掉了上次失败的 `getKeySpec(priv, RSAPrivateCrtKeySpec.class)` 主路徑（正是電視上丟 `RSAPrivateKeySpec cannot be cast to RSAPrivateCrtKeySpec` 的那行）與 `getEncoded()` 備援——正式路徑零 `getKeySpec`、零轉型。
+2. **產生與載入一致**：第一次產生金鑰時，`getEncoded()` 只用來把私鑰寫檔，隨即**把寫入的檔案重新讀回並解析**產生公鑰回傳，兩條路徑得相同公鑰（新增 `generate-load-same-pubkey` 測試覆蓋）。
+3. **錯誤訊息具體化**：`expectTag/readLen/parsePkcs8/parsePkcs1` 全部帶欄位名與位移（如 `PKCS#1 field[2] publicExponent e length … at offset …`），`publicKeyFromCrt` 會明確指出 `publicExponent missing`；所有例外鏈住 cause，沒有 `addSuppressed` 吞例外。
+4. `publicKeyFromPrivate` 保留簽名（既有測試呼叫它）但重寫為只解析 `getEncoded()` DER、不呼叫 `getKeySpec`、不轉型，並標註正式路徑不呼叫它；`mincryptPublicKey` 改為 `instanceof RSAPublicKey` 直接取 n、e（Conscrypt 有實作），非實作才 fallback `getKeySpec(RSAPublicKeySpec)`。
+
+**`tvagent/test/AdbClientTest.java`**（只新增）：`testConscryptBrokenObjectStillLoadsFromFile`（壞物件丟具體錯誤＋從 `testdata/adbkey` 載入與 `adbkey.pub` 逐 byte 相同）、`testGenerateThenLoadSameKey`（產生→重載公鑰相同）。
+
+## 為什麼這次在 Android 上不會再失敗
+電視失敗鏈是：Conscrypt 的 `getKeySpec(..., RSAPrivateCrtKeySpec.class)` 回傳不含 CRT 的 `RSAPrivateKeySpec` → 隱式轉型炸 → 備援 `parsePkcs8(priv.getEncoded())` 拿到的編碼缺 `publicExponent` 也失敗。Opus 已確認電視金鑰檔本身是完整 CRT（DER 里什麼都有）。新程式碼公鑰參數**只讀檔案 DER**，而檔案 DER 在 Conscrypt 上讀出來與 Mac 相同（純位元組 `readAll`＋`Base64` 解碼，無提供者參與），`parsePkcs8` 是自家最小 DER 解析器，不經任何 provider；私鑰物件只進 `Cipher("RSA/ECB/NoPadding")` 做簽章——簽章在退修 1 那版電視上並未報錯，且 `signToken` 路徑本次未動。`mincrypt` 的 n、e 也不再依賴 provider（介面直取）。
+
+## 指令實際輸出
+```
+$ sh tvagent/test.sh 2>&1 | tail -3
+PASS err-garbage-kind
+PASS err-garbage-time
+ALL PASS
+（另含新增：conscrypt-broken-object-throws/conscrypt-broken-error-specific/
+conscrypt-file-pubkey-matches-pub/generate-writes-file/generate-load-same-pubkey 皆 PASS；
+既有 vector-pubkey/vector-sig/opaque 系列皆 PASS）
+
+$ sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+Note: src/.../AgentService.java uses or overrides a deprecated API.   ← 既有（未動的檔），非本次引入
+-rw-r--r--@ 1 example-owner  staff  24981 10月 30 09:23 tvagent/tvagent.apk
+
+$ grep -n "getKeySpec\|getEncoded()\|RSAPrivateCrtKeySpec)" tvagent/src/.../AdbClient.java
+221,257-258,301-302：註解（說明不呼叫）
+282：產生時寫檔用（持久化，非推導參數）
+285,307,309,313：publicKeyFromPrivate（測試相容，正式路徑不呼叫）＋錯誤字串
+429,439：mincrypt 對「公鑰」的 getKeySpec 備援（非私鑰；主路徑走 RSAPublicKey 介面）
+→ 私鑰物件推導公鑰參數的程式碼路徑已不存在於正式路徑。
+
+$ git diff -U0 -- tvagent/test | grep -c '^-[^-]'
+0
+
+$ git status --porcelain --untracked-files=all
+ M tvagent/src/com/example/tvagent/AdbClient.java
+ M tvagent/test/AdbClientTest.java
+ M tvagent/tvagent.apk
+```
+無 commit、無連電視／執行 adb、無外部函式庫、未碰其他檔案。

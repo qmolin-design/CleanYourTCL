@@ -1,0 +1,90 @@
+[0m
+> build · muse-spark-1.3-contributor
+只做網路查詢不碰實機 — 先讀需求，再查 ADB 自建方案可行性。
+[0m→ [0mRead 00_REQUIREMENT.md 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Android+TV+11+network+ADB+adb+tcpip+reboot+disabled 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=TCL+Android+TV+ADB+network+debugging+reboot+off 
+[0m% [0mWebFetch https://developer.android.com/tools/adb 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=pm+disable-user+vs+pm+suspend+Android+persist+reboot 
+> build · muse-spark-1.3-contributor
+已確認 ADB 官方文件的無線偵錯門檻，繼續深挖暫停機制與投放行為。
+[0m✗ [0mWebFetch https://android.stackexchange.com/questions/56620/enable-and-disable-system-apps-via-adb failed
+[91m[1mError: [0mStatusCode: non 2xx status code (403 GET https://android.stackexchange.com/questions/56620/enable-and-disable-system-apps-via-adb)
+[0m✗ [0mWebFetch https://android.stackexchange.com/questions/247092/how-to-list-suspended-apps failed
+[91m[1mError: [0mStatusCode: non 2xx status code (403 GET https://android.stackexchange.com/questions/247092/how-to-list-suspended-apps)
+[0m% [0mWebFetch https://adbkit.com/blog/control-android-tv-with-adb 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=cmd+package+suspend+unsuspend+adb+shell+no+root+persist+reboot 
+[0m% [0mWebFetch https://github.com/mojothemonkey2/TCL_Guide 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.home-assistant.io/integrations/androidtv/ 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=cmd+package+suspend+dialog+%22managed+by%22+unsuspend+user+can+enable 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Home+Assistant+Android+TV+ADB+integration+adb_server+timer+automation 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Chromecast+built-in+YouTube+disabled+app+cast+fails+receiver 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Android+TV+standby+sleep+ADB+connection+refused+stay+awake+network 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.home-assistant.io/actions/androidtv.adb_command/ 
+[0m% [0mWebFetch https://www.home-assistant.io/integrations/timer/ 
+[0m% [0mWebFetch https://api.github.com/repos/hassio-addons/addon-adb 
+[0m% [0mWebFetch https://github.com/hassio-addons/addon-adb/blob/main/adb/DOCS.md 
+[0m% [0mWebFetch https://source.android.com/docs/core/power/tv-standby 
+> build · muse-spark-1.3-contributor
+前半段的官方文件已齊，繼續查遠端存取與防繞過。
+[0m% [0mWebFetch https://www.bing.com/search?q=cmd+package+suspend+unsuspend+adb+shell+persist+reboot+root+required 
+[0m% [0mWebFetch https://www.bing.com/search?q=YouTube+TV+package+name+com.google.android.youtube.tv+YouTube+Kids+tvkids+Android+TV 
+[0m% [0mWebFetch https://www.bing.com/search?q=Home+Assistant+companion+iPhone+button+timer+automation+no+coding+dashboard 
+[0m% [0mWebFetch https://www.bing.com/search?q=Home+Assistant+Cloud+Nabu+Casa+price+per+month+remote+access+2025 
+[0m% [0mWebFetch https://www.bing.com/search?q=Tailscale+remote+access+Home+Assistant+iPhone+free+personal 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://tailscale.com/pricing 
+[0m% [0mWebFetch https://api.github.com/repos/yuliskov/SmartTube 
+[0m% [0mWebFetch https://www.nabucasa.com/ 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=site%3Adeveloper.android.com+setPackagesSuspended+suspend+app 
+[0m% [0mWebFetch https://developer.android.com/reference/android/content/pm/PackageManager#setPackagesSuspended(java.lang.String[],%20boolean,%20android.os.PersistableBundle,%20android.os.PersistableBundle,%20java.lang.String) 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.home-assistant.io/cloud/ 
+[0m% [0mWebFetch https://developer.android.com/work/dpc/security 
+[0m% [0mWebFetch https://bytescope.dev/en/web-adb/commands/pm-disable-user/ 
+[0m% [0mWebFetch https://syndamia.com/blog/managing-apps-with-adb-without-root/ 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Android+TV+network+debugging+turns+off+after+reboot+adb+connect+refused 
+> build · muse-spark-1.3-contributor
+核心機制已齊，繼續補遠端方案與成本資訊。
+[0m% [0mWebFetch https://www.nabucasa.com/link/ 
+[0m% [0mWebFetch https://api.github.com/repos/JeffLIrion/python-androidtv 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=%22disable-user%22+%22Settings%22+Apps+Enable+button+re-enable+Android+TV+user+can+enable 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=YouTube+Android+TV+package+%22com.google.android.youtube.tv%22+disable+cast+receiver 
+[0m% [0mWebFetch https://community.home-assistant.io/t/android-debug-bridge-google-tv-streamer-not-working/955714 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://developers.google.com/cast/docs/android_tv_receiver 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=iPhone+Shortcuts+Get+Contents+of+URL+POST+API+webhook+Home+Assistant 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Cloudflare+Tunnel+free+expose+Home+Assistant+remote+access 
+[0m% [0mWebFetch https://tvboxtools.com/debloat-android-tv/ 
+[0m% [0mWebFetch https://www.appitika.com/read/enable-developer-options-android-tv-adb-debugging 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://companion.home-assistant.io/docs/integrations/siri-shortcuts/ 
+[0m% [0mWebFetch https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/ 
+[0m% [0mWebFetch https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios 
+[0m% [0mWebFetch https://github.com/yuliskov/SmartTube 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=adb+shell+cmd+package+suspend+reboot+still+suspended+persist 
+> build · muse-spark-1.3-contributor
+資料大致齊備，最後補四個關鍵來源後寫報告。
+[0m✗ [0mWebFetch https://play.google.com/store/apps/details?id=com.google.android.youtube.tvkids failed
+[91m[1mError: [0mStatusCode: non 2xx status code (404 GET https://play.google.com/store/apps/details?id=com.google.android.youtube.tvkids)
+[0m% [0mWebFetch https://www.home-assistant.io/hardware/ 
+[0m% [0mWebFetch https://www.reddit.com/r/tasker/comments/gc5qnn/about_pm_suspend_shell_command/ 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.home-assistant.io/docs/automation/trigger/ 
+[0m% [0mWebFetch https://developers.home-assistant.io/docs/auth_api/ 
+> build · muse-spark-1.3-contributor
+證據已收齊，開始撰寫報告。
+[0m← [0mWrite R3_selfhost_adb_MUSE.md
+Created file successfully: R3_selfhost_adb_MUSE.md
+> build · muse-spark-1.3-contributor
+報告已寫入 `R3_selfhost_adb_MUSE.md`。
+
+核心結論：不寫 TV App 可做閉環（HA＋`pm disable-user`＋`am force-stop`＋服務端時間戳＋reconcile），iPhone 經 HA App／捷徑核准，HA 視覺化編輯器即可組出 15／30／60 分鐘，不需寫程式。
+
+三個硬傷（皆已標待驗證）：重開機後網路 ADB 是否保留（Android TV 11 無配對碼式無線偵錯，只能用傳統 5555，官方要求 TV 需 Android 13+ 才有配對碼）；孩子能否自行在設定按啟用（最大防繞過風險）；瀏覽器 youtube.com 需另堵。
+
+證據紀律：官方／社群主張都附實際讀過的 URL（adb 官方文件、HA 官方文件、Cast Connect、SmartTube README、TCL Guide 等）；suspend 經 shell 可用性、Kids 套件名、停用後各入口確切 UX 等查無來源的一律標推測／列入 12 項實機驗證清單。

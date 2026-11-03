@@ -1,0 +1,2 @@
+1b 結果（21:15）：pm disable-user 後重開全部被恢復預設（enabled=0）；改用 appops RUN_ANY_IN_BACKGROUND ignore，重開後同樣被清除。本機（BeyondTV2 AR05）與 CleanYourTV BeyondTV4 AR05 行為不同。現況：5 個套件皆回原廠狀態（等於未改）。copydatatotv 測試用的 appops 已設回 allow。
+建議：先不處理（記憶體小：tvrecommendations 約 17MB）；之後時間管理服務上線時，可在開機後由服務重套。

@@ -1,0 +1,14 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網、不要執行 build 或測試（已跑過）。工作目錄 /Users/example-owner/TV-wt-tvagent。
+只讀以下內容，不要讀清單外的檔案：
+- /Users/example-owner/TV/research/wo/WO-A1_fix2_prompt.txt（本次工單：要做 1～7）
+- research/PLAN_v5_spike.md 檔尾「實機發現與計畫修正」
+- `git -C /Users/example-owner/TV-wt-tvagent diff -- tvagent/` 以及新檔 tvagent/src/com/example/tvagent/AlarmReceiver.java
+- tvagent/src/com/example/tvagent/AgentService.java、tvagent/AndroidManifest.xml（對照前後文）
+
+任務：
+1. 要做 1～7 逐項「做到／沒做到＋檔案:行號」。
+2. Android 11（API 30、targetSdk 30）實機風險：從 AlarmReceiver（背景）呼叫 startForegroundService 是否允許；服務若是新建，是否在 5 秒內 startForeground；鬧鐘鏈會不會斷（例如某次心跳例外、服務被殺、onStartCommand 收到 null intent、重開機後）；PendingIntent flags 是否正確；setExactAndAllowWhileIdle 用法是否正確。
+3. 30 秒去重邏輯會不會把正常的鬧鐘心跳也略過或造成永遠不寫；SELFTEST 是否仍在同一單執行緒序列化。
+4. 安全：AlarmReceiver exported=false；沒有新增任何可從外部注入指令的路徑；仍無 youtube、仍只動 tkey。
+
+輸出：第一行只能是 PASS 或 FAIL。之後列問題，每條：檔案:行號、問題、理由。只有違反工單、在 Android 11 上會失敗或鬧鐘鏈會斷、安全問題才算 FAIL；其他列「非阻擋」。繁體中文。

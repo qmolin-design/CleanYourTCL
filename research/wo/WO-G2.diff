@@ -1,0 +1,76 @@
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index da64511..fa12860 100644
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -47,6 +47,11 @@ public class AgentService extends Service {
+ 
+     static final String TARGET = "com.example.tkey";
+     static final String CMD_ECHO = "echo ok";
++    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
++    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
++            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+     static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+     static final String CMD_LIST_DISABLED = "pm list packages -d";
+     static final String CMD_ENABLE = "pm enable com.example.tkey";
+@@ -218,8 +223,18 @@ public class AgentService extends Service {
+         } catch (Exception e) {
+             status = AdbClient.IO + ":" + oneLine(e.getMessage());
+         }
++        String wl = "skip";
++        if ("ok".equals(status)) {
++            try {
++                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
++            } catch (AdbClient.AdbException e) {
++                wl = e.kind + ":" + oneLine(e.getMessage());
++            } catch (Exception e) {
++                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
++            }
++        }
+         long uptime = SystemClock.elapsedRealtime() / 1000;
+-        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status);
++        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+     }
+ 
+     private void runSelftest() {
+diff --git a/tvagent/test.sh b/tvagent/test.sh
+index 56fa55b..2dff070 100644
+--- a/tvagent/test.sh
++++ b/tvagent/test.sh
+@@ -3,6 +3,6 @@
+ # 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+ cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+ rm -rf testout && mkdir -p testout
+-javac -d testout src/com/example/tvagent/AdbClient.java test/AdbClientTest.java
++javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java test/AdbClientTest.java
+ java -cp testout com.example.tvagent.AdbClientTest testdata
+ rm -rf testout'
+diff --git a/tvagent/test/AdbClientTest.java b/tvagent/test/AdbClientTest.java
+index c12642c..7e408fd 100644
+--- a/tvagent/test/AdbClientTest.java
++++ b/tvagent/test/AdbClientTest.java
+@@ -700,6 +700,12 @@ public class AdbClientTest {
+             testBigOutput();
+             testTruncated();
+             testErrors();
++            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
++            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
++            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
++            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
++            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
++            check("keep".equals(Whitelist.wlStatus("Failed to write while dumping service activity: Broken pipe\nkeep\n")), "wl-broken-pipe", "keep after error");
+         } catch (Exception e) {
+             System.out.println("FAIL harness :: " + e);
+             e.printStackTrace(System.out);
+=== 新檔 Whitelist.java
+package com.example.tvagent;
+
+final class Whitelist {
+    static String wlStatus(String shellOutput) {
+        String status = shellOutput.trim();
+        status = status.substring(status.lastIndexOf('\n') + 1).trim();
+        return "keep".equals(status) || "set".equals(status) || "fail".equals(status)
+                ? status : "unexpected";
+    }
+}

@@ -1,0 +1,16 @@
+name = "tvquota"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "tv-demo.example.net/tv/*", zone_name = "example.net" }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tvquota"
+database_id = "00000001-0000-4000-8000-000000000000"
+
+[vars]
+OFFLINE_MIN = "30"
+ACCESS_TEAM = "example-team-0000"
+ACCESS_AUD = "00000000000000000000000000000000"

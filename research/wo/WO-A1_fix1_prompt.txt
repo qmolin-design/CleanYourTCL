@@ -1,0 +1,20 @@
+你是施工工人，這是 WO-A1 退修第 1 次。工作目錄：/Users/example-owner/TV-wt-tvagent（git worktree，分支 tvagent-fix1，來自 main，tvagent/ 已是你上次交件的版本）。只改 tvagent/src/com/example/tvagent/AdbClient.java，必要時改 tvagent/test/AdbClientTest.java 與 tvagent/tvagent.apk（重新 build 產生）。
+
+先讀：research/PLAN_v5_spike.md（WO-A1 與檔尾裁定表）、/Users/example-owner/TV/research/wo/WO-A1_prompt.txt（原工單）。
+
+實機失敗（電視 Android 11 實測）：
+- 安裝後 SELFTEST，agent.log：`adb=io:key error: com.android.org.conscrypt.OpenSSLRSAPrivateKey cannot be cast to java.security.interfaces.RSAPrivateCrtKey`
+- 原因：AdbClient.java:199 把 KeyFactory 產生的私鑰強制轉型成 RSAPrivateCrtKey。Android 的 Conscrypt 提供者回傳的私鑰類別不實作該介面（桌面 JVM 會實作，所以 Docker 測試抓不到）。
+
+要做：
+1. 不得把任何金鑰強制轉型成 RSAPrivateCrtKey 或其他提供者相關的類別。從私鑰取得公鑰的方式改為與提供者無關，例如 `KeyFactory.getKeySpec(priv, RSAPrivateCrtKeySpec.class)` 取 modulus 與 publicExponent，或產生金鑰時把公鑰也存檔（X509EncodedKeySpec）。已存在的 App 金鑰檔（只有私鑰 PKCS#8）要能繼續使用。
+2. 檢查整個 AdbClient.java 其他地方有沒有同類問題（例如對 PrivateKey／PublicKey 做 instanceof 或轉型、依賴特定提供者的演算法名稱）；Android 上簽章用 `Cipher.getInstance("RSA/ECB/PKCS1Padding")` 加密模式或 `Signature.getInstance("NONEwithRSA")` 都要確認 Conscrypt 支援，不支援就換成支援的寫法並在回報說明。
+3. 所有既有測試仍要通過（測試向量逐 byte 相同等），測試斷言不得放寬。
+
+完成前自己跑並貼實際輸出：
+  cd /Users/example-owner/TV-wt-tvagent && sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+  sh tvagent/test.sh 2>&1 | tail -3
+  grep -n "RSAPrivateCrtKey)\|(RSAPrivateKey)\|(RSAPublicKey)\|instanceof" tvagent/src/com/example/tvagent/AdbClient.java
+  git status --porcelain --untracked-files=all
+禁止：同原工單（不連電視、不執行 adb、不碰 tvagent/ 以外、不加外部函式庫、不 commit）。
+最後回報：改了什麼、為什麼在 Android 上可行、上面指令的實際輸出。

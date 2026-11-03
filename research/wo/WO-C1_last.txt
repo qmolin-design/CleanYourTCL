@@ -1,0 +1,155 @@
+已新增 Worker 與六組測試，但**尚未達成全部交件標準**：本機 Node 25.6.1 執行指定的 `node --test cfquota/` 時，無法將目錄解析為測試入口。直接指定測試檔則六組全過。
+
+新增檔案及行數：
+
+```text
+      14 cfquota/README.md
+     131 cfquota/lib.mjs
+      93 cfquota/lib.test.mjs
+       6 cfquota/schema.sql
+       2 cfquota/worker.mjs
+      16 cfquota/wrangler.toml
+     262 total
+```
+
+**完成標準 1：未通過，exit 1。** `node --test cfquota/` 實際輸出：
+
+```text
+node:internal/modules/cjs/loader:1458
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/example-owner/TV-wt-c1/cfquota'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1455:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1065:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1070:22)
+    at Module._load (node:internal/modules/cjs/loader:1241:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v25.6.1
+✖ cfquota (48.026625ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 52.77575
+
+✖ failing tests:
+
+test at cfquota:1:1
+✖ cfquota (48.026625ms)
+  'test failed'
+```
+
+直接指定測試檔的實際輸出：
+
+```text
+$ node --test --test-reporter=tap cfquota/lib.test.mjs
+TAP version 13
+# (node:38257) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 1 驗證、憑證快取與身分
+ok 1 - 1 驗證、憑證快取與身分
+  ---
+  duration_ms: 29.619459
+  type: 'test'
+  ...
+# Subtest: 2 加值、冪等、驗證與上限
+ok 2 - 2 加值、冪等、驗證與上限
+  ---
+  duration_ms: 7.283375
+  type: 'test'
+  ...
+# Subtest: 3 同步、重新安裝、資料庫重建與輸入驗證
+ok 3 - 3 同步、重新安裝、資料庫重建與輸入驗證
+  ---
+  duration_ms: 9.030333
+  type: 'test'
+  ...
+# Subtest: 4 異常、事件與恢復
+ok 4 - 4 異常、事件與恢復
+  ---
+  duration_ms: 7.811459
+  type: 'test'
+  ...
+# Subtest: 5 家長頁
+ok 5 - 5 家長頁
+  ---
+  duration_ms: 0.754083
+  type: 'test'
+  ...
+# Subtest: 6 每次同步清理 90 天以前事件
+ok 6 - 6 每次同步清理 90 天以前事件
+  ---
+  duration_ms: 0.733125
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 173.615
+```
+
+**完成標準 2～3：通過。** 無輸出項目以空白保留：
+
+```text
+$ grep -nE "^import" cfquota/lib.mjs
+
+$ grep -c "import" cfquota/worker.mjs
+1
+$ grep -rnE "@(gmail|icloud|yahoo|hotmail|outlook)\." cfquota/
+
+$ grep -nE "custom_domain|crons|triggers" cfquota/wrangler.toml
+
+$ grep -c 'tv-demo.example.net/tv/\*' cfquota/wrangler.toml
+1
+```
+
+**完成標準 4：通過，exit 0。**
+
+```text
+ ⛅️ wrangler 4.151.0
+────────────────────
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+Total Upload: 13.41 KiB / gzip: 4.95 KiB
+Your Worker has access to the following bindings:
+Binding                                   Resource                  
+env.DB (tvquota)                          D1 Database               
+env.OFFLINE_MIN ("30")                    Environment Variable      
+env.ACCESS_TEAM ("REPLACE_IN_WO_C3")      Environment Variable      
+env.ACCESS_AUD ("REPLACE_IN_WO_C3")       Environment Variable      
+
+--dry-run: exiting now.
+```
+
+**完成標準 5：通過。**
+
+```text
+?? cfquota/README.md
+?? cfquota/lib.mjs
+?? cfquota/lib.test.mjs
+?? cfquota/schema.sql
+?? cfquota/worker.mjs
+?? cfquota/wrangler.toml
+```
+
+規格疑問與保守選擇：
+
+- 「所有 POST 檢查 Origin」與 WO-C3 電視同步的 `curl` 範例未帶 Origin 有衝突；實作依指定優先的「Cloudflare 端」規格，對同步也要求 Origin。電視端與 C3 驗收須確認帶上該標頭。
+- 指定的目錄測試指令在本機失敗；工單只允許六個指定檔案，因此未增設目錄入口檔，也未改寫驗收指令來冒充通過。
+
+未登入 Cloudflare、未實際部署、未建立資源，亦未 commit 或 push。尚未進行 Cloudflare 實際環境驗收。

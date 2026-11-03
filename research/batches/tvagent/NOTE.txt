@@ -1,0 +1,57 @@
+# tvagent 實機實驗（WO-A2）紀錄 2026-10-30
+
+## 結果
+1. 協定（Mac 臨時金鑰，Docker JVM）：PASS 08:51。注意：電視開機久了 adbd 會卡「prompt currently pending」、框架沒收到公鑰、不跳授權視窗 → adb reboot 後正常。
+2. App 自連 127.0.0.1:5555＋SELFTEST（停用/啟用 com.example.tkey）：PASS 09:29:41（退修 3 版本）。App 金鑰（tvagent@tv）已在電視「一律允許」清單（dumpsys adb keystore 可見；授權時是否有跳視窗待 Owner 確認）。
+3. 開機自啟：首次 FAIL → 原因 TCL 自訂 appop `APP_AUTO_START: ignore`（TclActivityManagerService 只放行系統/Google App 收 BOOT_COMPLETED）。
+   鬧鐘心跳首次 FAIL → 原因待機分類 50（NEVER，無桌面圖示的 App）鬧鐘被延 24 小時。
+   修正（shell 指令，App 自己的 adb 也能下）：
+     cmd appops set com.example.tvagent APP_AUTO_START allow
+     am set-standby-bucket com.example.tvagent active
+     dumpsys deviceidle whitelist +com.example.tvagent   （分類變 5＝EXEMPTED）
+   之後 adb reboot：09:45:28 start reason=boot（uptime 81 秒）、09:46:28 src=alarm adb=ok → PASS。設定重開後仍在。
+4. TCL 凍結：persist.sys.freeze=true，FreezeManager 閒置十幾秒就凍結程序（前景服務也凍）；鬧鐘廣播會解凍 → 每分鐘心跳可行。
+5. 記憶體：TOTAL PSS 約 12MB（開機後 2 分鐘）。
+
+6. 冷開機（Owner 拔插頭）：PASS。09:54:01 start reason=boot（uptime 82 秒）、之後每分鐘 src=alarm adb=ok；APP_AUTO_START allow、bucket 5 仍在；YouTube 由 v4 鎖回。
+
+## 待做
+- 常駐觀察：Owner 指定 10-30 19:00 看 agent.log 心跳間隔、pid 變化、PSS。
+- 收尾或續做 v5：只 adb uninstall，不撤銷 USB 偵錯授權（會清掉 Mac 金鑰）。
+## 讀紀錄
+adb -s 192.0.2.69:5555 shell run-as com.example.tvagent cat files/agent.log
+
+## 常駐觀察（2026-10-30 19:00，Opus）：FAIL
+資料：agent.log（92 行）、dumpsys usagestats 螢幕事件、logcat events、dumpsys alarm。
+- 螢幕：09:53 開 → 10:09:13 待機 → 18:27:44 開（之後在看 Netflix）。
+- 清醒時段 09:54～10:09：每 60 秒一跳、最大間隔 1 分 → PASS。
+- 待機時段 10:09～18:27：心跳間隔 4、20、8 分，11:53 起約每 60 分一跳（每小時 :53）。
+- 清醒時段 18:27～19:00：**最大間隔 ≥ 24 分（18:35:26 之後只剩 18:52 一筆，19:00 程序不在、沒有待命鬧鐘）→ FAIL**。
+- pid 變化：開機（09:54 reason=boot）之後 11 次，全部 reason=other。原因：logcat `am_kill … tguard-kill`，TCL TGuardMemoryManager 依記憶體排名砍背景程序（tvagent 被砍 12 次；同時期也砍 gservices、gapps、vending 等）。被砍後靠系統的服務重啟，間隔逐次拉長（1 秒→4 秒→…→17 分），**鬧鐘跟著消失**。
+- 被砍時段：待機中 10:41、10:53、11:03；開 Netflix 後 18:28～18:52 共 8 次。
+- TOTAL PSS：19:00 程序已被砍，量不到；早上開機後約 12MB。
+- 設定仍在：standby bucket 5、APP_AUTO_START allow、deviceidle 白名單有 tvagent（這三條擋不住 tguard）。
+- 結論：TCL 有第二層「記憶體管家」tguard，現行 tvagent 做法撐不住。v5 開工前要先解決常駐（候選：無障礙服務、找 tguard 白名單、或 v5 保留 Mac 補位），另開實驗。
+
+## TGuard 白名單調整（2026-10-30 21:05，Owner 選 C，Opus 執行）
+- 依據：scratchpad R8_tguard_report.md（TERRA 逆向）＋實機唯讀 dump 驗證；網路查詢（EN/CN）無「停用 TGuard 且正常」案例 → 不停用 TGuard。
+- 原 mKillWhiteList（11）：mediashell, bluetooth, providers.media.module, tcl.tvinput, providers.tv, tcl.autopair, katniss, tcl.ttvs(未裝), tcl.versionUpdateApp, tcl.usagestats(未裝), tcl.MultiScreenInteraction_TV
+- 新（9）：移除 mediashell、providers.media.module、providers.tv；加入 com.example.tvagent。讀回確認 OK。
+- 指令：adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList '<逗號清單>'（整份取代；只在記憶體，TGuard 重啟／電視重開機就回預設）
+- 停用 Chromecast：pm disable-user --user 0 com.google.android.apps.mediashell → enabled=3。還原：pm enable --user 0 com.google.android.apps.mediashell
+- 還原白名單：同指令帶原 11 個，或重開電視。
+- 啟動 tvagent（SELFTEST 廣播）：pid 3540，鬧鐘 7 筆。當下 MemFree 71MB、MemAvailable 635MB、SwapFree 161MB。
+- 記憶體實況（20:55 量）：實體約 1990MB，kernel 管 1621MB，CMA 608MB（影片/畫面），zram 600MB 已用約 490MB；TGuard 警戒值 mWarningThreadHold≈150MB、每 30 秒 polling。
+- 待觀察：開 Netflix ≥25 分鐘，tvagent 是否仍有 tguard-kill、心跳間隔 ≤3 分。
+- 未解：tvagent 用 PendingIntent 鬧鐘（AgentService.java:89），一般被砍不應消失，之前消失原因未定。
+
+## WO-G2 上線：心跳自動補回白名單（2026-10-30 21:15，TERRA 施工、GEMINI PASS、Opus 審定）
+- 每分鐘心跳後記 wl=keep|set|fail|skip。第 1 版實機 FAIL（grep -q 使 dumpsys 印 Broken pipe 到 stderr，shell: v1 合併）→ 退修 1 加 2>/dev/null、取最後非空行。
+- 21:12 adb install -r（同 debug.keystore）。**覆蓋安裝後 TCL TclAppBootManager 擋 AlarmReceiver（APP_ASSOC_START ignore）**→ 補下 `cmd appops set com.example.tvagent APP_ASSOC_START allow`。之後每次重裝都要檢查 appops：APP_AUTO_START、APP_ASSOC_START 皆 allow。
+- 驗證：把名單設回原 11 個模擬重置 → 21:13:34 src=start wl=set；21:14:33 src=alarm wl=keep；名單讀回 9 個含 tvagent。
+- 待觀察：TclAppBootManager 每次心跳仍記 start_foreground isAllow=false default_borbid，但心跳照跑；程序被砍後鬧鐘能否拉起、冷開機後 wl=set，待下次實測。
+
+## 冷開機＋Netflix 常駐驗證：PASS（2026-10-30 21:23～21:33，Owner 指定 10 分鐘）
+- 21:23 Owner 冷開機：21:23:10 start reason=boot、21:23:13（uptime 90）wl=set，名單讀回 9 個含 tvagent；APP_AUTO_START／APP_ASSOC_START 仍 allow；Chromecast 仍 enabled=3。
+- 21:23～21:33 前景 Netflix：心跳每 60 秒 10 次全 adb=ok wl=keep，pid 3392 不變，tvagent am_kill 0 次；同時段 TGuard 砍其他程序 24 次。對照 18:27 那次：26 秒內第一次被砍、半小時 8 次。
+- 結論：v5「電視 App 常駐」阻擋解除。

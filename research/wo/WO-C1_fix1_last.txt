@@ -1,0 +1,116 @@
+已完成修改：Origin 檢查只套用於家長端 `POST /tv/api/grant`；新增電視 JWT 無 Origin 同步成功的測試。家長 grant 無 Origin 的 403 測試原本已有，且已通過。README 沒有舊測試指令。
+
+以下是完成標準 1～5 的實際輸出。
+
+**1. 測試**（exit 0）
+
+```text
+TAP version 13
+# (node:41731) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 1 驗證、憑證快取與身分
+ok 1 - 1 驗證、憑證快取與身分
+  ---
+  duration_ms: 45.044083
+  type: 'test'
+  ...
+# Subtest: 2 加值、冪等、驗證與上限
+ok 2 - 2 加值、冪等、驗證與上限
+  ---
+  duration_ms: 11.635833
+  type: 'test'
+  ...
+# Subtest: 電視同步不需要 Origin
+ok 3 - 電視同步不需要 Origin
+  ---
+  duration_ms: 0.964792
+  type: 'test'
+  ...
+# Subtest: 3 同步、重新安裝、資料庫重建與輸入驗證
+ok 4 - 3 同步、重新安裝、資料庫重建與輸入驗證
+  ---
+  duration_ms: 18.239
+  type: 'test'
+  ...
+# Subtest: 4 異常、事件與恢復
+ok 5 - 4 異常、事件與恢復
+  ---
+  duration_ms: 16.2095
+  type: 'test'
+  ...
+# Subtest: 5 家長頁
+ok 6 - 5 家長頁
+  ---
+  duration_ms: 1.286
+  type: 'test'
+  ...
+# Subtest: 6 每次同步清理 90 天以前事件
+ok 7 - 6 每次同步清理 90 天以前事件
+  ---
+  duration_ms: 1.73825
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 218.100583
+```
+
+**2. import 檢查**
+
+`grep -nE "^import" cfquota/lib.mjs`：無輸出。
+
+`grep -c "import" cfquota/worker.mjs`：
+
+```text
+1
+```
+
+**3. 設定及信箱檢查**
+
+`grep -rnE "@(gmail|icloud|yahoo|hotmail|outlook)\." cfquota/`：無輸出。
+
+`grep -nE "custom_domain|crons|triggers" cfquota/wrangler.toml`：無輸出。
+
+`grep -c 'tv-demo.example.net/tv/\*' cfquota/wrangler.toml`：
+
+```text
+1
+```
+
+**4. Wrangler dry-run**（exit 0）
+
+```text
+
+ ⛅️ wrangler 4.151.0 (update available 4.156.0)
+───────────────────────────────────────────────
+Total Upload: 13.44 KiB / gzip: 4.95 KiB
+Your Worker has access to the following bindings:
+Binding                                   Resource                  
+env.DB (tvquota)                          D1 Database               
+env.OFFLINE_MIN ("30")                    Environment Variable      
+env.ACCESS_TEAM ("REPLACE_IN_WO_C3")      Environment Variable      
+env.ACCESS_AUD ("REPLACE_IN_WO_C3")       Environment Variable      
+
+--dry-run: exiting now.
+```
+
+**5. 工作樹狀態**
+
+```text
+?? cfquota/README.md
+?? cfquota/lib.mjs
+?? cfquota/lib.test.mjs
+?? cfquota/schema.sql
+?? cfquota/worker.mjs
+?? cfquota/wrangler.toml
+```
+
+疑問：無。
+
+未登入 Cloudflare、實際部署、commit 或 push；未檢查真實電視與 Cloudflare 環境的端到端連線。

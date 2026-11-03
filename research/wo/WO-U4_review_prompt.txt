@@ -1,0 +1,9 @@
+你是獨立審查者（唯讀），審 git worktree /Users/example-owner/TV-wt-u4（分支 page-u4）的改動。不要改任何檔案、不要 commit、不准跑 adb 或 wrangler。
+計畫：/Users/example-owner/TV-wt-u4/research/PLAN_page.md。樣式來源：/Users/example-owner/TV-wt-u4/mockups/parent-v3.html（排法 B）。工人回報：worktree 內 research/wo/WO-U4_report.md。diff：git diff -- cfquota；新檔 cfquota/page.mjs。
+要審：
+1. XSS：page.mjs 所有 innerHTML 拼接處，來自 API 的每個值（who、text、alerts.text、adb 字串、日期等）是否都經 esc()；esc 是否涵蓋 & < > " '；屬性值是否在引號內。
+2. 行為：歸零確認框才送出；送出中 disabled；note 文字與 would_cap；refresh 時不洗掉打開中的確認框；爸媽時段三狀態與 /tv/api/adult 呼叫；失聯（≥1800 秒）判斷；yt 三狀態；無 tv。
+3. 資料：usage.recent 7 筆舊→新補 0 跨月；today/week/month/days 語意不變；lib.mjs 其餘邏輯沒被動到（逐行看 diff）。
+4. 版面：與 mock 的 CSS／結構一致（排法 B），無橫向捲動風險（固定寬度、長字串）。
+5. 自己跑 cd cfquota && node --test。
+輸出：第一行 PASS 或 FAIL，逐條發現（檔案:行號＋說明＋嚴重度），最後「建議」。繁體中文。

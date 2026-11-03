@@ -1,0 +1,17 @@
+你是唯讀審核者，不要修改任何檔案、不要執行 wrangler、adb 或部署指令。審查工單 WO-U2 的施工結果是否符合工單。
+只看這些檔案，不要讀清單外的檔案：
+1. /Users/example-owner/TV-wt-u2/research/PLAN_usage.md 的「定義」「WO-U2」兩節與檔尾「挑戰裁定」表
+2. /Users/example-owner/TV/research/wo/WO-U2.diff（本次 diff）
+3. 需要上下文時可讀 /Users/example-owner/TV-wt-u2/cfquota/lib.mjs、lib.test.mjs、schema.sql 完整內容
+重點檢查：
+- 既有 sync batch 是否完全沒變；usage_daily upsert 是否在 batch 成功之後另外執行、包 try/catch、失敗仍回 200 與 grants。
+- validReport：三個新欄位可選（舊 app_ver 2 回報仍有效）、只給部分 → 400、today 格式與秒數範圍檢查。
+- MAX upsert 是否正確（較小值不覆蓋）。
+- state.usage 的 today/week（週一起算）/month 以台北日期計算是否正確，含跨週、跨月邊界。
+- 家長頁：使用時間區塊（今天／本週／本月，每列 YouTube、Netflix、合計，合計＝兩秒數相加後 floor）；紀錄白話對照表是否完整符合工單（grant→加 N 分 等 11 種、未知 kind 原樣）。
+- 對照表在頁面與伺服器各有一份（eventLabel / eventText）：這違反「單一來源」，請判定是否應改為伺服器在 state 的 events 每筆附上白話文字、頁面直接顯示（只留一份）。若應改，列為 FAIL 理由之一。
+- 完成標準①①b②③④⑤是否都有測試且測試在邏輯壞掉時會失敗；既有測試有沒有被改弱或刪除。
+- 有沒有碰禁止項（Access 驗證、grant／歸零邏輯、路由、wrangler.toml、worker.mjs）。
+輸出：第一行只寫 PASS 或 FAIL。之後列理由；FAIL 時逐條寫問題、檔案行號、建議改法。
+
+這是第 2 次審查。上次 FAIL 的理由在 /Users/example-owner/TV/research/wo/WO-U2_review_GEMINI.md（跨月週漏算、對照表雙份、測試缺口），請逐條確認是否已修好，並重新檢查全部重點。

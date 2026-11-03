@@ -1,0 +1,54 @@
+# 步驟 2 YouTube 閘門 原始狀態 2026-10-29 23:44:14
+package:com.tcl.esticker
+package:uk.co.freeview.mdsclient
+package:uk.co.freeview.amc_catchup
+package:uk.co.freeview.onnow
+package:au.com.stan.and
+package:uk.co.freeview.uktv
+package:com.tcl.gallery
+package:uk.co.freeview.fvpconfigauth
+package:uk.co.freeview.systemdistributor
+package:uk.co.freeview.bbc_sounds
+package:com.amazon.amazonvideo.livingroom
+package:com.tcl.tv.tclhome_master
+package:uk.co.freeview.tifbridge
+package:com.tcl.waterfall.overseas
+package:com.tcl.copydatatotv
+package:com.tcl.notereminder
+package:com.google.android.tvrecommendations
+package:uk.co.freeview.explore
+package:com.tcl.MultiScreenInteraction_TV
+package:com.google.android.tvlauncher
+package:com.google.android.youtube.tvmusic
+package:com.google.android.partnersetup
+package:com.google.android.videos
+package:com.google.android.feedback
+package:tv.wuaki.apptv
+package:uk.co.freeview.bbc
+package:uk.co.freeview.ch5
+package:uk.co.freeview.itv
+package:uk.co.freeview.stv
+package:uk.co.freeview.amc_horror
+package:com.tcl.tv.tclhome_passive
+package:com.google.android.apps.nbu.smartconnect.tv
+package:com.tcl.bi
+package:com.tcl.overseasappshow
+package:com.tcl.smartalexa
+package:com.tcl.messagebox
+package:com.google.android.play.games
+package:uk.co.freeview.ch4_vod
+---yt
+    versionName=5.30.340
+    User 0: ceDataInode=422299 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+    versionName=2.13.08
+    User 0: ceDataInode=0 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+    User 0:
+  User 0:
+---suspend-help
+  suspend [--user USER_ID] TARGET-PACKAGE
+    Suspends the specified package (as user).
+
+  unsuspend [--user USER_ID] TARGET-PACKAGE
+    Unsuspends the specified package (as user).
+
+  grant [--user USER_ID] PACKAGE PERMISSION

@@ -1,0 +1,11 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-a3（分支 poll-a3）施工。工作目錄只在 /Users/example-owner/TV-wt-a3，不要動其他資料夾。
+
+任務：依 /Users/example-owner/TV-wt-a3/research/PLAN_poll.md 的「改法」與「WO-A3」施工（先完整讀全檔，含檔尾「挑戰裁定」；正文是裁定後版本）。該節「動到」的檔案就是你唯一能改的檔案；「完成標準」每一條都要做到並自己跑過；「禁止」每一條都不能違反。特別注意改法 2 的順序與失敗路徑（預先 sync 獨立 try/catch、成功先 save 再 act），以及 heartbeat 兩條路徑 sync 都只呼叫一次。
+
+規則：
+- 不要 git commit、不要 push、不要 merge，改完留在工作區。
+- 絕對不准跑 adb、wrangler 或任何會碰到電視或雲端的指令。
+- 不要改計畫檔、不要改既有測試讓它變寬鬆；現有測試全部要照過。
+- 風格照現有程式（精簡、不加不必要的抽象）。
+- 驗收指令：sh tvagent/test.sh（用 Docker，已開）與 sh tvagent/build.sh；最後跑 git diff --stat。
+- 完成後在 /Users/example-owner/TV-wt-a3/research/wo/WO-A3_report.md 寫：改了什麼（每檔一兩行）、heartbeat 新流程逐步說明（成功加值／無加值／sync 失敗／enforce 變更／爸媽時段生效 各走哪條路）、新增測試（對應編號）、驗收輸出、git diff --stat、疑慮。

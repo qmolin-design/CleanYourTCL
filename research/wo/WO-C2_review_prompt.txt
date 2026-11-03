@@ -1,0 +1,17 @@
+你是唯讀審查員。審查 WO-C2（電視 App「看電視時間」）的施工結果。不要改任何檔案、不要執行 adb、不要連電視。
+
+只准讀這些檔案，不要讀清單外的檔案：
+1. /Users/example-owner/TV-wt-v5design/research/PLAN_v5.md 的這幾節：「額度規則（電視 App）」全節、「Cloudflare 端 → 介面」裡的 `POST /tv/api/sync`（請求、回應、電視收到回應怎麼處理）、「WO-C2 電視 App」全節。
+2. /Users/example-owner/TV-wt-v5design/research/wo/WO-C2.diff（本次全部改動，不含 apk）。
+3. 需要看完整內容時，才讀 /Users/example-owner/TV-wt-c2/tvagent/src/com/example/tvagent/ 底下的 AgentService.java、Quota.java、NoticeActivity.java、KickReceiver.java，以及 /Users/example-owner/TV-wt-c2/tvagent/test/QuotaTest.java、/Users/example-owner/TV-wt-c2/tvagent/AndroidManifest.xml。
+
+測試、建置、簽章已由施工方跑過且全過，你不用重跑。請專心讀程式碼，對照規格檢查：
+A. 每跳流程 1～7 的順序：先排鬧鐘、adb 與存檔在連網之前、同步後有變動要重新判斷並存檔、最後依 nextAlarmMs 改排鬧鐘。
+B. Quota.usage 事件演算法、clockJump、consume、applySync（含 db_id 不同或 null、CAP 封頂、CAP 調小不砍、last_seq 只設成實際套用的最後一筆）、decide 表格（END／LOCK／UNLOCK／WARN 與 warned 重置）、nextAlarmMs，是否與規格一致。QuotaTest 是否真的測到清單 1～7（不是空測）。
+C. enforce=false 時只記 dry-*，不碰 YouTube、不跳畫面。adb 失敗時不動作。END：跳畫面→同執行緒等 10 秒→force-stop→disable-user→讀回。
+D. 狀態檔原子寫入（暫存檔→fsync→rename），壞檔偏向鎖；設定只從 config.properties 來；Intent extra 只讀 reason、kind；`intent.getStringExtra("reason")` 的結果有沒有被丟掉不用（是否影響功能）。
+E. 安全：程式只停用／啟用 com.google.android.youtube.tv、只 am start 自己的 NoticeActivity；log 不寫 client_secret；sync 帶 CF-Access-Client-Id／Secret header、連線與讀取逾時 10 秒、非 200 記 sync=http:<碼>。
+F. 啟動時下 5 條 adb 設定（APP_AUTO_START、APP_ASSOC_START、GET_USAGE_STATS、standby bucket、deviceidle）並沿用 TGuard 名單補回。
+G. Manifest：NoticeActivity exported=true 且無 intent-filter、KickReceiver、無 LAUNCHER、無 TestReceiver／testOnly／裝置管理員。
+
+輸出格式：第一行只能是 `PASS` 或 `FAIL`。之後列出問題，每條寫「嚴重度（阻擋／建議）＋檔案:行號＋規格依據＋說明」。只有「阻擋」級問題才判 FAIL。

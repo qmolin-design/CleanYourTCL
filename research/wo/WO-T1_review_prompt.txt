@@ -1,0 +1,13 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網。工作目錄 /Users/example-owner/TV-wt-tvgate。
+只讀以下檔案，不要讀清單外的檔案：
+- research/PLAN_v3_service.md 的「運作方式」「失效時的行為」「Owner 裁定」「WO-T1」四節（規格與完成標準）
+- tvgate/gate.py、tvgate/sleephook.swift、tvgate/com.example.tvgate.plist、tvgate/test_gate.py、tvgate/README.md
+
+任務：
+1. 逐條對照 WO-T1 完成標準第 1 項的每個測試案例，指出 test_gate.py 裡對應的測試名稱；缺的、或測試寫法能假通過（例如沒真的檢查假 adb 收到的完整參數與順序、沒檢查狀態）的，列出來。
+2. 對照「運作方式」檢查 gate.py 有沒有違反規格的地方，特別是：套用時讀當下該開／該鎖；整行比對 package:com.google.android.youtube.tv；讀取成功條件；adb 一律帶 -s 且有 8 秒上限；回家寬限只由 wake 或斷線 ≥2 分鐘後重連觸發、不外溢；SIGTERM 盡力開放；token 檢查在所有端點；寫檔失敗處理。
+3. sleephook.swift：sleep 後是否真的等 stdin 回覆（最多 10 秒）才返回。
+4. plist：路徑 /Users/example-owner/TV/tvgate/gate.py、RunAtLoad、KeepAlive、PATH 含 /opt/homebrew/bin。
+你可以執行 `cd tvgate && python3 test_gate.py` 確認測試會過（它只用假 adb）。
+
+輸出格式：第一行只能是 PASS 或 FAIL。之後列問題清單，每條：檔案:行號、問題、為什麼違反規格。只有「違反規格或測試可假通過」才算 FAIL 理由；風格建議另列「非阻擋」。繁體中文。

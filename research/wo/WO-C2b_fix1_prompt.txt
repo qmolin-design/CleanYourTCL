@@ -1,0 +1,7 @@
+你是工人，繼續在 git worktree /Users/example-owner/TV-wt-c2b（分支 v5-c2b）施工。工單原文見 /Users/example-owner/TV-wt-v5design/research/wo/WO-C2b_prompt.txt，你上一輪的改動還在 worktree 裡。
+
+規格更正（大腦寫錯，不算你的失敗）：工單第 3 項「沒變也不必多 save」是錯的。sync() 成功時可能只改了 last_seq、db_id、cap_s、capped（例如加值被封頂、或家長按歸零時額度本來就是 0），這些不存檔的話下一跳會重新套用、Worker 端的「待接收」也清不掉。
+改成：sync 成功 → **一律 save(q)**；只有 balance 或 enforce 有變才重跑 act() 並在 log 寫 `act=<第一次>,<第二次>`（重跑後再 save 一次即可，或先跑 act 再統一 save 一次，擇一，保持簡單）。
+
+其他要求、完成標準 1～5、禁止事項全部照原工單。跑完 1～5 原樣貼輸出。不 commit、不 push。
+最後輸出：①改動檔案清單 ②完成標準 1～5 的實際輸出 ③疑問或保守選擇（沒有就寫「無」）。

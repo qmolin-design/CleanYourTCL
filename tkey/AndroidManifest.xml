@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.tkey" android:versionCode="1" android:versionName="1">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="30" />
+    <queries><package android:name="com.google.android.youtube.tv" /></queries>
+    <application android:label="YouTube（T 鍵）" android:allowBackup="false">
+        <activity android:name=".Main" android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="com.tcl.partnercustomizer.tkey" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

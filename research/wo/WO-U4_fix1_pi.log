@@ -1,0 +1,12 @@
+fix1 做完，全部在工作區、沒 commit。
+
+**改了什麼**（都在 `cfquota/page.mjs`，lib／測試／README 沒動）：
+- 爸媽卡改上下三行：小標移到說明上面，`.adult` 由左右 flex 改 `display:grid`；按鈕短文字「關閉這一段／下一段不要／取消關閉」。附帶抓到一個上一版漏看的 bug：`.adult-t` 的 grid 一直被 `.c-confirm div{display:flex}` 蓋掉（權重 0,1,1 > 0,1,0）——這才是擠壓的另一半原因，已改 `.adult .adult-t`。
+- 移除 `.c-plain` 的 `white-space:nowrap`；全域 `box-sizing:border-box`；c-desk／c-body 子元素等加 `min-width:0`；`.c-alert`、`.log li`、`.c-line`、`.note`、爸媽說明加 `overflow-wrap:anywhere`。
+- `esc()` 補 `'`→`&#39;`；adult 按鈕加 `finally` 恢復 disabled；`doZero()` 成功後立即重繪按鈕區。GEMINI 低嚴重度 3 項全採納，無剔除。
+
+**驗收**：
+- `cd cfquota && node --test`：29 pass／0 fail。
+- 預覽 `WO-U4_preview.html` 已用最新 page 重建，雙 script `node --check` 過。
+- Playwright（本機 bundled chromium）390×844：A～F 全頁圖存 `research/wo/u4fix_A～F.png`；六態 `scrollWidth` 皆 =390、`.c-desk` 無內溢出、無 pageerror。B 實測三行 y 座標 490／518／571，右側電視圖示、+60、印章、歸零全可見。
+- 說明已追加到 `WO-U4_report.md` 檔尾「fix1」；`git diff --stat` 追蹤檔維持上一輪 4 檔，我實際動的是未追蹤的 page.mjs＋預覽＋6 張截圖＋回報。

@@ -1,0 +1,5 @@
+com.tcl.MultiScreenInteraction_TV
+com.amazon.amazonvideo.livingroom
+com.google.android.videos
+com.google.android.youtube.tvmusic
+com.google.android.play.games

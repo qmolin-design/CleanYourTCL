@@ -1,0 +1,18 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網、不要執行測試（已跑過 5 次全 OK）。工作目錄 /Users/example-owner/TV-wt-tvgate5（分支 tvgate-v4fix，未 commit 的修正）。
+只讀以下內容，不要讀清單外的檔案：
+- /Users/example-owner/TV/research/wo/WO-T3_sol_prompt.txt（本次修正的工單：要做 1～4 與問題描述）
+- `git -C /Users/example-owner/TV-wt-tvgate5 diff -- tvgate/`（本次修正的完整 diff，重點）
+- tvgate/gate.py、tvgate/test_gate.py（對照 diff 前後文用）
+- research/PLAN_v4_ui.md、research/PLAN_v3_service.md 的「運作方式」一節（規格，需要時查）
+
+任務：
+1. 逐項對照 WO-T3_sol_prompt.txt「要做」1～4，每項回答「做到／沒做到＋檔案:行號」：
+   - 1：sleep（ok 或 fail）→ 休眠中；休眠中 monitor 不對帳停回、不到期鎖、不排程切斷、不抓使用時間；排程落在休眠中記 schedule-skipped detail「Mac 休眠」；休眠中到期 → 不鎖，wake 後才記 expire 並套用（前景 YouTube 走寬限）；wake 離開休眠；SIGTERM 不變；休眠狀態只在記憶體不存檔。
+   - 2：test_hook_sleep_wake_and_grace 改確定性（斷言前確定 monitor 跑過 ≥3 週期）；新增休眠中到期測試、休眠中排程測試。
+   - 3：README 限制段補句。
+   - 4：其他測試斷言沒被刪除或放寬（看 diff 裡 test_gate.py 被刪的行）。
+2. 競態：休眠旗標的讀寫是否都在正確的鎖內？sleep 與 monitor 同時進行時，monitor 是否可能在 sleep 處理到一半時鎖電視？wake 與到期同時發生是否會漏記或重複記 expire？API（網頁 open/lock、POST）在休眠中被呼叫時行為是否合理、不會崩潰？
+3. 新測試是否可能假通過（只靠真時鐘 sleep、沒確認 monitor 真的跑過、斷言太寬）或 flaky。
+4. 有沒有任何新路徑會讓 monitor 執行緒死掉或服務崩潰。
+
+輸出格式：第一行只能是 PASS 或 FAIL。之後列問題，每條：檔案:行號、問題、為什麼違反工單或規格。只有「違反工單／規格、測試可假通過、會崩潰」才算 FAIL 理由；其他列「非阻擋」。繁體中文。

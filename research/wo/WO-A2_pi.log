@@ -1,0 +1,13 @@
+WO-A2 施工完成，未 commit，留在工作區。
+
+**改了什麼（每檔一兩行）**
+- `Quota.java`：新增 `adultEnd`＋`adult_end_el` 寬鬆讀寫、`adultLeft()`／`adultInvalid()`；`decide()`／`nextAlarmMs()`／`usage()` 各加一個帶新參數的多載（有效額度／`freeToWall` 切分），舊簽名轉發、行為不變。
+- `AgentService.java`：heartbeat 先失效清理再用 `freeToWall` 結算（含 jump 路徑 `max(qEl, adultEnd)`）；sync 解析 `adult_left_s`（錯值歸 0、不失敗）後重取 `el2` 續期（上限 10 分鐘）；重跑 `act()` 加有效額度門檻變化；log 加 `adult=`；`app_ver` 3→4。
+- `QuotaTest.java`：只加新斷言，現有斷言一字未動；新增 13 個 PASS，對應完成標準 ①–⑪（⑩另加 save/load 來回）。
+- `README.md`：`adult` log 欄、`adult_end_el`、`app_ver` 4、`adult_left_s`＋新增「爸媽時段」一節。
+- `tvagent.apk`：`build.sh` 重建。
+
+**驗收**
+- `sh tvagent/test.sh`：exit=0，PASS 112 行，FAIL 0（含既有全部測試）。
+- `sh tvagent/build.sh`：exit=0，apk 已重建。
+- `git diff --stat`：4 檔＋apk，共 79 insertions、23 deletions；詳見 `research/wo/WO-A2_report.md`（含疑慮 4 點：斷網開頭最多一跳照扣為計畫已知誤差、`effBefore` 差 1 秒無害、`optLong` 外多一層 try/catch、上線順序 Worker 先行）。

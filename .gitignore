@@ -1,0 +1,50 @@
+.claude/.team-dev-anchor.md
+.claude/.dev-mode
+# 家人照片與電視原始日誌不上傳
+wallpapers/*.jpg
+wallpapers/tv-overlay.png
+memlog/raw/
+memlog/*.err
+memlog/pull.log
+memlog/mem.csv
+tvagent/agent.log
+tvgate/*.log
+.DS_Store
+*.idsig
+tvgate/sleephook
+cfquota/.wrangler/
+
+# 本機憑證與建置輸出
+.env
+.env.*
+!.env.example
+.dev.vars
+*.properties
+!*.example.properties
+*.links.txt
+tvgate.tokens.json
+tvgate.token
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+**/adbkey*
+!/tvagent/testdata/adbkey
+!/tvagent/testdata/adbkey.pub
+*.apk
+/tvagent/out/
+/tkey/out/
+
+# 私人照片常見格式只在桌布／私人照片目錄忽略，保留研究 UI 截圖
+/wallpapers/*
+!/wallpapers/config.json
+!/wallpapers/editor.html
+!/wallpapers/make.py
+**/family-photos/
+
+# Python 與 Node.js 本機快取
+__pycache__/
+*.py[cod]
+node_modules/

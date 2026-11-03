@@ -1,0 +1,31 @@
+已完成針對「方案 B MeshBrand MeshRouter M9 原生功能 ＋ HBO Max 安裝問題 ＋ TCL 55P715 規格」之網路研究與文件查證，全文已依規範寫入報告檔案：
+
+檔案路徑：[`/Users/example-owner/TV/research/R4_router_hbo_GEMINI.md`](file:///Users/example-owner/TV/research/R4_router_hbo_GEMINI.md)
+
+---
+
+### 重要研究結論摘要
+
+1. **MeshBrand MeshRouter M9（台灣版 V4.0）家長控制評估**：
+   - **無法滿足需求**：Tether App 的一鍵「暫停上網（Pause）」會切斷電視的**整機外網連線**，導致 Netflix 與四季線上同步癱瘓；付費版 HomeShield Pro 的「獎勵加時（Reward）」亦為**整機連線上網總時數加時**，無法單獨授權 YouTube 30 分鐘。
+   - **免費版黑名單限制**：免費版雖可針對電視 Profile 自訂網域黑名單（如 `youtube.com`、`googlevideo.com`），但屬靜態規則，若要單次開放 30 分鐘，必須由家長手動刪除網域並在 30 分鐘後手動加回，無自動倒數計時與防呆機制。
+   - **AP 模式致命限制**：若路由器運作於 AP 模式（Access Point），**HomeShield、家長控制、網址封鎖將全數關閉失效**，必須維持在 Router 模式。
+
+2. **網路層精準封鎖 YouTube 之技術現實**：
+   - **不共用核心網域**：精確封鎖 `googlevideo.com` 與 `youtubei.googleapis.com` 能癱瘓 YouTube 播放與介面推薦，且**不會**影響 Google Play 下載更新或 Google 帳號認證（僅 Play 商店內 App 預告片無法播放）。但嚴禁萬用字元封鎖 `*.googleapis.com` 或 `*.google.com`。
+   - **DNS 繞過風險**：Android TV 11 與 Google 服務常寫死向 `8.8.8.8` / `8.8.4.4` 發查或使用 DNS-over-TLS（DoT，Port 853）。M9 原生韌體不支援 DNAT Port 53 強制劫持，純靠 DHCP DNS 派發極易被繞過。
+   - **快取行為**：電視版 YouTube 無本機離線下載機制，網路斷開後僅剩 RAM 中的短暫緩衝（約 30～120 秒），緩衝播完即報錯停止。
+
+3. **HBO Max（現為 Max）無法在電視安裝之主因**：
+   - **品牌與名稱變更**：華納兄弟探索已於 **2024 年 11 月 19 日**在台灣正式推出 **Max** 取代 HBO GO，Play 商店上的官方名稱為「Max」（非 HBO Max）。
+   - **Google Play 裝置白名單限制**：55P715 具備 Widevine L1 認證（非 DRM 問題），但因採用早期 Realtek RT2851 晶片架構，未被 Max 官方加入 Google Play Developer Console 的裝置白名單中，導致商店內搜尋不到或顯示不相容。
+   - **解法建議**：可側載 Android TV 專用 APK（但有失去自動更新與 Dolby Atmos 解碼不全的風險）；或透過 iPhone 端 Max App **直接以內建 Chromecast 投放至電視**播放。
+
+4. **TCL 55P715 硬體規格與卡頓根因**：
+   - **硬體規格**：SoC 為 Realtek **RTD2851**（機芯代號 R851T02，BeyondTV），4 核心 Cortex-A55 @ 1.0GHz，GPU 為 Mali-470 MP3，RAM 僅 **2.0 GB DDR3**，ROM 為 **16 GB eMMC**。
+   - **系統支援**：官方 OTA 已實質終止（EOL），停留在 Android TV 11 分支（V7xx 系列），無 Android 12 或 Google TV 升級。
+   - **卡頓根本原因**：升級 Android TV 11 後，TCL TV+OS 桌面動態推薦與背景常駐服務大幅擠壓記憶體，可用 RAM 常態低於 200MB，開啟影音 App 時頻繁觸發 Low Memory Killer（LMK）與 Flash I/O 阻塞。社群共識建議透過 ADB 停用 TCL 臃腫軟體（Debloat）與替換輕量桌面，或直接外接電視盒。
+
+---
+
+詳細證據等級（[官方文件]、[社群實測]、[推測/待驗證]）、查證 URL 來源、以及完整的「## 待實機驗證清單」與「## 查不到／不確定」均已詳列於 [`R4_router_hbo_GEMINI.md`](file:///Users/example-owner/TV/research/R4_router_hbo_GEMINI.md)。

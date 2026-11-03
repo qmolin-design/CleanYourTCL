@@ -1,0 +1,7 @@
+已完成 tvagent 的 TGuard 保護名單維護：每次有效心跳會在 `echo ok` 後檢查，必要時設定並驗證，結果寫入 `wl=` 欄位。
+
+- `sh tvagent/test.sh` 通過，最後一行為 `ALL PASS`。
+- `sh tvagent/build.sh` 成功，APK 已更新；使用原有 debug keystore，檔案雜湊未變。
+- 已寫入[驗收報告](/Users/example-owner/TV/research/wo/WO-G2_done.md)。程式變更均在 `tvagent/` 下；未 commit 或 push。
+
+未執行 adb 或操作電視，因此新 APK 的實機行為尚未驗證。

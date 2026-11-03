@@ -1,0 +1,23 @@
+你是 Cloudflare Workers 工程師。在 git worktree /Users/example-owner/TV-wt-c1（分支 v5-c1）施工 WO-C1：新增 cfquota/ 這個 Worker。只改這個 worktree，不要 commit、不要 push。
+
+## 必讀（規格以此為準，不得自行改規格）
+- research/PLAN_v5.md 的「架構」「Cloudflare 端」全節（介面、驗證、D1 表、家長頁）與「WO-C1 Cloudflare Worker」全節。
+- 其他章節只供理解背景；與上述衝突以「Cloudflare 端」與「WO-C1」為準。看不懂或規格自相矛盾 → 在最後回報裡列出，選最保守的做法，不要擴大範圍。
+
+## 要做的事
+照 PLAN_v5.md「WO-C1」：只新增 cfquota/lib.mjs、cfquota/worker.mjs、cfquota/schema.sql（照 PLAN 原文）、cfquota/wrangler.toml、cfquota/lib.test.mjs、cfquota/README.md。lib.mjs 不得 import 任何東西；只用 Web 標準 API 與 D1 API。測試用 node:test＋node:sqlite（Node 25 內建），JWT 金鑰在測試內用 crypto.subtle 產生、不落地。測試清單 1～6 全部要有。
+
+README.md 要寫：用途、環境變數與 secret 名稱（不寫值）、wrangler 版本 4.151.0、WO-C3 的部署步驟摘要、如何用 `wrangler d1 execute` 改 meta.enforce／meta.cap_s。
+
+## 完成標準（你自己跑到全過才交件，原樣貼輸出）
+1. `node --test cfquota/` → exit 0，輸出含 `# fail 0`，30 秒內。
+2. `grep -nE "^import" cfquota/lib.mjs` → 無輸出；`grep -c "import" cfquota/worker.mjs` → `1`。
+3. `grep -rnE "@(gmail|icloud|yahoo|hotmail|outlook)\." cfquota/` → 無輸出；`grep -nE "custom_domain|crons|triggers" cfquota/wrangler.toml` → 無輸出；`grep -c 'tv-demo.example.net/tv/\*' cfquota/wrangler.toml` → `1`。
+4. `cd cfquota && npx -y wrangler@4.151.0 deploy --dry-run --outdir "$TMPDIR/cfq"` → 成功。
+5. `git status --porcelain --untracked-files=all` → 只有 cfquota/ 底下。
+
+## 禁止
+不登入 Cloudflare、不執行真的 wrangler deploy（只准 --dry-run）、不建任何 CF 資源；不碰 tvgate/、tvagent/、memlog/、research/、~/.secrets、launchd、電視、~/FAMILY-DOCS；不建 package.json／node_modules、不加 npm 依賴；不 commit、不 push。
+
+## 交件
+最後輸出：①新增檔案清單與行數 ②完成標準 1～5 的實際輸出 ③對規格的疑問或你做的保守選擇（沒有就寫「無」）。

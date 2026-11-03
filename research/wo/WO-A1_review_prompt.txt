@@ -1,0 +1,12 @@
+你是獨立審查者（唯讀），審 git worktree /Users/example-owner/TV-wt-a1（分支 adult-a1）的改動。不要改任何檔案、不要 commit、不准跑 adb 或 wrangler。
+
+計畫：/Users/example-owner/TV-wt-a1/research/PLAN_adult.md（讀「做法」「定義」「WO-A1」與檔尾裁定表）。工人回報：/Users/example-owner/TV-wt-a1/research/wo/WO-A1_report.md。diff：在 worktree 跑 git diff -- cfquota。
+
+要審：
+1. adultWindow：前1天到後3天展開、合併相鄰（24:00 接 00:00）、週末白天沒有、off_until 套用規則（結束時間 ≤ off_until 的段不算）、找目前段與下一段；用心算驗證完成標準①～⑦的時間點。
+2. sync 失敗隔離：adult 計算出錯絕不能讓 sync 回非 200 或影響 grants。
+3. /tv/api/adult：Access/Origin 檢查與 grant 一致、off 沒目前段也沒下一段回 400、事件只在值改變時寫、冪等。
+4. 家長頁 JS：日期星期格式、按鈕送出變灰、XSS（textContent 而非 innerHTML）。
+5. 既有測試沒有被放寬；自己跑 cd cfquota && node --test。
+
+輸出：第一行寫 PASS 或 FAIL，接著逐條列發現（檔案:行號＋說明＋嚴重度），最後一段寫「建議」。繁體中文。

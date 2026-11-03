@@ -1,0 +1,2 @@
+/team-dev 工作目錄 /Users/example-owner/TV；分工照 HANDOFF.md 最上面寫的（工人 TERRA high priority、審核 GEMINI＋DSF 平行、接手 SOL medium），不再問。
+讀 HANDOFF.md 最上面「★ 新 session 從這裡開始」與 .claude/.team-dev-anchor.md，接續時間管理 v4 收尾：審查 SOL 在 /Users/example-owner/TV-wt-tvgate5 的修正 → Opus 審定（worktree 與 merge 後的 main 都要跑）→ 合併 → 開預覽網頁給我 → 準備上線材料但不上線（等我說「上線」）。Owner 在睡覺，自主處理，需要我時再停下。

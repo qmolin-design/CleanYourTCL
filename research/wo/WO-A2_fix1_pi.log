@@ -1,0 +1,10 @@
+fix1 完成，改動留在工作區、無 commit。
+
+**兩個 bug 修正：**
+1. `Quota.java` 新增靜態 `freeToWall(wall, el, adultEnd)`（`adultEnd>0 ? wall−(el−adultEnd) : 0`），heartbeat 改調它——adultEnd＝0 時回 0，不在時段整段照扣，不再誤排開機前觀看。
+2. `AgentService.sync` 改為 `adultLeftS > 0 ? el2 + min(adultLeftS,600)*1000 : 0`——`adult_left_s == 0` 時直接清零，不再讓 status＋act＋sync 耗時（END 含 10 秒 sleep）對應的前景每跳被漏扣。
+3. jump 路徑 `Math.max(q.qEl, q.adultEnd)` 確認正確（adultEnd＝0 時 max＝qEl），未改。
+
+**測試：**新增 ⑫⑬⑭ 三個斷言（現有測試一字未動）。`sh tvagent/test.sh` exit=0、PASS 115 行（112＋3）、`ALL PASS`×2、FAIL 0；`sh tvagent/build.sh` 成功、apk 已重建。
+
+**報告：**fix1 說明已追加到 `research/wo/WO-A2_report.md` 檔尾。

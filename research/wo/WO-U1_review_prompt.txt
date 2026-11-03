@@ -1,0 +1,13 @@
+你是唯讀審核者，不要修改任何檔案、不要執行 adb 或部署指令。審查工單 WO-U1 的施工結果是否符合工單。
+只看這些檔案，不要讀清單外的檔案：
+1. /Users/example-owner/TV-wt-u1/research/PLAN_usage.md 的「定義」「WO-U1」兩節與檔尾「挑戰裁定」表
+2. /Users/example-owner/TV/research/wo/WO-U1.diff（本次 diff）
+3. 需要上下文時可讀 /Users/example-owner/TV-wt-u1/tvagent/src/com/example/tvagent/Quota.java、AgentService.java、/Users/example-owner/TV-wt-u1/tvagent/test/QuotaTest.java 的完整內容
+重點檢查：
+- 扣額行為（consume 的 balance 扣減、usedToday、usedTotal）、鎖定／提示／鬧鐘邏輯、sync 回應解析是否完全沒變。
+- Quota.load() 對三個新鍵（used_today_yt_s、used_today_nf_s、fg_pkg）缺少或格式錯時是否用預設值且不影響其他欄位、不丟例外；舊欄位驗證是否維持原本嚴格度。
+- usage() 原本的 seconds/ytFg/scrOn 計算是否不變；ytS/nfS 是否正確分 App；fg=true 但 fgPkg 空時不算給任何 App。
+- 換日時兩個新欄位與 usedToday 一起歸 0。
+- 完成標準①～⑦是否都有對應測試且測試真的會在邏輯壞掉時失敗；既有測試有沒有被改弱或刪除。
+- 有沒有改到禁止的檔案或邏輯。
+輸出：第一行只寫 PASS 或 FAIL。之後列理由；FAIL 時逐條寫問題、檔案行號、建議改法。

@@ -1,0 +1,82 @@
+[0m
+> build · muse-spark-1.3-contributor
+交叉驗證研究開始 — 先讀需求與待核對報告，再展開獨立調查。
+[0m→ [0mRead 00_REQUIREMENT.md 
+> build · muse-spark-1.3-contributor
+[0m→ [0mRead R2_debloat_DEEPSEEK.md 
+[0m→ [0mRead . 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=TCL+Android+TV+debloat+disable+%E9%96%8B%E4%B8%8D%E4%BA%86%E6%A9%9F+bootloop 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=TCL+P715+Android+TV+%E9%A0%90%E8%A3%9D+App+%E5%BB%A3%E5%91%8A+%E9%96%8B%E6%A9%9F 
+> build · muse-spark-1.3-contributor
+初步搜尋已有方向，繼續深挖台灣版預載與停用災情。
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Mobile01+TCL+P715+%E9%96%8B%E6%A9%9F%E5%BB%A3%E5%91%8A+%E5%8D%A1%E9%A0%93 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=TCL+P715+P615+review+Android+TV+11+Realtek+RT2851+spec 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.bing.com/search?q=TCL+Android+TV+disable+package+bootloop+tvlauncher+setupwraith 
+[0m% [0mWebFetch https://www.bing.com/search?q=TCL+P715+Android+TV+bloatware+TCL+Channel+startup+ad 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-50j7000a/debloat.txt 
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/README.md 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/tcl-43p615/debloat.txt 
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv4-uk-ar05.md 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/wiki/FAQ 
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/994 
+> build · muse-spark-1.3-contributor
+官方文件與關鍵災情已核對，繼續驗證其餘引用與台灣在地資料。
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/887 
+[0m% [0mWebFetch https://support.google.com/families/answer/10491112 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/mbcrump/shield-projectivy-debloat/main/BENCHMARKS.md 
+[0m% [0mWebFetch https://developer.android.com/training/tv/playback/memory 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/README.md 
+[0m% [0mWebFetch https://github.com/spocky/miproja1/issues/500 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.ptt.cc/bbs/Android/M.1792863138.A.817.html 
+[0m% [0mWebFetch https://github.com/spocky/miproja1/issues/415 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=site+mobile01.com+TCL+P715 
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=reddit+TCL+Android+TV+2GB+RAM+slow+lag+YouTube+2025+2026 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://www.reddit.com/r/AndroidTV/comments/1bb2tal/why_are_android_tvs_so_slow_in_general/ 
+[0m% [0mWebFetch https://support.tcl.com/us-googletv-troubleshooting/fix-a-slow-or-laggy-tcl-google-tv 
+> build · muse-spark-1.3-contributor
+繼續補齊開箱文、XDA 韌體串與外接盒售價等缺口。
+[0m✗ [0mWebFetch https://www.mobile01.com/topicdetail.php?f=347&t=6215949 failed
+[91m[1mError: [0mStatusCode: non 2xx status code (403 GET https://www.mobile01.com/topicdetail.php?f=347&t=6215949)
+[0m% [0mWebFetch https://r.jina.ai/https://xdaforums.com/t/tcl-android-tv-model-55p8m-android-recovery-tcl-beyondtv-beyondtv.4025755/page-187 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-beyondtv-rt2851.md 
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/devices/tcl-50dp660.txt 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://html.duckduckgo.com/html/?q=Chromecast+with+Google+TV+%E5%8F%B0%E7%81%A3%E5%94%AE%E5%83%B9+Google+TV+Streamer+%E5%94%AE%E5%83%B9 
+[0m% [0mWebFetch https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/670 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/seun-novodev/android-tv-debloat-toolkit/main/run_toolkit.py 
+[0m% [0mWebFetch https://r.jina.ai/https://xdaforums.com/t/app-android-tv-projectivy-launcher.4436549/ 
+> build · muse-spark-1.3-contributor
+[0m% [0mWebFetch https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/examples/README.md 
+[0m% [0mWebFetch https://www.tcl.com/global/en/tvs/p715 
+> build · muse-spark-1.3-contributor
+資料已齊，開始撰寫交叉驗證報告。
+[0m← [0mWrite R2b_debloat_MUSE.md
+Created file successfully: R2b_debloat_MUSE.md
+> build · muse-spark-1.3-contributor
+交叉驗證完成，報告已寫入 `R2b_debloat_MUSE.md`。重點結論：
+
+**R2 第 0 節（5 條）：4 相符、1 查不到**
+- 工具定性、50J7000A 495→655MB、換桌面不省 RAM、只用 disable-user——逐字核對原文，相符。
+- 「P8M 用戶 V616→V715 變慢」**查不到**：XDA page-187 經代理讀到的只是韌體版本問答，無效能原文。R2 自標二手摘要，建議降級為 [推測/待驗證]。
+
+**R2 第 4 節：找到 1 個實錘矛盾＋多處需註明**
+- `com.tcl.usercenter` 被 R2 放入「不要碰」，但 43P615 實測**停用且三重開機正常**——R2 自相矛盾（矛盾表自己寫了 43P615 停），應移出禁區。
+- `rc.ota`／`ttvs` 在兩份同板清單完全沒出現，R2 未給來源；`tvweishi`／`appmarket2` 反被 toolkit 列為 Safe；DRM 套件無直接災情——維持推測，不得寫成禁區。
+- `systemserver` vs `system.server` 是否同一套件改名未證實；setupwraith 災情機型是 Sony K-55S25 不是 TCL，結論方向對但須標型號差異。
+
+**獨立研究補洞**
+- 台灣版在地預載**查不到**：Mobile01 開箱文 403 讀不到、TCL 台灣無 FAQ、PTT 只有小米投影機實測。4gTV 套件名、開機廣告只能待 `pm list packages`。
+- Projectivy 在 Android TV 11＋TCL **零直接回報**，現有案例全是 12／14 新機；開發者自己的 TCL C1（ATV 11）重現不了問題。
+- 外接盒台灣價：Google TV Streamer 公司貨 NT$3,250（TechBang／PChome／momo）；Chromecast with Google TV 已是上一代，只能找二手。

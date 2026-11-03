@@ -1,0 +1,18 @@
+你是 Cloudflare Workers 工程師。繼續在 git worktree /Users/example-owner/TV-wt-c1（分支 v5-c1）修 WO-C1 的 cfquota/。只改 cfquota/ 底下，不要 commit、不要 push。
+
+## 規格澄清（Planner 已改 PLAN_v5.md，以下為準）
+1. Origin 檢查**只套用在家長端 POST `/tv/api/grant`**。電視的 `POST /tv/api/sync` 不檢查 Origin（電視不送這個 header，身分靠 Access service token 的 JWT）。請修 lib.mjs，並在 lib.test.mjs 加：電視 JWT、沒有 Origin 的 `/tv/api/sync` → 200；家長 grant 沒 Origin 仍 403。
+2. 完成標準 1 改為：`node --test --test-reporter=tap cfquota/lib.test.mjs` → exit 0、輸出含 `# fail 0`（Node 25 的 --test 不接受目錄）。README 裡若寫了舊指令一併改。
+
+## 完成標準（全部自己跑過，原樣貼輸出）
+1. `node --test --test-reporter=tap cfquota/lib.test.mjs` → exit 0、含 `# fail 0`。
+2. `grep -nE "^import" cfquota/lib.mjs` → 無輸出；`grep -c "import" cfquota/worker.mjs` → `1`。
+3. `grep -rnE "@(gmail|icloud|yahoo|hotmail|outlook)\." cfquota/` → 無輸出；`grep -nE "custom_domain|crons|triggers" cfquota/wrangler.toml` → 無輸出；`grep -c 'tv-demo.example.net/tv/\*' cfquota/wrangler.toml` → `1`。
+4. `cd cfquota && npx -y wrangler@4.151.0 deploy --dry-run --outdir "$TMPDIR/cfq"` → 成功。
+5. `git status --porcelain --untracked-files=all` → 只有 cfquota/ 底下。
+
+## 禁止
+同原工單：不登入 Cloudflare、不真的部署、不碰 cfquota/ 以外、不建 package.json、不 commit、不 push。
+
+## 交件
+①改了什麼 ②完成標準 1～5 實際輸出 ③疑問（沒有寫「無」）。

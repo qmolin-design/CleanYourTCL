@@ -1,0 +1,153 @@
+施工完成，不 commit、不 push。以下為交件內容。
+
+## ① 改動檔案清單
+
+`git diff --stat`（僅 3 個檔案，KickReceiver 未動——`EXTRA_REASON` 的值本來就是 `"reason"`，與 KickReceiver 的字串一致，無需改）：
+
+- `tvagent/src/com/example/tvagent/AgentService.java`（+17/−6，含上一輪）
+- `tvagent/README.md`（log 格式那一句加時間、src）
+- `tvagent/tvagent.apk`（重編）
+
+本次相對上一輪只多改一行（規格更正的關鍵修正）。上一輪的寫法是：
+
+```java
+if (sync.equals("ok") && (q.balance != balBefore || q.enforce != enforceBefore)) { action += "," + act(q, s); save(q); }
+```
+
+這樣 sync 成功但 balance/enforce 沒變時，sync() 寫入的 `last_seq`、`db_id`、`cap_s`、`capped` 完全沒存檔（sync 前的 `save(q)` 只存了 sync 之前的狀態）——正是更正事項指出的 bug。現改為（先跑 act 再統一 save 一次）：
+
+```java
+if (sync.equals("ok")) { if (q.balance != balBefore || q.enforce != enforceBefore) action += "," + act(q, s); save(q); }
+```
+
+其餘（台北時間戳、`src=<boot|kick|alarm>` 隨單跳傳入、`act=<第一次>` 沒變時不重跑）沿用上一輪，已在 worktree 內。
+
+## ② 完成標準 1～5 的實際輸出
+
+**標準 1：`sh tvagent/test.sh`（exit 0）**
+
+```
+PASS vector-pubkey
+PASS vector-sig
+PASS vector-pubkey-nul
+PASS vector-loadOrGenerate-pubkey
+PASS opaque-priv-pubkey
+PASS direct-priv-pubkey
+PASS conscrypt-broken-object-throws
+PASS conscrypt-broken-error-specific
+PASS conscrypt-file-pubkey-matches-pub
+PASS generate-writes-file
+PASS generate-load-same-pubkey
+PASS round1-fake-clean
+PASS round1-echo
+PASS round1-sent-pubkey
+PASS round1-key-parsed
+PASS round1-time
+PASS round2-fake-clean
+PASS round2-echo
+PASS round2-no-pubkey
+PASS big-fake-clean
+PASS big-concat
+PASS truncated-throws
+PASS truncated-time
+PASS err-connect-kind
+PASS err-connect-time
+PASS err-authtimeout-kind
+PASS err-authtimeout-time
+PASS err-disconnect-kind
+PASS err-disconnect-time
+PASS err-stls-kind
+PASS err-stls-time
+PASS err-badmagic-kind
+PASS err-badmagic-time
+PASS err-badcksum-kind
+PASS err-badcksum-time
+PASS err-garbage-kind
+PASS err-garbage-time
+PASS wl-keep
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+PASS wl-broken-pipe
+ALL PASS
+PASS usage 60 and end state
+PASS usage screen off
+PASS usage other resumed
+PASS usage initial
+PASS usage shutdown startup
+PASS usage bounds
+PASS clock jump
+PASS clock tolerance boot
+PASS consume limited
+PASS consume new date
+PASS sync sorted and dedup
+PASS sync repeated empty
+PASS sync reset
+PASS sync initial
+PASS sync capped
+PASS sync cap decrease
+PASS decide unknown
+PASS decide unlock
+PASS decide end lock
+PASS decide warn once
+PASS decide warn reset
+PASS alarm 20
+PASS alarm 2
+PASS alarm 330
+PASS alarm 302
+PASS alarm 3000
+PASS alarm background
+PASS save load
+PASS load garbage
+PASS load bad number
+PASS retry after unsaved sync
+ALL PASS
+```
+
+（含兩個 `ALL PASS`，exit 0）
+
+**標準 2：`sh tvagent/build.sh`（exit 0）**
+
+```
+Note: src/com/example/tvagent/NoticeActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+```
+
+（exit 0，`tvagent/tvagent.apk` 已產出）
+
+**標準 3：簽名與版本**
+
+```
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+package: name='com.example.tvagent' versionCode='2' versionName='2' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+application: label='看電視時間' icon=''
+old.apk removed
+```
+
+（第一行是 old.apk、第二行是新 apk，SHA-256 digest 相同；versionCode='2'、label='看電視時間'；`rm tvagent/old.apk` 已執行）
+
+**標準 4：`git diff --stat`**
+
+```
+ tvagent/README.md                                |   2 +-
+ tvagent/src/com/example/tvagent/AgentService.java |  21 ++++++++++++++++-----
+ tvagent/tvagent.apk                              | Bin 33174 -> 33174 bytes
+ 3 files changed, 17 insertions(+), 6 deletions(-)
+```
+
+（只有工單允許的 3 個檔案）
+
+**標準 5：`grep -n 'getStringExtra("reason");'`**
+
+```
+（沒有輸出，GREP_EXIT=1）
+```
+
+## ③ 疑問或保守選擇
+
+無。補充說明兩點（非疑問，只是如實記錄）：
+
+1. 本輪實際只改了一行（標準 3 重跑後 apk 大小同為 33174 bytes，是 `d8` 輸出巧合，簽名 digest 與舊版一致，證明仍用同一 `debug.keystore` 簽署）。
+2. 採用「先跑 act 再統一 save 一次」：sync 成功 → 若 balance/enforce 變了就重跑 `act()` 接著寫進 `act=<第一次>,<第二次>` → 無論有無重跑都 `save(q)` 一次。沒變時 log 仍只寫第一次的 act。

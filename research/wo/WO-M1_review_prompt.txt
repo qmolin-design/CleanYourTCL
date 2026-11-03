@@ -1,0 +1,4 @@
+你是審核者，審 /Users/example-owner/TV-wt-m1（分支 mode-m1）工作區的 WO-M1。唯讀：不要改檔、不要 commit、不准跑 adb／wrangler。
+依據：research/PLAN_mode.md（APPROVED，含檔尾挑戰裁定）、research/wo/WO-M1_report.md、git diff、research/wo/m1_*.png。（Opus 已改一行：同日標籤 18 點前不用「今晚」。）
+必查：①kid 只在排程「已開始」時寫 off，未開始的相接排程不關；刪手動＋off＋事件在同一 db.batch；冪等。②on 的 until 由伺服器算，choice 驗證，next 無效 400；覆蓋。③adultWindow 第 4 參數省略時與舊行為完全一致；排程 JSON 壞掉時手動仍生效但不會意外產生排程時段。④adult_manual 壞資料一律無手動、不延長免費時間；until 上限 24h。⑤sync adult_left_s 包含手動、上限 86400 不變。⑥權限：on／kid 非 parent 403、錯 Origin 403。⑦頁面：所有 API 字串經 esc／textContent；送出中／展開中 refresh 不重繪；disabled finally 恢復；畫面 until 用合併後；爸媽卡已移除。⑧既有測試只改了計畫允許的頁面斷言與 A1-⑥ deepEqual 補新鍵（請判斷是否等同放寬）。⑨禁止的檔沒動。⑩cd cfquota && node --test 全過。
+輸出：PASS 或 FAIL；FAIL 列「嚴重度／位置／問題／建議改法」。

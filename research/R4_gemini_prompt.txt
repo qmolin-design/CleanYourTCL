@@ -1,0 +1,18 @@
+【你的題目：方案 B MeshBrand MeshRouter M9 原生功能 + HBO Max 安裝問題 + 55P715 規格】
+輸出檔：/Users/example-owner/TV/research/R4_router_hbo_GEMINI.md
+請用你的網路搜尋能力查證，並把實際讀到的 URL 附上。
+
+要查：
+1. MeshBrand MeshRouter M9 台灣版 V4.0：
+   - 最新韌體版本與是否支援 HomeShield；HomeShield 免費版 vs HomeShield Pro 的功能差異與 Pro 在台灣的價格。
+   - 家長控制（Parental Controls）：能否針對「單一裝置（電視）」封鎖特定網站/網域（例如 youtube.com、googlevideo.com、youtubei.googleapis.com、ytimg.com）而不影響同裝置其他 App？免費版有沒有自訂網域封鎖？
+   - 有沒有「暫停上網」「Bonus time / 加時」「Reward」等可從 iPhone Tether / Deco 類 App 一鍵操作的功能？是否只能整台裝置斷網（那會影響 Netflix，不符需求）？
+   - 遠端操作：Tether App 綁 MeshBrand ID 後能否在外面控制？
+   - Router 模式 vs AP 模式：AP 模式下 HomeShield/家長控制是否失效。
+2. 網路層只封 YouTube 的技術現實：
+   - YouTube 影片 CDN（googlevideo.com）與 Google Play、Google 帳號、Chromecast、Android TV 系統服務是否共用網域？封鎖 youtube 相關網域會不會影響 Google Play 更新或其他 App？
+   - Android TV 使用 DNS over TLS（Private DNS）或寫死的 DNS（8.8.8.8）時，路由器 DNS/網域封鎖是否會失效？
+   - 封網域後 YouTube App 會怎樣（轉圈、錯誤訊息），孩子能否看已下載或快取內容。
+   - 替代：NextDNS（免費額度）、AdGuard Home、Pi-hole 依裝置封鎖 YouTube 並可排程/API 切換的可行性與成本。
+3. HBO Max 在台灣 TCL Android TV 11 無法安裝的可能原因：HBO Max 台灣上架狀態、Play 商店對 Android TV 的裝置相容性限制（裝置認證、Widevine L1、最低 Android 版本、TCL 機型不在支援清單）、官方支援裝置清單、社群回報與解法（側載是否可行與風險）。
+4. TCL 55P715 實際規格：RAM、儲存容量、SoC（RT2851/RT51M？）、有無 TCL 官方 OTA 支援狀態、是否有已知卡頓問題與官方或社群解法（找台灣、PTT、Mobile01、Reddit 回報）。

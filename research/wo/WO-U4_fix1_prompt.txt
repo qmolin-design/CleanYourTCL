@@ -1,0 +1,11 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-u4（分支 page-u4）修正你上一輪的 WO-U4（改動還在工作區，未 commit）。規則同原工單 /Users/example-owner/TV/research/wo/WO-U4_prompt.txt（先讀）。計畫 research/PLAN_page.md 第 4 點（爸媽時段卡）已更新，先重讀。
+
+Opus 用 Chrome 390px 寬截圖（worktree 內 research/wo/u4_A.png、u4_B.png，請看）與 GEMINI 審查（/Users/example-owner/TV/research/wo/WO-U4_review_GEMINI.md，請讀）發現：
+1.【高】爸媽時段卡按鈕文字太長且 nowrap，把整個 c-desk 撐寬：右側被切掉（電視圖示、+60 按鈕、已鎖印章看不到、歸零偏右），卡內說明文字被擠成每行 2～3 字，「不扣時間」小標變成超高橢圓。
+   修法：照計畫第 4 點改成上下三行（小標／說明／按鈕），按鈕短文字；移除 .c-plain 的 white-space:nowrap；c-desk、c-body 內的 grid／flex 子元素加 min-width:0；全域 `*,*::before,*::after{box-sizing:border-box}`；.c-alert、.log li、爸媽說明文字加 overflow-wrap:anywhere。
+2.【中】esc() 補單引號（&#39;）。
+3.【中】爸媽時段按鈕的 fetch 加 finally 恢復 disabled；doZero 成功後立即重繪按鈕區，不依賴 refresh 成功。
+4. GEMINI 其他低嚴重度建議你判斷，合理就順手改，並在回報寫明採納與否。
+
+驗收：cd cfquota && node --test 全 PASS；更新 research/wo/WO-U4_preview.html 使其用最新 page 內容。若本機有 python3 的 playwright（`python3 -c "import playwright"` 成功），用 chromium 或 channel="chrome" 在 390x844 對預覽 A～F 各截一張全頁圖存 research/wo/u4fix_<狀態>.png，並確認 document.documentElement.scrollWidth<=390 且 .c-desk 的 scrollWidth<=clientWidth；做不到就在回報說明。
+完成後把修正說明「追加」到 research/wo/WO-U4_report.md 檔尾（標題「fix1」）。

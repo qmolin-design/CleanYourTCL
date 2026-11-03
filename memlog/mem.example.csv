@@ -1,0 +1,4 @@
+time,uptime_s,mem_available_kb,swap_free_kb,foreground
+20000101-1200,1000,600000,300000,com.google.android.youtube.tv
+20000101-1300,4600,595000,295000,com.netflix.ninja
+20000101-1400,8200,590000,290000,com.google.android.youtube.tv

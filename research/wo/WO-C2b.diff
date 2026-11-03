@@ -1,0 +1,69 @@
+diff --git a/tvagent/README.md b/tvagent/README.md
+index 9c93b35..3c7ca64 100644
+--- a/tvagent/README.md
++++ b/tvagent/README.md
+@@ -35,7 +35,7 @@ adb shell am broadcast -n com.example.tvagent/.KickReceiver -a com.example.tvagent
+ adb shell run-as com.example.tvagent cat files/agent.log
+ ```
+ 
+-每跳一行：`uptime pid bal used_today fg yt screen act sync adb wl`，另有啟動設定結果與必要時的 `gap`、`clock=jump`。記錄超過 1MB 時只保留後約 512KB，不記憑證或私鑰。狀態保存在 `files/state.properties`。
++每跳一行：`yyyy-MM-dd HH:mm:ss（台北時間） uptime pid src bal used_today fg yt screen act sync adb wl`，另有啟動設定結果與必要時的 `gap`、`clock=jump`。記錄超過 1MB 時只保留後約 512KB，不記憑證或私鑰。狀態保存在 `files/state.properties`。
+ 
+ ## 影子模式、切換與回滾
+ 
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index 31d69f4..4be636b 100644
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -43,9 +43,11 @@ public class AgentService extends Service {
+         startForeground(1, new Notification.Builder(this, "tvagent").setContentTitle("看電視時間").setContentText("額度服務執行中").setSmallIcon(android.R.drawable.stat_notify_sync).build());
+     }
+     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+-        if (intent != null) intent.getStringExtra("reason");
++        String reason = intent != null ? intent.getStringExtra(EXTRA_REASON) : null;
++        if (!"boot".equals(reason) && !"kick".equals(reason)) reason = "alarm";
++        final String src = reason;
+         scheduleNextAlarm(this, 60000);
+-        exec.execute(new Runnable() { public void run() { heartbeat(); } });
++        exec.execute(new Runnable() { public void run() { heartbeat(src); } });
+         return START_STICKY;
+     }
+     @Override public IBinder onBind(Intent intent) { return null; }
+@@ -109,7 +111,7 @@ public class AgentService extends Service {
+         catch (InterruptedException ex) { Thread.currentThread().interrupt(); s.adb = "io"; s.yt = "unknown"; s.fg = null; }
+         return name;
+     }
+-    private void heartbeat() {
++    private void heartbeat(String src) {
+         Quota q = load(); long wall = System.currentTimeMillis(), el = SystemClock.elapsedRealtime();
+         long boot = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+         long gap = q.qEl > 0 && q.bootCount == boot ? Math.max(0, (el - q.qEl) / 1000) : 0;
+@@ -127,10 +129,16 @@ public class AgentService extends Service {
+         q.consume(seconds, format.format(new Date(wall))); q.qWall = wall; q.qEl = el; q.bootCount = boot; q.ytFg = usage.ytFg; q.scrOn = usage.scrOn;
+         if (!s.yt.equals("unknown")) { q.ytFg = Boolean.TRUE.equals(s.fg); q.scrOn = s.screen.equals("on"); }
+         String action = act(q, s), sync = "skip";
+-        try { save(q); sync = sync(q, s, gap, boot, el); if (sync.equals("ok")) { action += "," + act(q, s); save(q); } }
++        try {
++            save(q);
++            long balBefore = q.balance;
++            boolean enforceBefore = q.enforce;
++            sync = sync(q, s, gap, boot, el);
++            if (sync.equals("ok")) { if (q.balance != balBefore || q.enforce != enforceBefore) action += "," + act(q, s); save(q); }
++        }
+         catch (Exception ex) { sync = "io"; }
+         scheduleNextAlarm(this, q.nextAlarmMs(Boolean.TRUE.equals(s.fg) && s.screen.equals("on")));
+-        log("uptime=" + el / 1000 + " pid=" + android.os.Process.myPid() + " bal=" + q.balance + " used_today=" + q.usedToday + " fg=" + s.fg + " yt=" + s.yt + " screen=" + s.screen + " act=" + action + " sync=" + sync + " adb=" + s.adb + " wl=" + s.wl + " setup=" + setupResult + (gap > 300 ? " gap=" + gap : "") + (jump ? " clock=jump" : ""));
++        log("uptime=" + el / 1000 + " pid=" + android.os.Process.myPid() + " src=" + src + " bal=" + q.balance + " used_today=" + q.usedToday + " fg=" + s.fg + " yt=" + s.yt + " screen=" + s.screen + " act=" + action + " sync=" + sync + " adb=" + s.adb + " wl=" + s.wl + " setup=" + setupResult + (gap > 300 ? " gap=" + gap : "") + (jump ? " clock=jump" : ""));
+     }
+     private String sync(Quota q, Status s, long gap, long boot, long el) throws Exception {
+         Properties config = new Properties();
+@@ -158,6 +166,9 @@ public class AgentService extends Service {
+     }
+     private void log(String line) {
+         try {
++            SimpleDateFormat ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
++            ts.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
++            line = ts.format(new Date()) + " " + line;
+             if (logFile.length() > 1048576) {
+                 try (RandomAccessFile file = new RandomAccessFile(logFile, "rw")) { long start = file.length() - 524288; file.seek(start); file.readLine(); start = file.getFilePointer(); byte[] tail = new byte[(int)(file.length() - start)]; file.readFully(tail); file.seek(0); file.write(tail); file.setLength(tail.length); }
+             }

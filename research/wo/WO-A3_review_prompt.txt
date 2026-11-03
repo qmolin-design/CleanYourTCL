@@ -1,0 +1,5 @@
+你是審核者，審 /Users/example-owner/TV-wt-a3（分支 poll-a3）工作區的 WO-A3。唯讀：不要改檔、不要 commit、不准跑 adb／wrangler。
+依據：research/PLAN_poll.md（APPROVED，含檔尾挑戰裁定）、research/wo/WO-A3_report.md、git diff。
+必查（計畫裁定 #7 指定）：
+①heartbeat 兩條路徑 sync 都只呼叫一次；②wouldStop 路：save → sync（獨立 try/catch，任何例外／非 ok 都繼續）→ 成功先 save → act → save；sync 失敗一定還會 act 停用；③sync 帶回加值時不會 END／LOCK（decide 看到 eff>0）；④鎖住等加值（yt=disabled、eff=0）時走舊路，加值後同一跳 UNLOCK；⑤nextAlarmMs 新多載：eff=0＋螢幕亮＋yt 非 unknown → 10000，其他與舊公式一致；⑥enforce=false（影子模式）、爸媽時段 adult_left_s、mixed、unknown 各情境沒有回歸；⑦禁止的檔沒動（AdbClient、Whitelist、NoticeActivity、Manifest、簽章、testdata）、decide()／扣額／爸媽邏輯沒動；⑧sh tvagent/test.sh 全過。
+輸出：PASS 或 FAIL；FAIL 列「嚴重度／位置／問題／建議改法」。

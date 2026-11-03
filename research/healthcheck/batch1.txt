@@ -1,0 +1,13 @@
+# 第一批（每項：本機存在且啟用；R2＋R2b 都說可停；同平台 43P615、50J7000A 兩份清單都停過；同 AR05 韌體 BeyondTV4 清單也停）
+# 1a：TCL 遙測／促銷
+com.tcl.bi
+com.tcl.overseasappshow
+com.tcl.messagebox
+com.tcl.waterfall.overseas
+com.tcl.esticker
+# 1b：Google 歸因／推薦列＋TCL 被動首頁／搬資料
+com.google.android.feedback
+com.google.android.partnersetup
+com.google.android.tvrecommendations
+com.tcl.tv.tclhome_passive
+com.tcl.copydatatotv

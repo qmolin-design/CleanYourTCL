@@ -1,0 +1,961 @@
+Reading additional input from stdin...
+OpenAI Codex v0.163.0
+--------
+workdir: /Users/example-owner/TV-wt-tvagent-wl
+model: openai/gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 0000000019-0000-4000-8000-000000000000
+--------
+user
+WO-G2 退修（第 1 次失敗，Opus 實機審定 FAIL）。原工單：/Users/example-owner/TV/research/wo/WO-G2_prompt.txt（限制與完成標準不變）。worktree /Users/example-owner/TV-wt-tvagent-wl，不 commit、不 push、不執行 adb。
+
+失敗原因（電視上實測）：`dumpsys activity service $S | grep -q ...` 時，grep -q 找到就提前結束，dumpsys 會往 stderr 印 `Failed to write while dumping service activity: Broken pipe`。tvagent 的 AdbClient 開的是 `shell:`（v1）服務，stdout 與 stderr 會合在同一個串流，所以 runAdb 拿到的是「Broken pipe 那行＋keep」，Whitelist.wlStatus trim 後不等於 keep，回 unexpected。實測輸出：
+```
+Failed to write while dumping service activity: Broken pipe
+keep
+```
+修法要求：
+1. CMD_WHITELIST 裡每個 dumpsys 都加 `2>/dev/null`（讀取的兩次與設定那次）。不要拿掉 grep -q 改用其他寫法，也不要把錯誤藏在 Java 端。
+2. 保險：Whitelist.wlStatus 改成取輸出「最後一個非空白行」判斷 keep/set/fail，其餘回 unexpected。測試加一個案例：輸入 "Failed to write while dumping service activity: Broken pipe\nkeep\n" 要回 keep；原本 5 個案例保留。
+3. 重跑 `sh tvagent/test.sh`（ALL PASS）與 `sh tvagent/build.sh`。
+4. 在 /Users/example-owner/TV/research/wo/WO-G2_done.md 末尾加「## 退修 1」：改了什麼、test.sh 最後 7 行。
+hook: SessionStart
+hook: SessionStart
+hook: SessionStart Completed
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+我會先讀取共用規範、原工單與現有實作，確認修改範圍後修正並執行指定測試與建置，最後補上退修紀錄。這次會依 ponytail 規則保持修改精簡。
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat ~/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail/SKILL.md' in /Users/example-owner/TV-wt-tvagent-wl
+exec
+/bin/zsh -lc 'cat ~/.agents/MODELS.md ~/.agents/CLI-GUIDE.md' in /Users/example-owner/TV-wt-tvagent-wl
+exec
+/bin/zsh -lc 'cat /Users/example-owner/TV/research/wo/WO-G2_prompt.txt /Users/example-owner/TV/research/wo/WO-G2_done.md' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+---
+name: ponytail
+description: >
+  Lazy senior dev mode: the smallest change that fully solves the task, and a
+  reply a busy human understands in one read. Use on any coding task (writing,
+  fixing, refactoring, reviewing, choosing dependencies) and when the user says
+  "ponytail", "be lazy", "simplest solution", "yagni", or complains about
+  over-engineering or bloat. Levels: lite, full (default), ultra.
+argument-hint: "[lite|full|ultra|off]"
+license: MIT
+---
+
+# Ponytail
+
+You are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.
+
+Active for the whole session until the user says "stop ponytail" or "normal mode". Switch level: `/ponytail lite|full|ultra`.
+
+## Before you write
+
+Read the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.
+
+## The smallest complete change
+
+Take the first option that fully works:
+
+1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request ("build me X") gets the smallest version that does the core job.
+2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.
+3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.
+4. An installed dependency? Use it. Never add a dependency for a few lines.
+5. Can it be one line a reader gets at a glance? One line.
+6. Otherwise: the minimum code that works.
+
+- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.
+- No abstraction, wrapper, type conversion, option, config, boilerplate or "for later" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.
+- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.
+- Comment only the why the code cannot show, in one line.
+- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.
+- Code you move or merge keeps its error handling and validation.
+- Between options of equal size, take the one that is correct on edge cases.
+- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.
+- A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.
+
+Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
+
+## Levels
+
+| Level | Behavior |
+|-------|----------|
+| **lite** | Build what was asked. Name the smaller option in one line and let the user pick. |
+| **full** | The rules above. Default. |
+| **ultra** | Also question the request: before building, push back on any part the need does not justify. |
+
+ succeeded in 0ms:
+你是 Android 工程師。在 git worktree /Users/example-owner/TV-wt-tvagent-wl（分支 tvagent-wl）修改 tvagent，讓它自動把 TCL TGuard 的保護名單設回去。只改這個 worktree，不要 commit、不要 push、不要執行 adb、不要碰電視。
+
+## 背景
+- tvagent（tvagent/）是電視上的前景服務，透過自己實作的 AdbClient 連 127.0.0.1:5555 的 adbd，以 shell uid 執行指令。心跳由 AlarmManager 每 60 秒叫醒一次：`AgentService.heartbeat(src)` 執行 `echo ok`，寫一行 log 到 files/agent.log。先讀 tvagent/README.md 與 tvagent/src/com/example/tvagent/AgentService.java。
+- TCL 內建的 TGuard（com.tcl.guard）會砍背景 App。它的保護名單 mKillWhiteList 可以用 shell 指令整份取代（已經在實機驗證過）：
+  `dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList '<逗號分隔的套件清單>'`
+  讀取：`dumpsys activity service com.tcl.guard/.memorymanager.TGuardService` 的輸出裡，每個成員各一行，格式是 `    KillWhiteList:          com.xxx`。
+- 這份名單只存在 TGuard 的記憶體裡，TGuard 重啟或電視重開機就會變回預設的 11 個（不含 tvagent）。
+
+## 要做的事
+1. 在 AgentService 加常數，存 Owner 選定的名單（共 9 個，順序照抄）：
+   `com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent`
+2. 每次心跳（src=start 與 src=alarm 都要）在 `echo ok` 之後，用**同一個 runAdb 呼叫、一條 shell 指令**做「檢查→必要時設定→再驗證」，輸出一個字：
+   - 名單已經有 `com.example.tvagent` → `keep`
+   - 沒有 → 執行設定，再讀一次；有了 → `set`，還是沒有 → `fail`
+   建議形式（自行確認引號正確）：
+   `S=com.tcl.guard/.memorymanager.TGuardService; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo keep || { dumpsys activity service $S mKillWhiteList '<名單>' >/dev/null 2>&1; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo set || echo fail; }`
+3. 心跳 log 行尾加 ` wl=<keep|set|fail|錯誤類別>`，例如 `... src=alarm adb=ok wl=keep`。echo 失敗（adb 不通）時不做名單檢查，記 `wl=skip`。名單指令丟例外時，用跟 adb= 一樣的格式記錯誤類別，例如 `wl=io:...`。心跳本身不能因為名單步驟失敗而中斷或少寫 log。
+4. 判斷結果的程式寫成一個可以離線測試的 static 方法（例如 `static String wlStatus(String shellOutput)`：trim 後是 keep/set/fail 就原樣回傳，其他回 `unexpected`）。在 test/ 加測試（沿用 AdbClientTest 的風格，或另寫一個極小的 main 測試，由 test.sh 一起跑），涵蓋 keep、set、fail、空字串、亂碼。注意 test.sh 只用純 Java 編譯，不能 import android.*；如果 AgentService 不能被 javac 單獨編譯，就把這個方法放到不依賴 android.* 的小類別（例如 Whitelist.java），AgentService 呼叫它。
+5. 更新 tvagent/README.md：說明保護名單常數、wl= 欄位意思、「名單只在 TGuard 記憶體、由心跳每分鐘自動補回」、手動還原原名單的指令（原 11 個：`com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV`）。README 原本寫的「程式裡沒有其他套件名」要改成正確描述。
+6. 執行 `sh tvagent/test.sh`（最後一行要是 ALL PASS），再執行 `sh tvagent/build.sh` 產生新的 tvagent/tvagent.apk（用 repo 內的 debug.keystore，不要產生新 keystore；簽章換了，電視上就沒辦法覆蓋安裝）。
+
+## 禁止事項
+- 不改 tvagent/testdata/、不改 debug.keystore、不改 AdbClient.java 的協定行為。
+- 不改心跳間隔、鬧鐘機制、selftest 流程。
+- 不加新權限、不加新的 Android 元件。
+- 除了 tvagent/ 底下的檔案，什麼都不改。
+
+## 完成標準（Opus 會照這些驗收）
+- `cd /Users/example-owner/TV-wt-tvagent-wl && sh tvagent/test.sh` 最後一行 ALL PASS，且包含新測試的輸出。
+- `sh tvagent/build.sh` 成功，tvagent/tvagent.apk 的 mtime 更新。
+- `git -C /Users/example-owner/TV-wt-tvagent-wl diff --stat` 只動到 tvagent/ 底下的檔案，testdata/ 沒有變動。
+- `grep -n "wl=" tvagent/src/com/example/tvagent/AgentService.java` 有結果；名單常數和上面完全一致。
+
+做完在 /Users/example-owner/TV/research/wo/WO-G2_done.md 寫：改了哪些檔、test.sh 最後 5 行輸出、build 結果、任何疑慮。
+# WO-G2 完成報告
+
+- `tvagent/src/com/example/tvagent/AgentService.java`：加入九個套件的名單常數與單次 shell 檢查、設定、驗證；心跳記錄 `wl=`，並處理錯誤。
+- `tvagent/src/com/example/tvagent/Whitelist.java`：純 Java 名單結果判斷。
+- `tvagent/test/AdbClientTest.java`、`tvagent/test.sh`：加入並執行五種離線狀態測試。
+- `tvagent/README.md`：說明名單、狀態、記憶體限制與還原指令。
+- `tvagent/tvagent.apk`：重新建置。
+
+`sh tvagent/test.sh` 成功，最後五行：
+
+```text
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+ALL PASS
+```
+
+`sh tvagent/build.sh` 成功；APK 修改時間為 2026-10-30 21:08:35（台北時間）。使用原有 `debug.keystore`，建置前後 SHA-256 相同。編譯器提示既有程式使用已棄用 API，未阻止建置。
+
+首次測試時 OrbStack 未啟動，啟動後重跑通過。未執行 adb 或操作電視，故尚未驗證新 APK 的實機行為；已在名單中的情況只檢查 tvagent，不校正其他成員。未修改 testdata、AdbClient 協定或 keystore，也未 commit、push。
+
+ succeeded in 0ms:
+# AI 訂閱／HARNESS-MODEL 使用規範（所有 harness 開工前必讀）
+
+> **總綱要＝本檔**。所有 harness（Claude Code、Codex、pi、OpenCode、AGY）啟動後、做任何實質工作前先讀本檔；各 harness 的 context 檔只放一行指向這裡，不重複內容。Claude Code 例外：開場不自動載入，由 `/team-dev` 指令載入並設定本 session 分工（2026-10-28 Owner 定案）。
+> 要更新規範：只改本檔（改完更新下方「最後查證」日期）；各 CLI 的設定檔是機器開關，依本檔去調整，怎麼調見 `~/.agents/CLI-GUIDE.md`。
+> 要從一個 harness 呼叫別的 CLI（派工、問意見），先看 `~/.agents/CLI-GUIDE.md`「必看的坑」一節，避免 timeout／卡死／沒有輸出。
+> 單一真相來源。工作單、派工、對話一律用「暱稱」，實際 ID 查本表。
+
+## 訂閱線（有哪些錢包、各准用什麼）
+
+| 訂閱線 | 進入的 harness | 准用模型 |
+|---|---|---|
+| Anthropic 訂閱 | Claude Code | OPUS、SONNET、HAIKU |
+| OpenAI 訂閱（ChatGPT 帳號） | Codex（經 opencodex，`gpt-*`） | SOL、TERRA、LUNA、ASTRA（被指定才用） |
+| OpenCode-Go 訂閱 | pi、OpenCode、Codex（`OC-*`） | 白名單：DEEPSEEK FLASH、MUSE SPARK、MIMO FLASH；＋免費模型 |
+| Google AI Pro | AGY（只有 AGY） | GEMINI FLASH |
+| DeepSeek 官方 API（按量計費） | DSCC（`~/.zshrc` 的 `ds-cc-flash`／`ds-cc-flash-high`）、pi 的 `deepseek` provider | 只用 DEEPSEEK FLASH（`deepseek-v4-flash`）。**DEEPSEEK PRO 停用**（2026-10-18 Owner 定案；`cc-ds`／`ds-cc`／`ds-cc-high` 已註解；pi 內建清單仍列得到 PRO，但不准用） |
+| TypeSafe／Cloudflare（按量計費） | 不進 harness，只給程式呼叫 | JEV（見下方） |
+
+## 鐵律
+
+- **R1** GEMINI 只走 AGY，不接到其他 harness。`GEMINI_API_KEY` 留在電腦上給程式開發用，pi 不接。
+- **R2** AGY 只用 Google AI Pro 內建模型，不外掛 API（2026-10-18 查過：agy 設定裡沒有任何外部 key，現況符合）。
+- **R3** OpenCode-Go 只用白名單＋免費模型。白名單只有 Owner 能改；免費模型由 `~/.agents/bin/ocgo-free-sync.py` 每 2 天自動檢查一次（launchd `com.example.ocgo-free-sync`：自動新增／移除免費模型，並把 OpenCode 裡非白名單、非免費的模型關掉；log 在 `~/.agents/logs/ocgo-free-sync.log`）（models.dev 標價 0 而且上游 /v1/models 有列出，兩個來源都同意才收；有疑慮就從 pi／OpenCode 清單移除）。
+- **R4** 本檔沒列的模型不准自己選；指定的模型失敗就回報，不准默默換別的。
+- 已定案不做（不要重提）：API 探針驗證；在 OpenCode Console 找 model 開關（那裡管不到 Go 訂閱線）。詳見 QMem #316。
+
+---
+
+# 模型清單
+> 本檔與其他任何檔案（AGENTS.md、skill、舊工單）的 model ID 衝突時，以本檔為準。
+> 最後查證：2026-09-30（opencodex 2.73.0 / Codex CLI 0.159.2 / App 內建 0.158；16 項實測含工具呼叫全 PASS）；2026-10-13 增列 AGY 欄、GEMINI 4 ARGON（waiting list）、OpenCode-Go 白名單；2026-10-27 pi 的 DEEPSEEK FLASH ID 改為 `opencode-go/deepseek-v4.1-flash`（舊 ID 上游回 ModelDeprecated；Owner 同意）；2026-10-28 移除 GEMINI 4 ARGON、新增 TERRA（`openai/gpt-6.1-terra` 實測可用）與 HAIKU、MIMO FLASH 擴為基礎工作、加 Codex 速度規則（Owner 定案）。
+
+## 暱稱 → 用途
+
+| 暱稱 | 家族 | 用途 |
+|---|---|---|
+| SOL | OpenAI | 高階：規劃、架構；同一工人 3 次未過時的接手者 |
+| TERRA | OpenAI | 高階：challenger |
+| LUNA | OpenAI | 中階：施工、review |
+| ASTRA | OpenAI | 高階；太貴，被指定才用 |
+| OPUS | Anthropic | 高階：大腦（規劃、審定）（Claude Code，主力） |
+| SONNET | Anthropic | 中階：施工、review（Claude Code） |
+| HAIKU | Anthropic | 初階：基礎工作（查詢、整理）（Claude Code） |
+| MUSE SPARK | OpenCode-Go | 中階：施工、review |
+| DEEPSEEK FLASH | OpenCode-Go | 中階：施工、review |
+| MIMO FLASH | OpenCode-Go | 初階：基礎工作（查詢、整理）、看圖 |
+| GEMINI FLASH | Google | 中階：施工、review（AGY） |
+| JEV | TypeSafe | 判斷專用（System One：只回選項＋機率，不生成文字）：記憶分類／去重／取代判斷。試用中，其他用途視情形再加 |
+
+OPENCODE（API／model，非 CLI）只走 OpenCode-Go。OpenCode-Go 採**白名單**，目前納入：MUSE SPARK／MIMO FLASH／DEEPSEEK FLASH／FREE MODEL。OpenCode CLI 與 pi CLI 都讀這份白名單；白名單外的 API 由 Owner 自行接。
+
+不在本表的 model：不要自己挑。要用請先問 Owner。
+高階不做中階工作，除非被指定（如 Rescuer）。高階額度不足時：留一個高階做 Planner，DEEPSEEK FLASH＋MUSE SPARK 各用最高 effort 平行做 Challenger。
+派工角色規則以 QMem 必讀 **#425** 為準（#310 → #424 → #425；2026-10-28 改為預設分工版），本 session 實際分工由 `/team-dev` 設定。
+
+**Codex 速度**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。
+
+## 暱稱 → 各 CLI 實際寫法
+
+| 暱稱 | Claude Code | Codex（App 選單／`-m`，經 opencodex） | OpenCode | pi | AGY |
+|---|---|---|---|---|---|
+| SOL | —（改 CLI 派工） | `gpt-6.1-sol` | —（未開放） | — | — |
+| TERRA | —（改 CLI 派工） | `openai/gpt-6.1-terra` | — | — | — |
+| LUNA | —（改 CLI 派工） | `gpt-6-luna` | —（已停用） | — | — |
+| ASTRA | —（改 CLI 派工） | `gpt-6-astra` | — | — | — |
+| OPUS | `opus`（別名，自動跟最新） | — | — | — | — |
+| SONNET | `sonnet`（別名，自動跟最新） | — | — | — | — |
+| HAIKU | `haiku`（Agent 工具 model 參數） | — | — | — | — |
+| MUSE SPARK | — | `OC-muse-spark` | `opencode-go/muse-spark-1.3-contributor` | `opencode-go/muse-spark-1.3-contributor` | — |
+| DEEPSEEK FLASH | —（改 CLI 派工） | `OC-deepseek-flash`（或不經 proxy：`-p oc_ds_flash`） | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash`（舊 ID `opencode-go/deepseek-flash` 已於 2026-10-27 被上游停用） | — |
+| MIMO FLASH | — | `OC-mimo-flash` | `opencode-go/mimo-v2.6-flash` | `--provider opencode-go --model mimo-v2.6-flash` | — |
+| GEMINI FLASH | — | — | — | `google-gemini/gemini-2.5-flash`（免費，備援） | `gemini-3.8-flash-high`（另 medium／low） |
+
+Codex 的 `OC-*` 是 opencodex 別名，**名稱不帶版本、永遠不變**；上游改版只改別名背後的 target（見 CLI-GUIDE.md「Codex」）。
+
+JEV 不是聊天模型，CLI 叫不到；三條管道（2026-10-01 查證，價格皆為輸入 $0.042／1M token、輸出免費）：
+- **Cloudflare Workers AI**（主力）：`env.AI.run('typesafe/jev', …)`；官方標示 zero data retention。第三方模型**不在免費額度內**：未儲值會回 402 `Insufficient balance`；不儲值。
+- **TypeSafe 官方 API**（**QMem Worker 正式用這條**，Owner 2026-10-01 裁決）：`POST /v1/systemone`，model `jev-1.13.0`（別名 `jev-latest`）；金鑰 `~/.secrets/example-home/JEV.env`。
+- **OpenCode Zen**（Owner 有 USD $5 初始額度）：`jev-1.13`、限時免費 `jev-1.13-free`（免費版資料政策未查證，只餵模擬資料）。**不在 opencode-go 訂閱內**；`opencode.json` 的 policy 目前擋掉 Zen，要用請直接打 API，改設定先問 Owner。
+
+**AGY**（`/Users/example-owner/.local/bin/agy`）：GEMINI 家族一律走 AGY，`--model gemini-3.8-flash-high`（另有 medium／low）；`agy models` 可列當期清單。GEMINI 4 ARGON 2026-10-28 移出清單（一直沒排入使用名單）。
+
+**Claude Code 不再用 `ocx-*` subagent 呼叫外部模型**（2026-10-13 Owner 定案）：之後一律改 CLI 派工。舊紀錄若見 `ocx-gpt-6-1-sol`、`ocx-gpt-6-luna`、`ocx-gpt-6-astra`、`ocx-oc-deepseek-flash` 等名稱，只作歷史查照，不再使用。
+
+## 推理強度（effort）寫法
+
+| CLI | 寫法 |
+|---|---|
+| Claude Code | `/model` 選單調整 |
+| Codex | `-c model_reasoning_effort="xhigh"`（low / medium / high / xhigh） |
+| OpenCode | `-m provider/model#variant` |
+| pi | `--model id:max` 或 `--thinking max`（off … high / xhigh / max） |
+
+## 找不到 model 時（白名單失效）
+
+1. 不要猜新 ID、不要自己換成別的 model。
+2. 跑該 CLI 的列清單指令，找同家族最新版：
+   - Codex：`python3 -c "import json;[print(m['slug']) for m in json.load(open('$HOME/.codex/opencodex-catalog.json'))['models']]"`
+   - Codex 清單沒有新 GPT model → 不必等 opencodex 發版：`ocx models add openai/<新ID>` 手動註冊即可進選單。
+   - OpenCode：`opencode models | grep opencode-go/`
+   - pi：`pi --list-models <關鍵字>`
+   - AGY：`agy models`
+3. 回報 Owner：「暱稱 X 的 ID 從 A 變成 B，要更新 MODELS.md 嗎？」由 Owner 拍板後才改本檔與 CLI 設定。
+# Coding CLI 使用手冊（團隊合作前先讀）
+
+> 所有 CLI 共用。模型 ID 一律查 `~/.agents/MODELS.md`，本檔只講機制、注意事項、指令。
+> 最後查證：2026-10-28 加 HAIKU、ocx-* 標停用、Codex 速度規則；2026-10-27 pi DEEPSEEK FLASH 範例改新 ID；2026-10-18 增「必看的坑」一節；2026-09-30（codex-cli 0.159.2 / opencodex 2.73.0 / opencode v2.0.10 / pi 0.87.1）
+
+## 共通規則
+
+- 派工、報告一律寫模型暱稱（SOL、LUNA、DEEPSEEK FLASH…），並附實際 ID 與 effort。
+- 不得默默換 model。指定的 model 失敗 → 回報，不要自己找替代。
+- 派別的 CLI 當 worker / reviewer 時：非同步背景跑，不要 blocking 等；超過 5 分鐘是正常的。
+- Reviewer 一律唯讀（Codex 加 `--sandbox read-only`）。
+- Owner 非技術背景：回報先講白話「這是什麼、為什麼」，再講技術細節。
+- **等待背景工作（2026-10-08 Owner 同意；起因：`pgrep -f` 比對到等待腳本自己，空等 25 分鐘，且常發生）**：
+  1. 盯 PID，不按名字找：啟動時記 `$!`（寫進 `.pid` 檔），等待只用 `kill -0 <PID>`。
+  2. 或用完成標記檔：`<指令> > log 2>&1; echo $? > done.flag`，等待只看 `done.flag`，順便拿到結束碼。
+  3. 每個等待迴圈都設上限（預估時間約 2 倍），逾時就停下回報，不無限期空等。
+  4. 不得不按名字找時要排除自己：`pgrep -f "[n]ode --test"`；只當退路。
+  5. 等待超過預估 1.5 倍，主動查狀態並回報 Owner，不等 Owner 來問。
+
+## 從一個 harness 呼叫另一個 CLI：必看的坑（2026-10-18 彙整）
+
+> 任何 harness 要用 Bash 派工／叫別的 CLI 前先看這張表。來源：QMem #43、#108、#278 與實測。
+
+**通用（所有 CLI 都適用）**
+- 背景執行一律加 `< /dev/null`，不加可能卡在等 stdin（Codex 必卡；pi MUSE SPARK 曾卡 9.5 小時）。
+- 一律設時間上限。macOS **沒有 `timeout` 指令**，改用：`perl -e 'alarm shift; exec @ARGV' <秒數> <指令…>`。
+- 不要用 `| tail`／`| head` 接長時間任務：pipe 會等指令結束才吐輸出，看起來像卡住。判斷進度看工作目錄檔案 mtime 或 `git status -s`。
+- 背景派工用工具的背景執行（Claude Code `run_in_background`），**不要用 `( … ) &`**：pi 這樣啟動會被砍且輸出 0 bytes。
+- 驗證模型身分不要叫模型自報（常答錯），看 CLI 印的 session header＋派一個可驗證的小任務。
+
+| CLI | 正確寫法 | 坑 |
+|---|---|---|
+| **AGY** | `agy --model gemini-3.8-flash-high --print-timeout 20m -p "<prompt>" < /dev/null` | ① `-p` 會把**下一個字**當 prompt：寫成 `-p --model …` 會報錯或吃錯參數，**`-p "<prompt>"` 放最後**。② 非互動預設 **5 分鐘就中斷**，審查／長任務一定加 `--print-timeout 20m`（或更長）。③ `--model` 要用 slug（`gemini-3.8-flash-high`），不要用顯示名稱（如「Gemini 3.6 Flash (High)」），否則會回「模型不可用」或走慢速預設而逾時。④ 實測 reviewer 品質不如 pi DEEPSEEK FLASH，AGY 的「全部沒問題」不可直接當結論。 |
+| **pi** | `pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>" < /dev/null` | ① `pi -p` **整個任務做完才一次輸出**，執行中 log 一直是 0 bytes，這是正常的；判斷活著看檔案 mtime／`git status -s`。② MIMO 用 `--provider opencode-go --model mimo-v2.6-flash`（把 provider 寫進 `--model` 曾無聲退出）。③ MUSE SPARK 要寫完整 ID `muse-spark-1.3-contributor`。④ 要確認 pi 可用：跑一句「原樣回覆 OK」的小測試。⑤ 不要用 `pi install` 試裝擴充，它會改全域 `settings.json`；臨時要用就 `-e` 載入。 |
+| **Codex** | `codex exec -m <id> --cd <dir> "<prompt>" < /dev/null` | ① 不加 `< /dev/null` 必卡（process 活著但不做事）。② 全域是 `danger-full-access`，要降權必須明確加 `--sandbox`。③ `--sandbox read-only` 的 reviewer 跑不了測試、寫不了暫存檔，要實測的驗收改派 pi 或 Opus。④ 收結果用 `-o <file>`／`--json`。 |
+| **OpenCode** | `opencode run --auto -m opencode-go/deepseek-v4.1-flash "<prompt>" < /dev/null` | ① 讀工作目錄外的檔（例如 `~/.agents/`）會被 `external_directory` 擋下並中斷，非互動要加 `--auto`。② 背景 service 卡住時加 `--standalone`。③ MIMO FLASH 偶爾工具呼叫格式出錯，換 DEEPSEEK FLASH。 |
+| **Claude Code** | `echo "<prompt>" \| claude -p --model sonnet` | 只能用 OPUS／SONNET／HAIKU（Claude Code 內派工直接用 Agent 工具的 `model` 參數較省事）；prompt 有特殊字元要正確跳脫，避免被 shell 執行。 |
+
+## Claude Code
+
+**機制**
+- 只用 Anthropic 官方模型（OPUS / SONNET / HAIKU）。`opus`、`sonnet`、`haiku` 是別名，會自動跟到最新版，不會有白名單失效問題。
+- `ocx-*` subagent **已停用**（2026-10-13 Owner 定案）：Agent 清單裡看得到，但不要用；呼叫別家模型一律改 CLI 派工。
+- 全域指令：`~/.claude/CLAUDE.md`（支援 `@路徑` 匯入別的檔案）。
+
+**指令**
+- 非互動：`claude -p "<prompt>"`
+- 切模型：`/model`
+
+## Codex（經 opencodex）
+
+**機制**
+- `~/.codex/config.toml` 的 `openai_base_url` 被 opencodex 指到本機 proxy `http://127.0.0.1:10100/v1`，再分流：
+  - `gpt-*` → ChatGPT 帳號（OpenAI 訂閱）
+  - `OC-*` → OpenCode-Go（opencodex 的 combo 別名）
+- **Codex App 的選單也來自 opencodex**（`~/.codex/opencodex-catalog.json`）。沒有 opencodex，App 選單只剩 GPT，OC-* 全部消失（2026-09-30 實測）。
+- 不經 proxy 的備援：`-p oc_ds_flash`（原生 `opencode_go` provider，只支援 DeepSeek；Muse、Mimo 原生不行）。team-dev relay 用這條。
+- **速度規則**（2026-10-28 Owner 定案）：LUNA 用 priority；SOL、TERRA 用一般速度。全域 `~/.codex/config.toml` 的 `service_tier = "fast"` 已註解掉（預設一般速度，Codex App 也一樣）；派 LUNA 時加 `-c service_tier='"fast"'`（2026-10-28 實測可跑）。
+- TERRA 是用 `ocx models add` 手動註冊的，`-m` 要寫 `openai/gpt-6.1-terra`（2026-10-28 實測可用）。
+
+**Owner 的清單怎麼維持（不必每次更新）**
+- OpenCode-Go：選單只放三個**不帶版號**的別名 `OC-deepseek-flash`、`OC-muse-spark`、`OC-mimo-flash`。上游出新模型不會自動冒出來（`liveModels=false`）。上游改名或下架時，只改 target，別名不動：
+  `ocx combo set OC-mimo-flash --targets opencode-go/<新ID> --alias OC-mimo-flash`
+- OpenAI：新 GPT model 內建在 opencodex 版本裡。**不想等發版** → `ocx models add openai/<新ID>` 手動註冊；不要的用 `disabledModels` 藏起來（黑名單，新 model 預設會出現）。
+- 升級 opencodex：`ocx update`（會自動重套 compat shim）。**不是必要的**，只有想要新功能，或不想手動 add 新 model 時才升。
+
+**常用 ocx 指令**
+- 狀態：`ocx status`；修復：`ocx ensure`；看別名：`ocx combo list`
+- 暫停 proxy、還原原生 Codex：`ocx restore`（`ocx restore back` 接回去）。**不要用 `ocx uninstall`**：它會刪掉 config，而且 App 選單的 OC-* 會消失。
+- 改了 `~/.opencodex/config.json`（金鑰、combo）要重開 proxy 才生效：`launchctl kickstart -k gui/$(id -u)/com.opencodex.proxy`（不要用 `ocx stop`，它會順便還原原生 Codex）。`ocx combo set` 會把該 combo 的 `defaultEffort` 清成 null，改完要手動補回。
+- `OC-*` 回 `No available targets for combo` 時，先直接打 proxy 看真正錯誤（2026-10-27 是 OpenCode-Go 金鑰過期 401）：opencodex 的 `providers.opencode-go(-responses).apiKey` 要跟 `~/.secrets/example-home/opencode.env` 同一把。
+
+**沙盒（sandbox）白話版**
+
+Sandbox = 限制 Codex 能碰什麼。三種模式：
+
+| 模式 | 能讀 | 能寫 | 網路 | 用在 |
+|---|---|---|---|---|
+| `read-only` | 全部 | 不能 | 不能 | reviewer |
+| `workspace-write` | 全部 | 只有工作目錄（`--add-dir` 可加） | 預設關 | 一般施工 |
+| `danger-full-access` | 全部 | 全部 | 開 | Owner 本機全域預設 |
+
+- Owner 全域設定是 `danger-full-access` ＋ `approval_policy = "never"`（等於不設限、不問）。
+- 「怪怪的」通常是 `workspace-write`：`npm install`、`git push`、寫工作目錄外的檔案會失敗，因為網路預設關、寫入範圍受限。不是 bug。
+- 全域 AGENTS.md：`~/.codex/AGENTS.md`（不支援匯入，要寫「先讀某檔」）。
+
+**指令**
+- 非互動：`codex exec -m <id> -c model_reasoning_effort="high" --cd <dir> "<prompt>" < /dev/null`（背景執行一定要 `< /dev/null`，否則會卡在等 stdin）
+- DeepSeek：`codex exec -p oc_ds_flash --cd <dir> "<prompt>" < /dev/null`
+- prompt 從 stdin：結尾放 `-`，例如 `codex exec ... - < prompt.txt`
+- Reviewer：`codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" --sandbox read-only --cd <dir> -`
+- 只要最後回覆：`-o <file>`；JSON 事件流：`--json`
+- 列模型：見 MODELS.md「找不到 model 時」
+
+## OpenCode
+
+**機制**
+- 設定：`~/.config/opencode/opencode.json`。
+- 模型用**黑名單**（`"disabled": true`）：上游新增的 model 會自動出現，要手動再關掉；舊 model 下架不會壞設定。
+- `experimental.policies` 擋掉 `openrouter`、`deepseek`、`opencode`（付費 Zen 線）三個 provider，只走 `opencode-go` 訂閱線。
+- 原生支援 MCP（已接 FRIDAY `mem`）。
+- `instructions` 陣列列出的檔案每次 session 自動載入。
+- `opencode run` 預設連背景 service；service 卡住時加 `--standalone`。
+
+**指令**
+- 非互動：`opencode run -m opencode-go/deepseek-v4.1-flash "<prompt>"`
+- 自動核准權限：`--auto`；JSON 輸出：`--format json`
+- 列模型：`opencode models | grep opencode-go/`
+
+## pi
+
+**機制**
+- 設定：`~/.pi/agent/settings.json`（`enabledModels` = 白名單，Ctrl+P 切換用）、`~/.pi/agent/models.json`（自訂 model 定義）。
+- 白名單項目在上游消失時只會警告 `No models match pattern`，不會擋啟動。
+- **內建 MCP**（2026-10-09 查證，pi 1.0.4）：直接讀 `~/.pi/agent/mcp.json`（已接 QMem 本機 `qmem`）。**不要再載 `pi-mcp-adapter`**：它會自動在 `settings.json` 寫入 `"-builtin:mcp"` 關掉內建 MCP。
+- `pi -p` 跑完才一次輸出 stdout；背景派工判斷是否還活著，看 worktree 檔案 mtime 或 `git status -s`，不要看 log 大小。
+- 全域記憶：`~/.pi/agent/AGENTS.md`（`--no-context-files` 可關）。
+
+**指令**
+- 非互動：`pi -p --model opencode-go/deepseek-v4.1-flash:max "<prompt>"`
+- mimo 用 provider 寫法較保險：`pi -p --provider opencode-go --model mimo-v2.6-flash "<prompt>"`
+- 隔離執行：`--no-session --no-extensions --no-context-files --tools read,bash`（`--no-extensions` 連內建 MCP 一起關，要用 QMem 就拿掉）
+- 列模型：`pi --list-models <關鍵字>`
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "pwd && git status --short && rg -n 'CMD_WHITELIST|wlStatus|dumpsys activity service' ." in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+/Users/example-owner/TV-wt-tvagent-wl
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ M tvagent/test.sh
+ M tvagent/test/AdbClientTest.java
+ M tvagent/tvagent.apk
+?? tvagent/src/com/example/tvagent/Whitelist.java
+./tvagent/README.md:57:adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList 'com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV'
+./tvagent/src/com/example/tvagent/Whitelist.java:4:    static String wlStatus(String shellOutput) {
+./tvagent/src/com/example/tvagent/AgentService.java:51:    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+./tvagent/src/com/example/tvagent/AgentService.java:52:            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+./tvagent/src/com/example/tvagent/AgentService.java:53:            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>&1; "
+./tvagent/src/com/example/tvagent/AgentService.java:54:            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+./tvagent/src/com/example/tvagent/AgentService.java:229:                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
+./tvagent/test/AdbClientTest.java:703:            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
+./tvagent/test/AdbClientTest.java:704:            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
+./tvagent/test/AdbClientTest.java:705:            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
+./tvagent/test/AdbClientTest.java:706:            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
+./tvagent/test/AdbClientTest.java:707:            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
+./research/batches/tvagent/NOTE.txt:40:- 指令：adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList '<逗號清單>'（整份取代；只在記憶體，TGuard 重啟／電視重開機就回預設）
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat tvagent/test.sh tvagent/build.sh && cat tvagent/README.md' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+#!/bin/sh
+# 離線協定測試：在 Docker 內用純 Java 編譯並執行 AdbClient + AdbClientTest。
+# 最後一行印 ALL PASS；任一失敗以非 0 結束。在 Mac 上執行：sh test.sh
+cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+rm -rf testout && mkdir -p testout
+javac -d testout src/com/example/tvagent/AdbClient.java src/com/example/tvagent/Whitelist.java test/AdbClientTest.java
+java -cp testout com.example.tvagent.AdbClientTest testdata
+rm -rf testout'
+#!/bin/sh
+# 用 Docker 映像 cleanyourtv-android-build-amd64 編譯，輸出 tvagent.apk。在 Mac 上執行：sh build.sh
+cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+BT=/opt/android-sdk/build-tools/34.0.0; JAR=/opt/android-sdk/platforms/android-34/android.jar
+rm -rf out && mkdir -p out/classes
+[ -f debug.keystore ] || keytool -genkeypair -keystore debug.keystore -storepass android -keypass android -alias tvagent -keyalg RSA -validity 36500 -dname CN=tvagent
+$BT/aapt2 link -o out/base.apk -I $JAR --manifest AndroidManifest.xml
+javac -source 8 -target 8 -bootclasspath $JAR -d out/classes src/com/example/tvagent/*.java
+$BT/d8 --min-api 26 --lib $JAR --output out out/classes/com/example/tvagent/*.class
+(cd out && jar uf base.apk classes.dex)
+$BT/zipalign -f 4 out/base.apk out/aligned.apk
+$BT/apksigner sign --ks debug.keystore --ks-pass pass:android --out tvagent.apk out/aligned.apk
+rm -rf out tvagent.apk.idsig'
+# tvagent 實驗 App（PLAN v5 WO-A1）
+
+目的：驗證「電視上的 App 不靠 Mac，能不能自己連本機 adbd、通過 RSA 認證，
+停用／啟用 App」。只做實驗，不碰額度、不碰 Cloudflare、不取代 v4。
+
+- 套件：`com.example.tvagent`，無桌面圖示，minSdk 26、targetSdk 30。
+- 停用／啟用只針對 `com.example.tkey`；心跳另會維護 TGuard 的保護名單。
+
+## 檔案
+
+- `AndroidManifest.xml`：INTERNET、RECEIVE_BOOT_COMPLETED、FOREGROUND_SERVICE；
+  BootReceiver（exported）、TestReceiver（exported）、AgentService。
+- `build.sh`：Docker 映像 `cleanyourtv-android-build-amd64` 編譯，
+  產出 `tvagent.apk`（`debug.keystore` 不存在就產生，alias `tvagent`）。
+- `src/com/example/tvagent/AdbClient.java`：純 Java adb 連線端
+  （CNXN／AUTH／OPEN／OKAY／WRTE／CLSE），不依賴 android.*。
+  附 `main` 供 Docker 單獨執行（電視上不用）。
+- `src/.../AgentService.java`：前景服務。所有 adb 動作在同一個單執行緒
+  序列化；心跳由鬧鐘驅動（每 60 秒 `echo ok`），寫 `files/agent.log`。
+- `src/.../BootReceiver.java`、`TestReceiver.java`：只負責啟動服務。
+- `src/.../AlarmReceiver.java`：鬧鐘廣播入口（exported=false），
+  只負責用 action `HEARTBEAT` 把服務叫起來；見「TCL 凍結機制與鬧鐘心跳」。
+- `test/AdbClientTest.java`＋`test.sh`：離線協定測試（假 adbd＋測試向量）。
+
+## 安裝
+
+```sh
+sh tvagent/build.sh
+# 用現有 adb 把 tvagent.apk 裝到電視（不代勞，只記指令形狀）
+```
+
+## 讀紀錄
+
+```sh
+adb shell run-as com.example.tvagent cat files/agent.log
+```
+
+心跳行形狀：`<本地時間> uptime=<秒> pid=<pid> src=<alarm|start> adb=<ok|錯誤類別:訊息> wl=<狀態>`；
+服務啟動記 `start reason=<boot|test|other>`。`adb=ok` 表示輸出 trim 後等於 `ok`。
+pid 變化＝程序曾被系統砍掉重啟。
+
+`wl=keep` 表示名單已有 tvagent；`wl=set` 表示已設定並驗證；`wl=fail` 表示設定後仍未查到；`wl=skip` 表示 adb 心跳失敗，未檢查名單。`wl=unexpected` 表示指令輸出不符合預期，`wl=<錯誤類別:訊息>` 表示名單指令發生例外。
+
+## TGuard 保護名單
+
+`AgentService` 的 `WHITELIST` 常數保存 Owner 選定的九個套件：
+
+```text
+com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent
+```
+
+名單只存在 TGuard 的記憶體；TGuard 重啟或電視重開後會恢復預設。心跳每分鐘檢查 tvagent 是否在名單中，缺少時以常數整份取代並重新驗證。若 tvagent 已在名單中，其他成員不會被變更。
+
+手動還原原本的 11 個套件（之後心跳仍會自動補回選定名單）：
+
+```sh
+adb shell dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList 'com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV'
+```
+
+## TCL 凍結機制與鬧鐘心跳
+
+實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結，
+前景服務也一樣；`ScheduledExecutorService` 的週期心跳因此停擺。
+收到廣播時系統會立即解凍該程序，所以心跳改由 `AlarmManager` 驅動：
+
+- 服務啟動（boot／test／other）與每次心跳後，都用
+  `setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, now+60秒)` 排下一次
+  精確鬧鐘（API 26～30 不需要 `SCHEDULE_EXACT_ALARM` 權限，故不新增權限；
+  不用 `setRepeating`，每次觸發後重新排）。
+- 鬧鐘送明確廣播給 `AlarmReceiver`（`exported=false`，無 intent-filter）。
+- `AlarmReceiver` 收到後用 `startForegroundService` 送 action `HEARTBEAT` 給
+  `AgentService`（服務若曾被殺也會因此重建）；服務把一次心跳排進原本的
+  單執行緒 executor，並排下一次鬧鐘。executor 只留單次工作佇列，
+  沒有 `scheduleAtFixedRate` 週期任務。
+- `PendingIntent` 用固定 requestCode＋`FLAG_UPDATE_CURRENT`（另加
+  `FLAG_IMMUTABLE`），同一時間只有一個待發鬧鐘。
+- 心跳 `src=alarm` 表示鬧鐘觸發，`src=start` 表示服務啟動時先做的一次。
+  心跳執行期間若被凍結，解凍時可能補跑：距上次心跳（`elapsedRealtime`）
+  `< 30 秒` 就略過，同一分鐘內不重複寫兩次。
+
+## 自我測試
+
+```sh
+adb shell am broadcast -n com.example.tvagent/.TestReceiver \
+  -a com.example.tvagent.SELFTEST
+```
+
+服務在背景執行緒依序：停用 tkey → 查停用清單有 tkey → 啟用 tkey →
+查停用清單無 tkey，最後寫 `selftest PASS`（或 `selftest FAIL <步驟>`）。
+開始前若 tkey 已在停用清單，記 `selftest SKIP tkey-disabled` 不動作；
+無論中途哪步失敗都會再嘗試 `pm enable` 恢復。
+
+## 移除
+
+```sh
+adb uninstall com.example.tvagent
+```
+
+收尾只做 uninstall，不撤銷電視的 USB 偵錯授權（殘留公鑰對應的私鑰
+已隨 App 刪除，無法再被使用）。
+
+exec
+/bin/zsh -lc "cat tvagent/src/com/example/tvagent/Whitelist.java && sed -n '40,60p;205,245p' tvagent/src/com/example/tvagent/AgentService.java && sed -n '685,720p' tvagent/test/AdbClientTest.java" in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+package com.example.tvagent;
+
+final class Whitelist {
+    static String wlStatus(String shellOutput) {
+        String status = shellOutput.trim();
+        return "keep".equals(status) || "set".equals(status) || "fail".equals(status)
+                ? status : "unexpected";
+    }
+}
+    static final String EXTRA_SELFTEST = "selftest";
+    static final String SELFTEST_ACTION = "com.example.tvagent.SELFTEST";
+    static final String HEARTBEAT_ACTION = "com.example.tvagent.HEARTBEAT";
+
+    static final long HEARTBEAT_MS = 60 * 1000;
+    static final long DEDUP_MS = 30 * 1000;
+    static final int ALARM_REQ = 1;
+
+    static final String TARGET = "com.example.tkey";
+    static final String CMD_ECHO = "echo ok";
+    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
+    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>&1; "
+            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+    static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+    static final String CMD_LIST_DISABLED = "pm list packages -d";
+    static final String CMD_ENABLE = "pm enable com.example.tkey";
+
+    static final String HOST = "127.0.0.1";
+    static final int PORT = 5555;
+            throw new AdbClient.AdbException(AdbClient.IO, "key error: " + e.getMessage());
+        }
+    }
+
+    private void heartbeat(String src) {
+        // 凍結期間被略過的心跳可能在解凍時補跑：距上次 < 30 秒就略過，
+        // 同一分鐘內不重複寫兩次。心跳都在單執行緒上跑，不會有並行問題。
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastHeartbeatElapsed < DEDUP_MS) {
+            return;
+        }
+        lastHeartbeatElapsed = now;
+        String status;
+        try {
+            String output = runAdb(CMD_ECHO);
+            status = output.trim().equals("ok") ? "ok" : "io:unexpected-output";
+        } catch (AdbClient.AdbException e) {
+            status = e.kind + ":" + oneLine(e.getMessage());
+        } catch (Exception e) {
+            status = AdbClient.IO + ":" + oneLine(e.getMessage());
+        }
+        String wl = "skip";
+        if ("ok".equals(status)) {
+            try {
+                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
+            } catch (AdbClient.AdbException e) {
+                wl = e.kind + ":" + oneLine(e.getMessage());
+            } catch (Exception e) {
+                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
+            }
+        }
+        long uptime = SystemClock.elapsedRealtime() / 1000;
+        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+    }
+
+    private void runSelftest() {
+        // 0. 先確認有授權（必要時等授權）；沒有就結束。
+        try {
+            String echo = runAdb(CMD_ECHO);
+            if (!echo.trim().equals("ok")) {
+                logLine("selftest FAIL auth");
+                8000);
+        expectKind("err-stls", Fake.Auth.STLS, AdbClient.TLS_REQUIRED, false, 8000);
+        expectKind("err-badmagic", Fake.Auth.BAD_MAGIC, AdbClient.PROTOCOL, false, 8000);
+        expectKind("err-badcksum", Fake.Auth.BAD_CHECKSUM, AdbClient.PROTOCOL, false, 8000);
+        expectKind("err-garbage", Fake.Auth.GARBAGE_CMD, AdbClient.PROTOCOL, false, 8000);
+    }
+
+    public static void main(String[] args) {
+        try {
+            String td = args.length > 0 ? args[0] : "testdata";
+            testVectors(td);
+            testOpaquePrivateKey();
+            testConscryptBrokenObjectStillLoadsFromFile(td);
+            testGenerateThenLoadSameKey();
+            testAuthRoundTrip();
+            testBigOutput();
+            testTruncated();
+            testErrors();
+            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
+            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
+            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
+            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
+            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
+        } catch (Exception e) {
+            System.out.println("FAIL harness :: " + e);
+            e.printStackTrace(System.out);
+            failures++;
+        }
+        if (failures == 0) {
+            System.out.println("ALL PASS");
+        } else {
+            System.out.println(failures + " FAILURES");
+            System.exit(1);
+        }
+    }
+}
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'find .. -name AGENTS.md -print' in /Users/example-owner/TV-wt-tvagent-wl
+hook: PreToolUse
+hook: PreToolUse Completed
+mcp: mem/get_profile started
+mcp: mem/get_profile (completed)
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+已確認問題發生在白名單指令的輸出判斷；修改會涵蓋三次 `dumpsys`、共用狀態判斷與離線測試，並保留原有五個案例。現有設定指令已將 stderr 導向 `/dev/null`，我會改成明確的 `2>/dev/null` 寫法，讓三處一致。
+hook: PreToolUse
+hook: PreToolUse Completed
+apply patch
+patch: completed
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/src/com/example/tvagent/AgentService.java
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/src/com/example/tvagent/Whitelist.java
+/Users/example-owner/TV-wt-tvagent-wl/tvagent/test/AdbClientTest.java
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index e77edecdcbf60659c82263635985bf3efd84a3d1..fa12860e40e942db730ac052ba7ae72fea43ec7c
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -49,9 +49,9 @@
+     static final String CMD_ECHO = "echo ok";
+     static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
+     static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
+-            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
+-            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>&1; "
+-            + "dumpsys activity service $S | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
++            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+     static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+     static final String CMD_LIST_DISABLED = "pm list packages -d";
+     static final String CMD_ENABLE = "pm enable com.example.tkey";
+diff --git a/tvagent/src/com/example/tvagent/Whitelist.java b/tvagent/src/com/example/tvagent/Whitelist.java
+index a9c3e70851dce33c131dd3a6e2ceeada76d71275..1825ceecb62a8a4b7b1a3b0a1054d90a1bc003f1
+--- a/tvagent/src/com/example/tvagent/Whitelist.java
++++ b/tvagent/src/com/example/tvagent/Whitelist.java
+@@ -3,6 +3,7 @@
+ final class Whitelist {
+     static String wlStatus(String shellOutput) {
+         String status = shellOutput.trim();
++        status = status.substring(status.lastIndexOf('\n') + 1).trim();
+         return "keep".equals(status) || "set".equals(status) || "fail".equals(status)
+                 ? status : "unexpected";
+     }
+diff --git a/tvagent/test/AdbClientTest.java b/tvagent/test/AdbClientTest.java
+index e1e3a7d5937d260a7aebcf8c5ccf4ee20d1cb8b1..7e408fddae250631fceaa17aef8b35f376248855
+--- a/tvagent/test/AdbClientTest.java
++++ b/tvagent/test/AdbClientTest.java
+@@ -705,6 +705,7 @@
+             check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
+             check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
+             check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
++            check("keep".equals(Whitelist.wlStatus("Failed to write while dumping service activity: Broken pipe\nkeep\n")), "wl-broken-pipe", "keep after error");
+         } catch (Exception e) {
+             System.out.println("FAIL harness :: " + e);
+             e.printStackTrace(System.out);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'sh tvagent/test.sh > /tmp/wo-g2-repair1-test.log 2>&1; result=$?; tail -n 7 /tmp/wo-g2-repair1-test.log; exit "$result"' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 7964ms:
+PASS wl-keep
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+PASS wl-broken-pipe
+ALL PASS
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+離線測試已通過，包含 Broken pipe 後接 `keep` 的新案例。接下來使用既有簽章金鑰建置 APK，並把指定的測試末七行附到退修紀錄。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "test -f tvagent/debug.keystore && shasum -a 256 tvagent/debug.keystore && sh tvagent/build.sh && shasum -a 256 tvagent/debug.keystore && stat -f '%Sm %N' -t '%Y-%m-%d %H:%M:%S %Z' tvagent/tvagent.apk" in /Users/example-owner/TV-wt-tvagent-wl
+ exited 1 in 36072ms:
+../.config/opencode/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/vercel/skills/react-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/data-analytics/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/build-web-apps/skills/react-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/build-web-apps/skills/supabase-best-practices/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/product-design/templates/mobile-app/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/product-design/templates/prototype/AGENTS.md
+../.codex-team-dev/.tmp/plugins/plugins/zoom/AGENTS.md
+../Tools/xiaohongshu-mcp-readonly/AGENTS.md
+../go/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.7.0/AGENTS.md
+../ai_dispatcher/.claude/worktrees/suspicious-mclean-3992c7/AGENTS.md
+../ai_dispatcher/AGENTS.md
+../WhisperMacTool/AGENTS.md
+../.claude/plugins/cache/ponytail/ponytail/4.8.3/AGENTS.md
+../.claude/plugins/marketplaces/ponytail/AGENTS.md
+../Library/Application Support/orca/codex-runtime-home/home/AGENTS.md
+../Library/Caches/example-dev/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.33/AGENTS.md
+../.teamdev/repos/example-teamA/AGENTS.md
+../.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.59/AGENTS.md
+../.codex/.chatgpt-projects/g-p-6a09029d73808191b6c48bcedd928871/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69fd8c7facd88191a9432e0a19be87ea/AGENTS.md
+../.codex/.chatgpt-projects/g-p-68ef86022a04819193cddd83549174b4/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69d79ea39a5c8191ad033cdbab1538ed/AGENTS.md
+../.codex/.chatgpt-projects/g-p-69e609fc4840819197f0964c195a3bd3/AGENTS.md
+../.codex/plugins/cache/ponytail/ponytail/5.3.3/AGENTS.md
+../.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-8gLgFE/AGENTS.md
+../.codex/.tmp/plugins/plugins/vercel/skills/react-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/data-analytics/AGENTS.md
+../.codex/.tmp/plugins/plugins/build-web-apps/skills/react-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/build-web-apps/skills/supabase-best-practices/AGENTS.md
+../.codex/.tmp/plugins/plugins/product-design/templates/mobile-app/AGENTS.md
+../.codex/.tmp/plugins/plugins/product-design/templates/prototype/AGENTS.md
+../.codex/.tmp/plugins/plugins/zoom/AGENTS.md
+../.codex/.tmp/marketplaces/ponytail/AGENTS.md
+../.codex/AGENTS.md
+../example-docs/tmp/word-oss-eval/w2/wc/AGENTS.md
+../example-teamA/AGENTS.md
+../example-ime/AGENTS.md
+find: ../Downloads: Operation not permitted
+../FAMILY-DOCS/eBooks/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-109/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-100/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-98/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-96/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-99/AGENTS.md
+../orca/workspaces/example-teamA/knifefish/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-95/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-94/AGENTS.md
+../orca/workspaces/example-teamA/teamdev-ai_dev_team-93/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/fb6f7e8500d04b18a03d7b080b76f527/workspace/cron/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/bcdddcfc3feb479a83c54e745b4fa8ec/workspace/cron/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/tools/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/hermes_cli/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/plugins/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/agent/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/tui_gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/gateway/AGENTS.md
+../.hermes/installs/f5971c6c138ef0ec/environments/c40ebe4da5814bee95e4b056fcf46dec/workspace/cron/AGENTS.md
+../.hermes/hermes-agent/tools/AGENTS.md
+../.hermes/hermes-agent/hermes_cli/AGENTS.md
+../.hermes/hermes-agent/plugins/AGENTS.md
+../.hermes/hermes-agent/web/AGENTS.md
+../.hermes/hermes-agent/agent/AGENTS.md
+../.hermes/hermes-agent/tui_gateway/AGENTS.md
+../.hermes/hermes-agent/skills/AGENTS.md
+../.hermes/hermes-agent/AGENTS.md
+../.hermes/hermes-agent/apps/desktop/AGENTS.md
+../.hermes/hermes-agent/apps/desktop/src/AGENTS.md
+../.hermes/hermes-agent/gateway/AGENTS.md
+../.hermes/hermes-agent/cron/AGENTS.md
+../.pi/agent/AGENTS.md
+../AI-Quota-Plugin/CodexBar/.build/checkouts/Commander/AGENTS.md
+../AI-Quota-Plugin/CodexBar/.build/checkouts/SweetCookieKit/AGENTS.md
+../AI-Quota-Plugin/CodexBar/AGENTS.md
+
+ succeeded in 6392ms:
+83c5654528d0e450754efd99e55fae5433837a5cfa3b56b14c0df1a98f6a1ffb  tvagent/debug.keystore
+Note: src/com/example/tvagent/AgentService.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+83c5654528d0e450754efd99e55fae5433837a5cfa3b56b14c0df1a98f6a1ffb  tvagent/debug.keystore
+2026-10-30 21:11:17 CST tvagent/tvagent.apk
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc "cat >> /Users/example-owner/TV/research/wo/WO-G2_done.md <<'EOF'
+
+## 退修 1
+
+- "'`AgentService.java` 的三次 `dumpsys` 均明確加入 `2>/dev/null`，保留 `grep -q`。
+- `Whitelist.java` 改以最後一個非空白行判斷結果；`AdbClientTest.java` 保留原有五個案例，新增 Broken pipe 訊息後接 `keep` 的案例。
+- `sh tvagent/build.sh` 成功，重新產生 APK；沿用既有 `debug.keystore`，建置前後 SHA-256 相同。編譯器仍提示既有程式使用已棄用 API。
+- `sh tvagent/test.sh` 最後七行：
+
+```text
+PASS wl-keep
+PASS wl-set
+PASS wl-fail
+PASS wl-empty
+PASS wl-garbage
+PASS wl-broken-pipe
+ALL PASS
+```
+
+未執行 adb 或操作電視，尚待實機驗證。
+EOF
+ git diff --check && git status --short && git diff --stat && git diff -- tvagent/src/com/example/tvagent/AgentService.java tvagent/test/AdbClientTest.java' in /Users/example-owner/TV-wt-tvagent-wl
+ succeeded in 0ms:
+ M tvagent/README.md
+ M tvagent/src/com/example/tvagent/AgentService.java
+ M tvagent/test.sh
+ M tvagent/test/AdbClientTest.java
+ M tvagent/tvagent.apk
+?? tvagent/src/com/example/tvagent/Whitelist.java
+ tvagent/README.md                                |  22 ++++++++++++++++++++--
+ tvagent/src/com/example/tvagent/AgentService.java |  17 ++++++++++++++++-
+ tvagent/test.sh                                  |   2 +-
+ tvagent/test/AdbClientTest.java                  |   6 ++++++
+ tvagent/tvagent.apk                              | Bin 24981 -> 24981 bytes
+ 5 files changed, 43 insertions(+), 4 deletions(-)
+diff --git a/tvagent/src/com/example/tvagent/AgentService.java b/tvagent/src/com/example/tvagent/AgentService.java
+index da64511..fa12860 100644
+--- a/tvagent/src/com/example/tvagent/AgentService.java
++++ b/tvagent/src/com/example/tvagent/AgentService.java
+@@ -47,6 +47,11 @@ public class AgentService extends Service {
+ 
+     static final String TARGET = "com.example.tkey";
+     static final String CMD_ECHO = "echo ok";
++    static final String WHITELIST = "com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent";
++    static final String CMD_WHITELIST = "S=com.tcl.guard/.memorymanager.TGuardService; "
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo keep || { "
++            + "dumpsys activity service $S mKillWhiteList '" + WHITELIST + "' >/dev/null 2>/dev/null; "
++            + "dumpsys activity service $S 2>/dev/null | grep -q 'KillWhiteList:.*com[.]example[.]tvagent$' && echo set || echo fail; }";
+     static final String CMD_DISABLE = "pm disable-user --user 0 com.example.tkey";
+     static final String CMD_LIST_DISABLED = "pm list packages -d";
+     static final String CMD_ENABLE = "pm enable com.example.tkey";
+@@ -218,8 +223,18 @@ public class AgentService extends Service {
+         } catch (Exception e) {
+             status = AdbClient.IO + ":" + oneLine(e.getMessage());
+         }
++        String wl = "skip";
++        if ("ok".equals(status)) {
++            try {
++                wl = Whitelist.wlStatus(runAdb(CMD_WHITELIST));
++            } catch (AdbClient.AdbException e) {
++                wl = e.kind + ":" + oneLine(e.getMessage());
++            } catch (Exception e) {
++                wl = AdbClient.IO + ":" + oneLine(e.getMessage());
++            }
++        }
+         long uptime = SystemClock.elapsedRealtime() / 1000;
+-        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status);
++        logLine("uptime=" + uptime + " pid=" + Process.myPid() + " src=" + src + " adb=" + status + " wl=" + wl);
+     }
+ 
+     private void runSelftest() {
+diff --git a/tvagent/test/AdbClientTest.java b/tvagent/test/AdbClientTest.java
+index c12642c..7e408fd 100644
+--- a/tvagent/test/AdbClientTest.java
++++ b/tvagent/test/AdbClientTest.java
+@@ -700,6 +700,12 @@ public class AdbClientTest {
+             testBigOutput();
+             testTruncated();
+             testErrors();
++            check("keep".equals(Whitelist.wlStatus(" keep\n")), "wl-keep", "keep");
++            check("set".equals(Whitelist.wlStatus("set")), "wl-set", "set");
++            check("fail".equals(Whitelist.wlStatus("fail")), "wl-fail", "fail");
++            check("unexpected".equals(Whitelist.wlStatus("")), "wl-empty", "empty");
++            check("unexpected".equals(Whitelist.wlStatus("亂碼")), "wl-garbage", "garbage");
++            check("keep".equals(Whitelist.wlStatus("Failed to write while dumping service activity: Broken pipe\nkeep\n")), "wl-broken-pipe", "keep after error");
+         } catch (Exception e) {
+             System.out.println("FAIL harness :: " + e);
+             e.printStackTrace(System.out);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+退修完成。三次 `dumpsys` 均已加入 `2>/dev/null`，狀態判斷改為讀取最後一個非空白行，並新增 Broken pipe 測試案例。
+
+- `sh tvagent/test.sh`：**ALL PASS**，原有五個案例與新增案例均通過。
+- `sh tvagent/build.sh`：成功產生 APK；既有簽章金鑰未變。
+- 已在 [WO-G2_done.md](/Users/example-owner/TV/research/wo/WO-G2_done.md) 末尾追加退修紀錄與測試最後七行。
+- 未 commit、push，也未修改 testdata。
+
+依要求未執行 adb 或操作電視；修正後的 APK 仍待實機驗證。
+hook: Stop
+hook: Stop Completed
+tokens used
+43,505
+退修完成。三次 `dumpsys` 均已加入 `2>/dev/null`，狀態判斷改為讀取最後一個非空白行，並新增 Broken pipe 測試案例。
+
+- `sh tvagent/test.sh`：**ALL PASS**，原有五個案例與新增案例均通過。
+- `sh tvagent/build.sh`：成功產生 APK；既有簽章金鑰未變。
+- 已在 [WO-G2_done.md](/Users/example-owner/TV/research/wo/WO-G2_done.md) 末尾追加退修紀錄與測試最後七行。
+- 未 commit、push，也未修改 testdata。
+
+依要求未執行 adb 或操作電視；修正後的 APK 仍待實機驗證。

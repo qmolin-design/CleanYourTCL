@@ -1,0 +1,13 @@
+你是獨立審查者（唯讀），審 git worktree /Users/example-owner/TV-wt-a2（分支 adult-a2）的改動。不要改任何檔案、不要 commit、不准跑 adb 或 wrangler。
+
+計畫：/Users/example-owner/TV-wt-a2/research/PLAN_adult.md（讀「做法」「定義」「WO-A2」與檔尾裁定表）。工人回報：/Users/example-owner/TV-wt-a2/research/wo/WO-A2_report.md。diff：在 worktree 跑 git diff -- tvagent/src tvagent/test。
+
+要審：
+1. 扣額切分：Quota.usage 的 freeToWall 是否只把 freeToWall 之前的前景時間排除，seconds/ytS/nfS 一致；舊簽名行為完全不變。
+2. heartbeat 順序：先失效清理（boot<0、boot 不同、el<qEl）、再用舊 adultEnd 結算、consume、act、sync 後才覆寫 adultEnd＝el2＋min(left,600)*1000；jump 路徑公式。
+3. sync 解析 adult_left_s 錯誤絕不使 sync 失敗；舊 Worker 無欄位＝0。
+4. decide/nextAlarmMs 用有效額度；sync 後重跑 act 的條件保留原本 balance/enforce 變化。
+5. 鎖定路徑沒被改壞（act 的 adb 指令與驗證沒動）；Quota.load 對舊 state 相容。
+6. 自己跑 sh tvagent/test.sh（Docker 已開）確認 PASS；既有測試沒被放寬。
+
+輸出：第一行寫 PASS 或 FAIL，接著逐條列發現（檔案:行號＋說明＋嚴重度），最後一段寫「建議」。繁體中文。

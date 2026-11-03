@@ -1,0 +1,16 @@
+【你的題目：需求 A 電視瘦身——第二位獨立研究員（交叉驗證＋補洞）】
+輸出檔：/Users/example-owner/TV/research/R2b_debloat_MUSE.md
+查資料用 webfetch 工具。websearch 工具目前後端會回 403，不要依賴它；要搜尋就用 webfetch 抓 https://html.duckduckgo.com/html/?q=<關鍵字>（或 https://www.bing.com/search?q=<關鍵字>）。XDA 等被 Cloudflare 擋的頁面可試 https://r.jina.ai/<原網址>，並註明是透過代理取得。只寫你實際讀到內容的 URL。
+
+第一部分：獨立研究（先做這部分，做完再讀第二部分提到的檔案，避免被先入為主）
+1. 台灣版 TCL Android TV（P715／P615／P725／C715 等 2020–2021 台灣機種，Android TV 11、RT2851／RT51M 平台）實際有哪些預載 App 與 TCL 服務：查 Mobile01、PTT（HD-Player、TV 板）、巴哈、TCL 台灣官網／客服 FAQ、Reddit。台灣版特有的在地預載（例如影音平台、TCL Channel、廣告推播、開機廣告）有哪些、使用者是否回報停用後的問題。
+2. 「停用後出事」的案例：在 TCL Android TV（任何機種，標明型號與 Android 版本）停用哪些套件導致開不了機／開機循環、遙控器或藍牙配對失效、HDMI／訊號源／CEC 失效、聲音消失、Wi-Fi 設定打不開、Netflix／Disney+ DRM 錯誤、OTA 失效、首頁空白。整理成「不要碰」清單，每條附型號與來源。
+3. 卡頓的硬體面：2GB RAM／16GB eMMC 的 Android TV 11 在 2026 年跑 YouTube、Netflix 是否普遍卡頓（新版 YouTube／Play 服務變肥的回報）；debloat 能改善到什麼程度、什麼情況下該放棄改用外接電視盒（Chromecast with Google TV／Google TV Streamer 等，列台灣售價）。
+4. Projectivy Launcher 在 Android TV 11（非 Google TV）＋TCL 上的實際回報：是否被韌體搶回 HOME、是否要停用原 launcher、停用原 launcher 的風險與還原。
+
+第二部分：交叉驗證
+讀 /Users/example-owner/TV/research/R2_debloat_DEEPSEEK.md 第 0 節「先講結論」與第 4 節「套件分類」，逐條重新打開它引用的 URL 核對：
+- 原文是否真的這樣說（數字、型號、版本是否一致）？
+- 證據等級標得對不對（例如標 [官方文件] 的是否真是官方來源）？
+- 第 4 節「可安全停用」的套件，你在第一部分有沒有找到反例？
+輸出成表格：R2 的說法 ／ 你核對結果（相符／不符／查不到）／ 依據 URL。不要改 R2 檔，只寫你自己的輸出檔。

@@ -1,0 +1,11 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-m1（分支 mode-m1）施工。工作目錄只在 /Users/example-owner/TV-wt-m1，不要動其他資料夾。
+
+任務：依 /Users/example-owner/TV-wt-m1/research/PLAN_mode.md 的「伺服器」「頁面」「WO-M1」施工（先完整讀全檔，含檔尾「挑戰裁定」；正文是裁定後版本）。樣式與文字照 /Users/example-owner/TV-wt-m1/mockups/parent-v4-mode.html 的 `.mode`／`.seg`／`.dur` 與 V 物件裡的文字（黃色 MOCK 狀態列不要）。「動到」的檔案就是你唯一能改的檔案；「完成標準」每一條都要做到並自己跑過；「禁止」每一條都不能違反。
+
+規則：
+- 不要 git commit、不要 push、不要 merge，改完留在工作區。
+- 絕對不准跑 adb、wrangler 或任何會碰到電視或雲端的指令。
+- 不要改計畫檔；既有 API 行為測試不能放寬（只有計畫允許的頁面元素斷言可改）。
+- 風格照現有程式（精簡、不加不必要的抽象）；頁面 JS 不得含反引號與 `${`；所有 API 字串經 esc() 或 textContent。
+- 驗收：cd cfquota && node --test；完成標準⑥用本機 Chrome/Playwright（python3 playwright，chromium.launch(channel="chrome")，viewport 390x844）對假資料預覽截四態圖，存 research/wo/m1_*.png，量 scrollWidth。
+- 完成後在 /Users/example-owner/TV-wt-m1/research/wo/WO-M1_report.md 寫：改了什麼（每檔一兩行）、kid／on 各情境走哪條路、新增測試（對應編號）、node --test 輸出、截圖與 scrollWidth、git diff --stat、疑慮。

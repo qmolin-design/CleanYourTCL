@@ -1,0 +1,4 @@
+你是審核者，複審 /Users/example-owner/TV-wt-u4（分支 page-u4）工作區的 WO-U4 fix1。唯讀：不要改任何檔案、不要 commit、不准跑 adb／wrangler。
+依據：research/PLAN_page.md（規格，第 4 項已更新爸媽卡三行＋短按鈕）、research/wo/WO-U4_review_GEMINI.md（你上次的 FAIL 意見）、research/wo/WO-U4_report.md 檔尾 fix1。
+請逐項查：①上次 FAIL 各點是否修好；②cfquota/page.mjs 所有 API 字串是否都經 esc() 或 textContent（XSS）；③refresh 時確認框／note 不被洗掉；④按鈕 disabled／finally 恢復正確；⑤版面 390px 無橫向溢出（可看 research/wo/u4fix_A～F.png）；⑥cd cfquota && node --test 全過；⑦git diff 沒動到禁止的檔（Access、grant／adult／sync 邏輯、路由、wrangler.toml、worker.mjs、schema.sql）。
+輸出：PASS 或 FAIL，FAIL 時列「嚴重度／位置／問題／建議改法」。

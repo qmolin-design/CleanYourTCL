@@ -1,0 +1,1 @@
+還原：pm enable com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver

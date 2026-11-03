@@ -1,0 +1,15 @@
+【你的題目：方案 A 現成 Android TV 家長監護工具】
+輸出檔：/Users/example-owner/TV/research/R1_parental_apps_HAIKU.md
+
+要查：
+1. ScreenUsage（原名 tvusage，Android TV 家長監護 App）：官網、Play 商店頁、開發者文件。逐項確認：
+   a. 是否能「單次核准 N 分鐘」（非每日額度）？有沒有 bonus time / 臨時加時？可選 15/30/60 分鐘嗎？
+   b. 家長端是否支援 iPhone（iOS App 或網頁）？能否遠端（不在同一 Wi-Fi）操作？
+   c. 能否只鎖 YouTube 單一 App、其他 App（Netflix、4gTV）不受影響？
+   d. 到期是否自動關閉正在播放的 App？
+   e. 重開機、強制停止、清除資料、解除安裝、切換帳號是否能繞過？它靠什麼權限（Accessibility、Device Admin、Usage Access）？
+   f. 收費方式（免費/訂閱/買斷，價格）。
+   g. Android TV 11、TCL 機種相容性的任何回報。
+2. 其他候選：Google Family Link 在 Android TV 11（非 Google TV）的支援度；TCL Android TV 內建「家長控制／App 鎖（PIN）」能否只鎖 YouTube；其他 Android TV 上可用的家長監護 App（至少找 2–3 個，例如 Kids Place、AppLock 類、Screen Time 類），同樣用上面 a–g 比較。
+3. 每個工具對以下入口的封鎖能力：YouTube App、遙控器 YouTube 鍵、YouTube Kids、瀏覽器 youtube.com、iPhone 投放 YouTube（Chromecast built-in 投放是否會繞過 App 鎖）、語音搜尋開 YouTube。
+4. 最後給一張比較表（工具 × 上述條件），每格標證據等級。

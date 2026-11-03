@@ -1,0 +1,13 @@
+WO-A3 施工完成，工作區保留未 commit。
+
+**改了什麼（只動計畫允許的 4 檔＋重建 apk）：**
+- `Quota.java`：新增 `wouldStop(yt, mixed, eff)`；`nextAlarmMs` 新增多載（`screenOn`、`locked`）—— eff=0＋螢幕亮＋狀態已知 → 10 秒，其餘轉舊公式；`decide()` 沒動。
+- `AgentService.java`：heartbeat 分兩條路——`wouldStop` 為真時 `save→sync（獨立 try/catch）→sync 成功先 save 落盤→act→save`；否則舊流程逐字保留；兩路 sync 都只呼叫一次；`app_ver` 4→5；排鬧鐘改傳新多載。
+- `QuotaTest.java`：只加 8 個新 check（①②③④×3⑤），既有測試一字未改。
+- `README.md`：`app_ver` 5＋兩句話說明。`tvagent.apk` 已重建。
+
+**驗收：** `sh tvagent/test.sh` exit=0（123 PASS，以 ALL PASS 結尾）、`sh tvagent/build.sh` exit=0。沒跑 adb/wrangler，沒碰電視或雲端。
+
+**報告：** `research/wo/WO-A3_report.md`（新流程五種情境走哪條路、測試對應編號、驗收輸出、diff、3 點疑慮——主要是 heartbeat 順序無法被 JVM 測試覆蓋，需靠實機＋外部 review，照計畫裁定 #7 辦理）。
+
+一個小提醒：過程中 `AgentService` 曾多出一個 `}`，已刪除並以測試＋建置確認無誤。

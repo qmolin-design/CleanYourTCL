@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.tvagent" android:versionCode="2" android:versionName="2">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="30" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <application android:label="看電視時間" android:allowBackup="false" android:debuggable="true">
+        <service android:name=".AgentService" android:exported="false" />
+        <receiver android:name=".BootReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter></receiver>
+        <receiver android:name=".KickReceiver" android:exported="true"><intent-filter><action android:name="com.example.tvagent.KICK" /></intent-filter></receiver>
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <activity android:name=".NoticeActivity" android:exported="true" android:excludeFromRecents="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+    </application>
+</manifest>

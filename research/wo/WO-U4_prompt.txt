@@ -1,0 +1,11 @@
+你是工人，在 git worktree /Users/example-owner/TV-wt-u4（分支 page-u4）施工。工作目錄只在 /Users/example-owner/TV-wt-u4，不要動其他資料夾。
+
+任務：依 /Users/example-owner/TV-wt-u4/research/PLAN_page.md 的「WO-U4」施工。樣式照 /Users/example-owner/TV-wt-u4/mockups/parent-v3.html（排法 B，row3）搬，先完整讀這兩個檔，再讀 cfquota/lib.mjs（現行 page、state、usage、adult 相關）與 cfquota/lib.test.mjs。計畫列的「動到」檔案就是你唯一能改／新增的檔案；「完成標準」每一條都要做到並自己跑過；「禁止」每一條都不能違反。
+
+規則：
+- 不要 git commit、不要 push、不要 merge，改完留在工作區。
+- 絕對不准跑 adb、wrangler deploy、wrangler d1 execute --remote 或任何會碰到電視或雲端的指令。
+- 不要改計畫檔與 mockups；不要改既有測試讓它變寬鬆；現有測試全部要照過。
+- 風格照現有程式（精簡、不加不必要的抽象）。
+- 驗收指令：cd cfquota && node --test；最後在 worktree 根目錄跑 git diff --stat。
+- 完成後在 /Users/example-owner/TV-wt-u4/research/wo/WO-U4_report.md 寫：改了什麼（每檔一兩行）、新增了哪些測試（對應完成標準編號）、驗收輸出（PASS/FAIL 統計）、本機看頁面的方式與結果（各狀態長什麼樣）、git diff --stat、疑慮。另外把你用來本機預覽的假 state 頁面存成 /Users/example-owner/TV-wt-u4/research/wo/WO-U4_preview.html（單檔、打開就能看，內含假資料與一個切換狀態的小選單），讓 Opus 檢查。

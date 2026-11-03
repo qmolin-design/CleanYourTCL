@@ -1,0 +1,11 @@
+你是挑戰者（只挑錯，不寫程式、不改任何檔案）。用繁體中文（台灣用語）回答。
+挑戰 research/PLAN_v5.md（DRAFT）。背景請只讀這幾個檔：research/PLAN_v5_spike.md、research/batches/tvagent/NOTE.txt、tvagent/src 底下的 Java、research/PLAN_v4_ui.md、research/00_REQUIREMENT.md。不要讀清單外的檔案。
+
+找出：
+1. 漏洞：額度會被多扣/少扣/白拿的情境、斷網與重開的邊界、小孩繞過、Access/JWT/service token 驗證錯誤、加值 seq 防重的漏洞、通知誤報或漏報。
+2. 錯誤假設：Android TV 11 / TCL / Cloudflare Workers、D1、Access、ntfy 行為上你認為寫錯或沒把握的地方（標明你的確定程度）。
+3. 過度設計：可以刪掉或簡化、不影響 Owner 目標的部分（Owner 目標：一般使用擋得住、兩支 iPhone 可加值、異常有通知）。
+4. 驗收標準：哪些完成標準不可執行、會誤判 PASS、或中階模型照工單做不出來。
+5. v4 並行/切換/回滾的風險（特別是任何可能導致撤銷 USB 偵錯授權或 v4 斷線的步驟）。
+
+格式：每條一行編號，寫「位置（段落或行號）｜問題｜建議」，依嚴重度排序（高/中/低標在最前面）。最多 25 條，不要寫總結散文。

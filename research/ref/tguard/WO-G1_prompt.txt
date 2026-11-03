@@ -1,0 +1,35 @@
+你是逆向分析工程師。任務：反編譯 TCL 電視內建的記憶體管家 TGuard，回答 4 個問題，寫成繁體中文報告。只做唯讀分析。
+
+## 背景
+- 電視：TCL Android TV（Android 11 左右，2GB RAM）。我們自製的背景 App `com.example.tvagent`（第三方、非系統簽章，跑一個前景/一般 Service＋AlarmManager 每 60 秒心跳）一直被砍。
+- event log 實例（am_kill 格式：[user,pid,process,adj,reason]）：
+  - `[0,2297,com.example.tvagent,500,tguard-kill]`、`[0,3515,com.example.tvagent,200,tguard-kill]`、`[0,2421,com.example.tvagent,800,tguard-kill]`
+  - `[0,3389,com.android.vending,935,tguard-kill-SystemApp]`、`[0,2959,com.google.android.gms.unstable,905,tguard-kill-Gms]`
+  - 被砍時 MemAvailable 約 590MB／2GB，所以不是真的記憶體不足。18:27 開 Netflix 後 25 分鐘內砍了 tvagent 8 次；被砍後 tvagent 設的 AlarmManager 鬧鐘也消失（懷疑等同 force-stop）。
+  - 系統屬性：`sys.tguard.restart=false`、`persist.sys.freeze=true`（另一個 TCL 凍結機制 FreezeManager，可順帶看）。
+- 檔案（全部在 BASE=/private/tmp/claude-501/-Users-example-TV/000000024-0000-4000-8000-000000000000/scratchpad/tguard/dev）：
+  - `$BASE/TGuard.apk`（套件 com.tcl.guard，sharedUser=android.uid.system，版本 1.01.00_f761a12_220511；含 libtguard-native.so、libdexinterpret.so、libdalvikhack.so，可能有加殼/動態載入）
+  - `$BASE/apk/assets/`：已解出的設定檔。sys_config.xml（`<sysrubish type=mem>` 清單）、autoselfstart_config.xml、ops_config.xml、custom_config.xml（看起來是加密的）、config/kernel_config.xml 等。
+  - `$BASE/fw/services.jar`（system_server，內有 `IAMSTGuardInjector`、`getAMSTGuardInjector`、`INT_TGUARD_ENABLE`、`KILL_TGUARD`、`tGuardKillPackageProcesses`、`isTclFactoryPMode, skip TGuard`、`startTGuard`、`sys.tguard.restart`）
+  - `$BASE/fw/tcl-service.jar`、`tcl-framework.jar`（含 `android.util.ITGuardManager`？）、`tcl-systemserver.jar`
+- 反編譯工具：`jadx`（Homebrew 已裝；若 `which jadx` 找不到，回報後停止，不要自行安裝其他東西）。輸出到 `$BASE/../src/<名稱>/`，例如 `jadx -d $BASE/../src/tguard $BASE/TGuard.apk`、`jadx -d $BASE/../src/services $BASE/fw/services.jar`。services.jar 很大，可以只 grep 相關類別。
+
+## 要回答的問題（每個結論都要附證據：反編譯檔案路徑:行號，或設定檔路徑；分清楚「程式碼證實」與「推測」）
+Q1 白名單：TGuard 有哪些「不砍」名單？各從哪裡載入（assets xml、custom_config 解密後內容、mmkv/SharedPreferences、雲端下發、Settings.Global/System/Secure、ContentProvider、硬寫在程式裡）？除了名單，還有哪些條件會讓程式免砍（例如：前景 App、桌面、輸入法、無障礙服務、桌布、裝置管理員、前景通知 Service、可見視窗、adj 門檻、播放音訊、套件名前綴、系統簽章/uid、特定權限）？**重點：一個第三方 App，能不能用 adb shell（shell uid，無 root）把自己加進白名單或滿足免砍條件？** 列出具體指令（settings put / am broadcast / content insert / cmd / appops / pm grant 等）與它是否真的被程式讀取。若 custom_config.xml 可解密，找出金鑰/演算法並把內容解出來寫進報告（存成 `$BASE/../custom_config_decrypted.xml`）。
+Q2 機制：什麼時候觸發（切換前景 App？啟動特定大 App 如 Netflix/YouTube？記憶體門檻？定時？待機）？怎麼挑要砍的程序（adj、PSS、分類 SystemApp/Gms/一般）？用什麼方式砍（killPackageProcesses、forceStopPackage、killBackgroundProcesses、移除 alarm）——解釋為什麼 tvagent 的鬧鐘會消失、為什麼 adj 200/500 也會被砍。system_server 端（IAMSTGuardInjector）和 TGuard App 端怎麼分工。
+Q3 停用：`INT_TGUARD_ENABLE` 在哪裡讀、是哪個 Settings 命名空間/key、預設值、shell 能不能改？`sys.tguard.restart` 的作用？`isTclFactoryPMode` 怎麼判斷？`pm disable-user --user 0 com.tcl.guard` 或 `pm suspend` 之後 system_server 端還會不會砍、會不會被自動重新啟用/重啟？列出每個停用方法的：指令、是否 shell 權限可做、可逆方法、預期副作用、證據強度。
+Q4 自製 MemoryControl 可行性：TGuard 除了砍程序還做哪些事（開機加速、清垃圾、兒童模式距離/坐姿 assets/child/*、kernel_config 調參）？若停用 TGuard，哪些功能會沒了、2GB RAM 單靠 Android 原生 lmkd 是否足夠（看 kernel_config.xml 有沒有改 lmk/minfree/zram 參數）？如果我們自己寫一個只「保護白名單（tvagent）、其他交給 lmkd」的方案，要做哪些事、shell 權限夠不夠。給出建議與風險排序。
+
+## 限制
+- 不要執行 adb，不要連任何網路服務，不要安裝任何套件或改全域設定。
+- 不要修改 /Users/example-owner/TV 底下任何檔案；所有輸出只放在 `$BASE/..`（即 scratchpad/tguard）底下。
+- 報告不要整段貼專有程式碼，每處引用 ≤15 行。
+- 時間上限約 60 分鐘；做不完就把已確認的寫下來，未完成的列「未查」。
+
+## 交付
+寫 `/private/tmp/claude-501/-Users-example-TV/000000024-0000-4000-8000-000000000000/scratchpad/tguard/R8_tguard_report.md`，結構：
+1. 一段白話總結（給非工程師看：有沒有白名單、我們能不能加進去、能不能停用、建議做法）
+2. Q1～Q4 詳細（含證據路徑:行號）
+3. 建議的上機驗證步驟（每步：指令、預期結果、還原指令），依「最安全、最可逆」排序
+4. 未查/不確定事項
+完成後在最後一行寫 `REPORT_DONE`。

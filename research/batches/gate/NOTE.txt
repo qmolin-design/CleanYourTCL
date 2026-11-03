@@ -1,0 +1,39 @@
+## 23:48:46 停用
+Package com.google.android.youtube.tv new state: disabled-user
+package:com.google.android.youtube.tvmusic
+package:com.google.android.youtube.tv
+## 23:50:36 Owner 回報（YouTube 停用中）
+- CleanYourTV 桌面 YouTube 圖示：消失
+- T 鍵：無反應
+- 遙控器 YouTube 鍵：這支遙控器沒有 → 不適用
+- 語音（遙控器麥克風）「YouTube」：無反應
+- Netflix、四季、Spotify：正常
+## 23:54:57 Owner：設定頁有「啟用」鈕，按下後桌面圖示回來 → 可被手動解鎖；Owner 接受（小孩乖，打斷慣性即可），不試 suspend，靠對帳停回
+## 23:54:57 重停用後重開
+0
+Package com.google.android.youtube.tv new state: disabled-user
+reboot sent 23:55:09
+adb 重連＋開機完成：開機指令後 50 秒（第 2 次嘗試）
+package:com.google.android.youtube.tvmusic
+ 23:56:03 up 0 min,  0 users,  load average: 20.49, 5.51, 1.87
+## 23:59:09 重開機結果：adb 50 秒內自動重連；YouTube 被開機程序改回啟用（其他 38 個停用維持）→ 服務需在電視重連後立即對帳
+## 23:59:09 播放中關閉：前景 = com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.MainActivity
+Package com.google.android.youtube.tv new state: disabled-user
+指令完成 23:59:10
+2 秒後前景 = com.gathin.tvhome/.MainActivity
+## 00:00:11 Owner：播放中關閉 → 立刻停、回桌面，無殘留。Owner 按電源鍵待機
+## 00:07:25 待機約 8 分鐘後（00:00 待機）
+still-connected
+  mWakefulness=Asleep
+disconnected 192.0.2.69:5555
+reconnect-ok-try1
+  mWakefulness=Asleep
+package:com.google.android.youtube.tv
+2 packets transmitted, 2 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 6.200/8.051/9.902/1.851 ms
+→ 待機結論：電視 Asleep 時 adb 仍連著、重連第 1 次成功、YouTube 維持停用
+## 00:07:37 閘門結束，恢復原始狀態（啟用）
+Package com.google.android.youtube.tv new state: enabled
+disabled-count:0
+  mWakefulness=Asleep
+（00:07:37 一次 error: closed、一次 connect 逾時，ping 正常；約 1 分鐘後重連成功 → 待機中 adb 偶發斷線，服務要能重試）

@@ -1,0 +1,66 @@
+①改動檔案清單
+- `tvagent/src/com/example/tvagent/AgentService.java`（3 項小修）
+- `tvagent/README.md`（「每跳一行」那句加時間、src）
+- `tvagent/tvagent.apk`（重建產物）
+- KickReceiver.java 未動：`EXTRA_REASON` 的值就是 `"reason"`，與 KickReceiver 現有用字串一致，依指示不需改。
+
+②完成標準 1～5 的實際輸出
+
+標準 1：`sh tvagent/test.sh`（尾段＋exit）
+```
+PASS retry after unsaved sync
+ALL PASS
+EXIT=0
+```
+完整輸出含兩個 `ALL PASS`（AdbClientTest 45 行 PASS 後 `ALL PASS`；QuotaTest 29 行 PASS 後 `ALL PASS`），exit 0。原樣節錄頭尾：
+```
+PASS vector-pubkey
+...（中略，共 AdbClient 45 項、Quota 29 項 PASS）
+ALL PASS
+...
+ALL PASS
+EXIT=0
+```
+
+標準 2：`sh tvagent/build.sh`
+```
+Note: src/com/example/tvagent/NoticeActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+-rw-r--r--@ 1 example-owner  staff  33174 10月 31 00:20 tvagent/tvagent.apk
+EXIT=0
+```
+
+標準 3：簽章與 badging（`D='docker run …'`、`BT=/opt/android-sdk/build-tools/34.0.0`；容器內路徑為 `/w` 下相對路徑）
+```
+---old---
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+---new---
+Signer #1 certificate SHA-256 digest: c8fe5940b6e90cb8f224284ec4f3d27bea7f5f573057c0ad39186d5fa8052fd2
+package: name='com.example.tvagent' versionCode='2' versionName='2' platformBuildVersionCode='34' ...
+application: label='看電視時間' icon=''
+```
+SHA-256 兩行相同；versionCode='2'、label='看電視時間'；DEX 經 cmp 確認有差異（`differ`，同大小 33174 只是巧合）；已 `rm -f tvagent/old.apk`，現只剩 `tvagent/tvagent.apk`。
+
+標準 4：`git status --short`＋`git diff --stat`
+```
+M tvagent/README.md
+M tvagent/src/com/example/tvagent/AgentService.java
+M tvagent/tvagent.apk
+ tvagent/README.md                                |   2 +-
+ tvagent/src/com/example/tvagent/AgentService.java |  21 ++++++++++++++++-----
+ tvagent/tvagent.apk                              | Bin 33174 -> 33174 bytes
+```
+
+標準 5：`grep -n 'getStringExtra("reason");' tvagent/src/com/example/tvagent/AgentService.java`
+```
+（無輸出）
+EXIT=1
+```
+（grep 無命中故 exit 1，符合「沒有輸出」）
+
+③疑問或保守選擇
+- src 正規化：非 `"boot"`／`"kick"`（含 null intent、鬧鐘路徑、未知值）一律記 `"alarm"`，保證 log 只出現 `boot|kick|alarm`。
+- reason 取進 `final String src` 再傳給 `heartbeat(src)`；exec 單執行緒排隊時各跳記自己的 src。
+- 時間戳取 `log()` 內 `new Date()`（與 heartbeat 的 wall 同一跳、差異可忽略），把前綴收斂在 `log()` 單一處。
+- 第 3 項只比 `balance`／`enforce`（不含 cap/capped/lastSeq/dbId）；沒變就不重跑 `act()` 也不多 `save()`。
+- 無其他疑問。

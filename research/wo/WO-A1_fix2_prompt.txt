@@ -1,0 +1,24 @@
+你是施工工人，這是 WO-A1 的計畫修正施工（退修 2）。工作目錄：/Users/example-owner/TV-wt-tvagent（git worktree，分支 tvagent-fix2，來自 main）。只改 tvagent/ 底下：src/com/example/tvagent/*.java、AndroidManifest.xml、README.md、tvagent.apk（重 build）。不得修改 AdbClient.java 的協定與金鑰邏輯、tvagent/test/、tvagent/testdata/。
+
+先讀：research/PLAN_v5_spike.md（整份，特別是檔尾「實機發現與計畫修正」）、/Users/example-owner/TV/research/wo/WO-A1_prompt.txt（原工單）。
+
+實機發現：TCL 電視的 FreezeManager 會在 App 閒置十幾秒後把整個程序凍結（前景服務也一樣），ScheduledExecutorService 的心跳因此停擺；收到廣播時系統會立即解凍該程序。
+
+要做：
+1. 心跳改由 AlarmManager 驅動：每 60 秒一次精確鬧鐘（API 26～30：`setExactAndAllowWhileIdle(RTC_WAKEUP 或 ELAPSED_REALTIME_WAKEUP, …)`，每次觸發後重新排下一次；不要用 setRepeating）。鬧鐘送明確廣播給新的 AlarmReceiver（exported=false）。
+2. AlarmReceiver 收到後：用 `startForegroundService` 送 action HEARTBEAT 給 AgentService（服務若已被殺也能重建）；AgentService 在 onStartCommand 收到 HEARTBEAT → 把一次心跳排進原本的單執行緒 executor，並排下一次鬧鐘。移除 executor 的 scheduleAtFixedRate 週期心跳（只留單次工作佇列）。
+3. 服務啟動（boot／test／other）時都要確保下一次鬧鐘已排好；同一時間只能有一個待發鬧鐘（PendingIntent 用固定 requestCode＋FLAG_UPDATE_CURRENT；API 30 不需要 FLAG_IMMUTABLE 但加上無害）。
+4. 心跳紀錄行加欄位 `src=alarm|start`，其餘格式不變（`<時間> uptime=<秒> pid=<pid> adb=<…>`，加在 pid 後面）。
+5. 心跳執行期間若被凍結，下一次解凍時可能補跑：同一分鐘內不得重複寫兩次心跳（以 elapsedRealtime 距上次心跳 < 30 秒就略過）。
+6. SELFTEST 流程不變；README 補一段「TCL 凍結機制與鬧鐘心跳」。
+7. Manifest：AlarmReceiver exported=false；權限不新增（API 30 精確鬧鐘不需要 SCHEDULE_EXACT_ALARM）。
+
+完成前自己跑並貼實際輸出：
+  cd /Users/example-owner/TV-wt-tvagent && sh tvagent/build.sh && ls -la tvagent/tvagent.apk
+  docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 /opt/android-sdk/build-tools/34.0.0/aapt2 dump badging tvagent/tvagent.apk | grep -E "package:|targetSdk|launchable|uses-permission"
+  docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 /opt/android-sdk/build-tools/34.0.0/aapt2 dump xmltree tvagent/tvagent.apk --file AndroidManifest.xml | grep -E "receiver|service|exported|action" 
+  sh tvagent/test.sh 2>&1 | tail -1
+  grep -n "scheduleAtFixedRate\|scheduleWithFixedDelay\|setRepeating\|youtube" tvagent/src/com/example/tvagent/*.java
+  git status --porcelain --untracked-files=all
+禁止：不連電視、不執行 adb、不碰 tvagent/ 以外、不加外部函式庫、不 commit。
+最後回報：改了什麼、鬧鐘與服務的流程、上面指令的實際輸出。

@@ -1,0 +1,24 @@
+你是 Android 工程師。在 git worktree /Users/example-owner/TV-wt-c2（分支 v5-c2）施工 WO-C2：把 tvagent/ 改成正式的電視額度 App「看電視時間」。只改這個 worktree，不要 commit、不要 push、不要執行 adb、不要碰電視。
+
+## 必讀（規格以此為準，不得自行改規格）
+- research/PLAN_v5.md 的「已證實」「額度規則（電視 App）」全節、「Cloudflare 端 → 介面」的 `POST /tv/api/sync`（請求／回應／電視收到回應怎麼處理）、「WO-C2 電視 App」全節。
+- 現有程式：tvagent/README.md、tvagent/src/com/example/tvagent/*.java（AdbClient 已實機驗證，不要重寫；Whitelist.java 是 TGuard 名單補回，要沿用）、tvagent/build.sh、tvagent/test.sh、tvagent/test/AdbClientTest.java。
+- 看不懂或規格自相矛盾 → 在最後回報裡列出，選最保守的做法（偏向鎖、不擴大範圍）。
+
+## 要做的事
+照 PLAN_v5.md「WO-C2」逐項做：Manifest（versionCode 2、label「看電視時間」、PACKAGE_USAGE_STATS、KickReceiver、NoticeActivity exported=true 無 intent-filter、拿掉 TestReceiver、無 LAUNCHER、不加 testOnly／裝置管理員）；新增純 Java 的 Quota.java（不得用 android.*）；AgentService 每跳流程照「額度規則」1～7；NoticeActivity；KickReceiver；config.properties 只有 url／client_id／client_secret；agent.log 格式與輪替；刪 TestReceiver.java；新增 test/QuotaTest.java（清單 1～7 全部要有）並讓 test.sh 兩個測試都跑；README.md 改寫。build.sh 不需改，沿用同一把 debug.keystore。
+
+## 完成標準（你自己跑到全過才交件，原樣貼輸出；Docker 可用）
+1. `sh tvagent/test.sh` → 輸出含兩個 `ALL PASS`（AdbClientTest 與 QuotaTest），exit 0。
+2. `sh tvagent/build.sh` 成功，產出 tvagent/tvagent.apk。
+3. 設 `D='docker run --rm --platform linux/amd64 -v '"$PWD"'/tvagent:/w -w /w cleanyourtv-android-build-amd64'`、`BT=/opt/android-sdk/build-tools/34.0.0`：`$D $BT/aapt2 dump badging tvagent.apk` → package com.example.tvagent、versionCode='2'、application-label:'看電視時間'、targetSdkVersion:'30'、含 PACKAGE_USAGE_STATS、沒有 launchable-activity／leanback-launchable-activity；`$D $BT/aapt2 dump xmltree --file AndroidManifest.xml tvagent.apk` 含 NoticeActivity 與 KickReceiver、不含 TestReceiver、testOnly、BIND_DEVICE_ADMIN。
+4. `git cat-file -e main:tvagent/tvagent.apk` 成功 → `git show main:tvagent/tvagent.apk > tvagent/old.apk`；`$D $BT/apksigner verify --print-certs old.apk` 與 `$D $BT/apksigner verify --print-certs tvagent.apk` 的 SHA-256 digest 那行相同；做完 `rm tvagent/old.apk`。
+5. `git diff --quiet main -- tvagent/debug.keystore tvagent/testdata` → exit 0。
+6. `grep -rn "disable-user" tvagent/src` → 只出現在 YouTube 常數那一處；`grep -rn "com.example.tkey\|SELFTEST" tvagent/src` → 無輸出；`grep -rnE "get(String|Int|Long|Boolean)Extra" tvagent/src` → 只剩 reason、kind。
+7. `git status --porcelain --untracked-files=all` → 只有 tvagent/ 底下。
+
+## 禁止
+不連電視、不執行真 adb、不裝到電視；不碰 tvgate/、tkey/、cfquota/、memlog/、research/、~/.secrets、launchd；不改 debug.keystore、testdata/；不加 Gradle 或外部函式庫；程式只准停用／啟用 com.google.android.youtube.tv、只准 am start 自己的 NoticeActivity；不 commit、不 push。
+
+## 交件
+最後輸出：①改動檔案清單 ②完成標準 1～7 的實際輸出 ③對規格的疑問或你做的保守選擇（沒有就寫「無」）。

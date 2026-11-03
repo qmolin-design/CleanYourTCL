@@ -1,0 +1,635 @@
+Activity Resolver Table:
+  Non-Data Actions:
+      com.tcl.versionUpdateApp.action.serviceNetworkUpdate:
+        d2da36 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.ui.activity.ServiceUpdateActivity filter 4078d37
+          Action: "com.tcl.versionUpdateApp.action.serviceNetworkUpdate"
+          Category: "android.intent.category.DEFAULT"
+      android.intent.action.MAIN:
+        25e353f com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.UI.SystemUpdateActivity filter 4100e0c
+          Action: "android.tcl.mtk.MaualUpdate"
+          Action: "android.intent.action.MAIN"
+      com.tcl.versionUpdateApp.action.checkoutVersion:
+        eb5fef8 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.UI.CheckoutVersionActivity filter 2fd4fd1
+          Action: "com.tcl.versionUpdateApp.action.checkoutVersion"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.versionUpdateApp.action.MaualUpdate:
+        25e353f com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.UI.SystemUpdateActivity filter 865d355
+          Action: "com.tcl.versionUpdateApp.action.MaualUpdate"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.versionUpdateApp.action.systemNetworkUpdate:
+        27d116a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.UI.NetworkUpdateActivity filter c8ae65b
+          Action: "com.tcl.versionUpdateApp.action.systemNetworkUpdate"
+          Category: "android.intent.category.DEFAULT"
+      android.tcl.mtk.MaualUpdate:
+        25e353f com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.UI.SystemUpdateActivity filter 4100e0c
+          Action: "android.tcl.mtk.MaualUpdate"
+          Action: "android.intent.action.MAIN"
+      com.tcl.versionUpdateApp.action.LAUNCHER_OPEN:
+        3c812a4 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.ui.activity.LauncherOptActivity filter b6180d
+          Action: "com.tcl.versionUpdateApp.action.LAUNCHER_OPEN"
+          Category: "android.intent.category.DEFAULT"
+
+Receiver Resolver Table:
+  Schemes:
+      package:
+        fea63c2 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.service.InstallManager$InstallMessageReceiver filter fc5b510
+          Action: "android.intent.action.PACKAGE_ADDED"
+          Scheme: "package"
+        eb92809 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.service.UninstallManager$UninstallMessageReceiver filter 794ec2f
+          Action: "android.intent.action.PACKAGE_REMOVED"
+          Scheme: "package"
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter f2402be
+          Action: "android.intent.action.PACKAGE_REMOVED"
+          Scheme: "package"
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 81f3f1f
+          Action: "android.intent.action.PACKAGE_ADDED"
+          Scheme: "package"
+
+  Non-Data Actions:
+      tcl.sys.intent.action.boot_t1:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter d231628
+          Action: "tcl.sys.intent.action.boot_t1"
+          Category: "android.intent.category.DEFAULT"
+          mPriority=1000, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      tcl.sys.intent.action.boot_t2:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 8274172
+          Action: "tcl.sys.intent.action.boot_t2"
+          Category: "android.intent.category.DEFAULT"
+      android.intent.action.SCREEN_OFF:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 7788240
+          Action: "android.intent.action.SCREEN_OFF"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.appmarket2.action.APPSTORE_INSTALL_APK:
+        5b9123c com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.broadcast.CommonBroadcastReceiver filter 9c33bc5
+          Action: "com.tcl.appmarket2.action.APPSTORE_INSTALL_APK"
+      android.intent.action.SCREEN_ON:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter ed3c9c3
+          Action: "android.intent.action.SCREEN_ON"
+          Category: "android.intent.category.DEFAULT"
+      android.net.conn.CONNECTIVITY_CHANGE:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 37f2579
+          Action: "com.tcl.neterr"
+          Action: "android.net.conn.CONNECTIVITY_CHANGE"
+          Category: "android.intent.category.DEFAULT"
+          mPriority=1000, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      com.tcl.CompleteRestoreFactory:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 46a1e7d
+          Action: "com.tcl.CompleteRestoreFactory"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.neterr:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 37f2579
+          Action: "com.tcl.neterr"
+          Action: "android.net.conn.CONNECTIVITY_CHANGE"
+          Category: "android.intent.category.DEFAULT"
+          mPriority=1000, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      com.tcl.versionUpdateApp.BootSTRCompleteService:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 3a0cf41
+          Action: "com.tcl.versionUpdateApp.BootSTRCompleteService"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.ota:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 7e43ce6
+          Action: "com.tcl.ota"
+          Category: "android.intent.category.DEFAULT"
+      android.intent.action.TIMEZONE_CHANGED:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 2a76cd4
+          Action: "android.intent.action.TIME_SET"
+          Action: "android.intent.action.TIMEZONE_CHANGED"
+          Category: "android.intent.category.DEFAULT"
+      android.intent.action.TIME_SET:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 2a76cd4
+          Action: "android.intent.action.TIME_SET"
+          Action: "android.intent.action.TIMEZONE_CHANGED"
+          Category: "android.intent.category.DEFAULT"
+      android.intent.action.BOOT_COMPLETED:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 38e1c4b
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Category: "android.intent.category.DEFAULT"
+          mPriority=1000, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      com.android.packageinstaller.PackageInstall:
+        fea63c2 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.service.InstallManager$InstallMessageReceiver filter b3dc5d3
+          Action: "com.android.packageinstaller.PackageInstall"
+      com.android.packageinstaller.PackageUnInstall:
+        eb92809 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.service.UninstallManager$UninstallMessageReceiver filter efefa0e
+          Action: "com.android.packageinstaller.PackageUnInstall"
+      tcl.sys.intent.action.STR_RESUME_COMPLETED:
+        3b4a91a com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.receiver.SystemUpdateReceiver filter 6a03227
+          Action: "tcl.sys.intent.action.STR_RESUME_COMPLETED"
+          Category: "android.intent.category.DEFAULT"
+
+Service Resolver Table:
+  Non-Data Actions:
+      com.tcl.versionUpdateApp.packageinstaller.UninstallerService:
+        9998cca com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.packageinstaller.UninstallerService filter d82ae3b permission tcl.permission.PACKAGE_INSTALLER
+          Action: "com.tcl.versionUpdateApp.packageinstaller.UninstallerService"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.versionUpdateApp.packageinstaller.PackageInstallerService:
+        b83826c com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.packageinstaller.PackageInstallerService filter 443a035 permission tcl.permission.PACKAGE_INSTALLER
+          Action: "com.tcl.versionUpdateApp.packageinstaller.PackageInstallerService"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.ttvs.versionUpdateApp.initStore:
+        eaaa9b3 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.service.InitService filter 1d0fb70
+          Action: "com.tcl.ttvs.versionUpdateApp.initStore"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.RestoreFactory:
+        f2bab96 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.service.SystemUpdateService filter 2e9b304 permission com.tcl.permission.START_CHECK_SYSTEMUPDATE
+          Action: "com.tcl.RestoreFactory"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.update.service.start:
+        f2bab96 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.service.SystemUpdateService filter fe3f317 permission com.tcl.permission.START_CHECK_SYSTEMUPDATE
+          Action: "com.tcl.update.service.start"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.update.service.checkUserSetUpCompleteService.start:
+        e5c5958 com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.core.service.CheckUserSetUpCompleteService filter 29b0ab1 permission com.tcl.permission.START_CHECK_SYSTEMUPDATE
+          Action: "com.tcl.update.service.checkUserSetUpCompleteService.start"
+          Category: "android.intent.category.DEFAULT"
+      com.tcl.versionUpdateApp.action.NEW_PLAN:
+        b24a0ed com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.ui.activity.NewPlanService filter beeeb22
+          Action: "com.tcl.versionUpdateApp.action.NEW_PLAN"
+          Category: "android.intent.category.DEFAULT"
+
+Permissions:
+  Permission [com.tcl.permission.START_CHECK_SYSTEMUPDATE] (3aa2c16):
+    sourcePackage=com.tcl.versionUpdateApp
+    uid=1000 gids=null type=0 prot=signature|privileged
+    perm=Permission{7e7a997 com.tcl.permission.START_CHECK_SYSTEMUPDATE}
+
+Registered ContentProviders:
+  com.tcl.versionUpdateApp/com.tcl.ff.component.utils.common.UtilsFileProvider:
+    Provider{5196784 com.tcl.versionUpdateApp/com.tcl.ff.component.utils.common.UtilsFileProvider}
+  com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.contentprovider.AppProvider:
+    Provider{d737b6d com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.contentprovider.AppProvider}
+
+ContentProvider Authorities:
+  [com.tcl.versionUpdateApp]:
+    Provider{d737b6d com.tcl.versionUpdateApp/com.tcl.ttvs.versionUpdateApp.appstore.component.contentprovider.AppProvider}
+      applicationInfo=ApplicationInfo{d14f3a2 com.tcl.versionUpdateApp}
+  [com.tcl.versionUpdateApp.utils.common.provider]:
+    Provider{5196784 com.tcl.versionUpdateApp/com.tcl.ff.component.utils.common.UtilsFileProvider}
+      applicationInfo=ApplicationInfo{5734833 com.tcl.versionUpdateApp}
+
+Key Set Manager:
+  [com.tcl.versionUpdateApp]
+      Signing KeySets: 1
+
+Packages:
+  Package [com.tcl.versionUpdateApp] (7c0883f):
+    userId=1000
+    sharedUser=SharedUserSetting{c8777f0 android.uid.system/1000}
+    pkg=Package{fd96169 com.tcl.versionUpdateApp}
+    codePath=/product/app/SystemUpdate
+    resourcePath=/product/app/SystemUpdate
+    legacyNativeLibraryDir=/product/app/SystemUpdate/lib
+    primaryCpuAbi=armeabi-v7a
+    secondaryCpuAbi=null
+    versionCode=3101 minSdk=19 targetSdk=23
+    versionName=1.7.01
+    splits=[base]
+    apkSigningVersion=2
+    applicationInfo=ApplicationInfo{fd96169 com.tcl.versionUpdateApp}
+    flags=[ SYSTEM HAS_CODE ALLOW_CLEAR_USER_DATA ]
+    privateFlags=[ PRIVATE_FLAG_REQUEST_LEGACY_EXTERNAL_STORAGE PRODUCT PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    forceQueryable=false
+    queriesPackages=[]
+    dataDir=/data/user/0/com.tcl.versionUpdateApp
+    supportsScreens=[small, medium, large, xlarge, resizeable, anyDensity]
+    usesLibraries:
+      android.test.base
+      android.hidl.manager-V1.0-java
+      android.hidl.base-V1.0-java
+      org.apache.http.legacy
+    usesOptionalLibraries:
+      android.tclwidget
+      com.tcl.tvos.addon
+      com.tcl.tvmanager
+      com.tcl.os.storage
+      com.tcl.device.authentication
+      com.tcl.deviceinfo
+      com.tcl.os.system
+      androidx.collection
+    usesLibraryFiles:
+      /system/framework/android.test.base.jar
+      /system/framework/android.hidl.manager-V1.0-java.jar
+      /system/framework/android.hidl.base-V1.0-java.jar
+      /system/framework/org.apache.http.legacy.jar
+      /system_ext/framework/android.tclwidget.jar
+      /product/framework/com.tcl.tvmanager.jar
+    timeStamp=2009-01-01 08:00:00
+    firstInstallTime=2009-01-01 08:00:00
+    lastUpdateTime=2009-01-01 08:00:00
+    signatures=PackageSignatures{b72a7ee version:2, signatures:[124cab85], past signatures:[]}
+    installPermissionsFixed=true
+    pkgFlags=[ SYSTEM HAS_CODE ALLOW_CLEAR_USER_DATA ]
+    declared permissions:
+      com.tcl.permission.START_CHECK_SYSTEMUPDATE: prot=signature|privileged, INSTALLED
+    requested permissions:
+      android.permission.WRITE_MEDIA_STORAGE
+      android.permission.INTERNET
+      android.permission.REBOOT
+      android.permission.SYSTEM_ALERT_WINDOW
+      android.permission.ACCESS_NETWORK_STATE
+      android.permission.INTERNAL_SYSTEM_WINDOW
+      android.permission.MASTER_CLEAR_NOTIFICATION
+      android.permission.MASTER_CLEAR
+      android.permission.ACCESS_CACHE_FILESYSTEM
+      android.permission.MOUNT_UNMOUNT_FILESYSTEMS
+      android.permission.WRITE_EXTERNAL_STORAGE: restricted=true
+      android.permission.READ_EXTERNAL_STORAGE: restricted=true
+      android.permission.MEDIASCANSERVICE
+      android.permission.ACCESS_WIFI_STATE
+      com.tcl.ttvs.deviceauthen.permission.READ_DNUM
+      android.permission.ACCESS_MEDIA_LOCATION
+    install permissions:
+      android.permission.REAL_GET_TASKS: granted=true
+      android.permission.ACCESS_CACHE_FILESYSTEM: granted=true
+      android.permission.WRITE_SETTINGS: granted=true
+      com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE: granted=true
+      android.permission.CONFIGURE_WIFI_DISPLAY: granted=true
+      android.permission.BIND_ATTENTION_SERVICE: granted=true
+      com.tcl.useragreement.service.start: granted=true
+      android.permission.RESTART_PACKAGES: granted=true
+      com.tcl.messagebox.access: granted=true
+      android.permission.MODIFY_AUDIO_SETTINGS: granted=true
+      android.permission.MANAGE_EXTERNAL_STORAGE: granted=true
+      android.permission.MODIFY_AUDIO_ROUTING: granted=true
+      android.permission.ACCESS_MOCK_LOCATION: granted=true
+      com.google.android.providers.gsf.permission.READ_GSERVICES: granted=true
+      android.permission.INSTALL_LOCATION_PROVIDER: granted=true
+      android.permission.USE_RESERVED_DISK: granted=true
+      com.tcl.tv.home.passive.contentProvider.permission: granted=true
+      android.permission.MANAGE_ACCOUNTS: granted=true
+      android.permission.SYSTEM_ALERT_WINDOW: granted=true
+      android.permission.CLEAR_APP_USER_DATA: granted=true
+      android.permission.SHUTDOWN: granted=true
+      android.permission.CHANGE_COMPONENT_ENABLED_STATE: granted=true
+      android.permission.INTERNAL_SYSTEM_WINDOW: granted=true
+      com.tcl.bi.permission.access: granted=true
+      android.permission.NETWORK_SETTINGS: granted=true
+      android.permission.START_ANY_ACTIVITY: granted=true
+      android.permission.CHANGE_NETWORK_STATE: granted=true
+      android.permission.MASTER_CLEAR: granted=true
+      android.permission.FOREGROUND_SERVICE: granted=true
+      android.permission.WRITE_SYNC_SETTINGS: granted=true
+      android.permission.MANAGE_DYNAMIC_SYSTEM: granted=true
+      android.permission.RECEIVE_BOOT_COMPLETED: granted=true
+      android.permission.CONTROL_DEVICE_LIGHTS: granted=true
+      android.permission.PEERS_MAC_ADDRESS: granted=true
+      com.tcl.bi.param: granted=true
+      android.permission.DEVICE_POWER: granted=true
+      android.permission.SET_TIME_ZONE: granted=true
+      android.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS: granted=true
+      android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: granted=true
+      com.android.providers.tv.permission.READ_EPG_DATA: granted=true
+      android.permission.READ_PROFILE: granted=true
+      android.permission.BLUETOOTH: granted=true
+      android.permission.CHANGE_WIFI_MULTICAST_STATE: granted=true
+      com.google.android.assistant.WRITE_HOTWORD_STATE: granted=true
+      com.android.alarm.permission.SET_ALARM: granted=true
+      android.permission.WRITE_MEDIA_STORAGE: granted=true
+      com.android.setupwizard.permission.SETUP: granted=true
+      android.permission.GET_TASKS: granted=true
+      android.permission.ACCESS_SURFACE_FLINGER: granted=true
+      android.permission.AUTHENTICATE_ACCOUNTS: granted=true
+      android.permission.INTERNET: granted=true
+      android.permission.TV_INPUT_HARDWARE: granted=true
+      android.permission.REORDER_TASKS: granted=true
+      android.permission.BLUETOOTH_ADMIN: granted=true
+      android.permission.CONTROL_VPN: granted=true
+      android.permission.UPDATE_DEVICE_STATS: granted=true
+      com.android.providers.tv.permission.WRITE_EPG_DATA: granted=true
+      android.permission.ACCESS_INSTANT_APPS: granted=true
+      android.permission.GET_PACKAGE_SIZE: granted=true
+      android.permission.ACCESS_CONTEXT_HUB: granted=true
+      android.permission.INTERACT_ACROSS_USERS_FULL: granted=true
+      android.permission.PACKAGE_USAGE_STATS: granted=true
+      android.permission.MOUNT_UNMOUNT_FILESYSTEMS: granted=true
+      android.permission.GET_ACCOUNTS_PRIVILEGED: granted=true
+      android.permission.WRITE_SECURE_SETTINGS: granted=true
+      android.permission.MANAGE_DEBUGGING: granted=true
+      uk.co.freeview.fvpconfigauth.FVP_CONFIG_READ: granted=true
+      com.tcl.notereminder.provider.permission: granted=true
+      android.permission.SET_ACTIVITY_WATCHER: granted=true
+      android.permission.ACCESS_LOCATION_EXTRA_COMMANDS: granted=true
+      android.permission.TRIGGER_TIME_ZONE_RULES_CHECK: granted=true
+      android.permission.BROADCAST_STICKY: granted=true
+      android.intent.category.MASTER_CLEAR.permission.C2D_MESSAGE: granted=true
+      android.permission.BIND_JOB_SERVICE: granted=true
+      android.permission.CONFIRM_FULL_BACKUP: granted=true
+      android.permission.TCL_USB_CAMERA: granted=true
+      android.permission.CHANGE_WIFI_STATE: granted=true
+      com.android.providers.tv.permission.ACCESS_ALL_EPG_DATA: granted=true
+      android.permission.MANAGE_USERS: granted=true
+      android.permission.SET_PREFERRED_APPLICATIONS: granted=true
+      android.permission.DELETE_CACHE_FILES: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+      android.permission.DISABLE_KEYGUARD: granted=true
+      android.permission.BACKUP: granted=true
+      android.permission.CHANGE_CONFIGURATION: granted=true
+      android.permission.LOCAL_MAC_ADDRESS: granted=true
+      android.permission.READ_LOGS: granted=true
+      android.permission.INTERACT_ACROSS_USERS: granted=true
+      android.permission.SET_WALLPAPER: granted=true
+      com.netflix.ninja.permission.ESN: granted=true
+      android.permission.READ_DREAM_STATE: granted=true
+      android.permission.INSTALL_SELF_UPDATES: granted=true
+      android.permission.KILL_BACKGROUND_PROCESSES: granted=true
+      android.permission.CONNECTIVITY_USE_RESTRICTED_NETWORKS: granted=true
+      android.permission.READ_SYNC_STATS: granted=true
+      android.permission.REBOOT: granted=true
+      android.permission.REQUEST_DELETE_PACKAGES: granted=true
+      com.google.android.assistant.READ_HOTWORD_STATE: granted=true
+      com.tcl.eva.service.EvaService: granted=true
+      android.permission.SEND_SHOW_SUSPENDED_APP_DETAILS: granted=true
+      android.permission.CONNECTIVITY_INTERNAL: granted=true
+      android.permission.SET_WALLPAPER_HINTS: granted=true
+      android.permission.LOADER_USAGE_STATS: granted=true
+      android.permission.OVERRIDE_WIFI_CONFIG: granted=true
+      android.permission.FORCE_STOP_PACKAGES: granted=true
+      android.permission.SUGGEST_MANUAL_TIME_AND_ZONE: granted=true
+      android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS: granted=true
+      com.android.providers.tv.permission.ACCESS_WATCHED_PROGRAMS: granted=true
+      android.permission.MEDIA_RESOURCE_OVERRIDE_PID: granted=true
+      android.permission.VIBRATE: granted=true
+      android.permission.HDMI_CEC: granted=true
+      com.tcl.permission.START_CHECK_SYSTEMUPDATE: granted=true
+      android.permission.READ_USER_DICTIONARY: granted=true
+      android.permission.MANAGE_SCOPED_ACCESS_DIRECTORY_PERMISSIONS: granted=true
+      android.permission.ACCESS_WIFI_STATE: granted=true
+      uk.co.freeview.systemdistributor.appList.app_config: granted=true
+      com.android.launcher.permission.INSTALL_SHORTCUT: granted=true
+      android.permission.READ_FRAME_BUFFER: granted=true
+      android.permission.QUERY_ALL_PACKAGES: granted=true
+      com.tcl.ShortcutKey: granted=true
+      android.permission.DUMP: granted=true
+      android.permission.LOCATION_HARDWARE: granted=true
+      android.permission.WAKE_LOCK: granted=true
+      android.permission.INJECT_EVENTS: granted=true
+      android.permission.BIND_NETWORK_RECOMMENDATION_SERVICE: granted=true
+      uk.co.freeview.fvpconfigauth.FVP_CONFIG_WRITE: granted=true
+      android.permission.READ_OEM_UNLOCK_STATE: granted=true
+      android.permission.DELETE_PACKAGES: granted=true
+    User 0: ceDataInode=422093 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+
+Queries:
+  system apps queryable: false
+  forceQueryable:
+    [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+  queries via package name:
+  queries via intent:
+  queryable via interaction:
+    User 0:
+      [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]:
+        com.android.bluetooth
+        [com.google.android.gms,com.google.android.gsf,com.google.android.sss.authbridge]
+        [com.android.providers.userdictionary,com.android.providers.contacts]
+        com.android.providers.tv
+        com.android.externalstorage
+        com.google.android.apps.mediashell
+        [com.android.providers.media,com.android.providers.downloads,com.android.soundpicker]
+        com.google.android.tungsten.setupwraith
+        com.google.android.tv.remote.service
+        com.google.android.tvlauncher
+        com.android.vending
+        com.android.providers.calendar
+        com.google.android.katniss
+        com.tcl.useragreement
+        com.tcl.usercenter
+        com.google.android.tts
+        com.google.android.youtube.tv
+        com.google.android.inputmethod.latin
+        com.tcl.xian.StartandroidService
+        com.netflix.ninja
+        com.tcl.inputmethod.international
+        com.android.systemui
+        com.google.android.permissioncontroller
+        com.google.android.ext.services
+        com.android.providers.media.module
+      com.android.bluetooth:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      [com.google.android.gms,com.google.android.gsf,com.google.android.sss.authbridge]:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.android.providers.tv:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      [com.android.providers.media,com.android.providers.downloads,com.android.soundpicker]:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.google.android.tv.remote.service:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.android.vending:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.google.android.katniss:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.google.android.youtube.tv:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.google.android.inputmethod.latin:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.tcl.xian.StartandroidService:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.netflix.ninja:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.tcl.inputmethod.international:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.android.systemui:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.google.android.ext.services:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+      com.android.providers.media.module:
+        [com.android.providers.settings,android,com.android.localtransport,com.android.networkstack.inprocess,com.tcl.tv,com.android.inputdevices,com.tcl.guard,com.android.dynsystem,com.google.android.tv.assistant,uk.co.freeview.systemdistributor,com.android.tv.settings,com.tcl.assistant,com.android.location.fused,com.android.wallpaperbackup,com.tcl.versionUpdateApp,com.android.networkstack.tethering.inprocess,com.tcl.gallery,com.tcl.copydatatotv,com.tcl.factory.view,com.tcl.messagebox,com.tcl.partnercustomizer,com.android.keychain,com.tcl.overseasappshow,com.tcl.tvinput,com.tcl.tv.tclhome_master,com.tcl.autopair,com.tcl.miracast,com.tcl.systemserver,com.tcl.smartalexa,com.tcl.micmanager,com.tcl.settings,com.tcl.MultiScreenInteraction_TV,com.tcl.keycustomfunctionservice,com.tcl.esticker,com.tcl.ui_mediaCenter,com.tcl.initsetup,com.tcl.providers.config]
+
+Shared users:
+  SharedUser [android.uid.system] (c8777f0):
+    userId=1000
+    Packages
+      PackageSetting{63c5e com.android.providers.settings/1000}
+      PackageSetting{1b2112 android/1000}
+      PackageSetting{ce830d com.android.localtransport/1000}
+      PackageSetting{fb6286 com.android.networkstack.inprocess/1000}
+      PackageSetting{137181a com.tcl.tv/1000}
+      PackageSetting{17bc5f8 com.android.inputdevices/1000}
+      PackageSetting{2457ae0 com.tcl.guard/1000}
+      PackageSetting{2c98bae com.android.dynsystem/1000}
+      PackageSetting{2f00079 com.google.android.tv.assistant/1000}
+      PackageSetting{58cc0e3 uk.co.freeview.systemdistributor/1000}
+      PackageSetting{60db1e5 com.android.tv.settings/1000}
+      PackageSetting{637650c com.tcl.assistant/1000}
+      PackageSetting{6eb41be com.android.location.fused/1000}
+      PackageSetting{7a89072 com.android.wallpaperbackup/1000}
+      PackageSetting{7c0883f com.tcl.versionUpdateApp/1000}
+      PackageSetting{7e4293c com.android.networkstack.tethering.inprocess/1000}
+      PackageSetting{9081b74 com.tcl.gallery/1000}
+      PackageSetting{9a7de55 com.tcl.copydatatotv/1000}
+      PackageSetting{a281ac8 com.tcl.factory.view/1000}
+      PackageSetting{b07e940 com.tcl.messagebox/1000}
+      PackageSetting{b9fa8d3 com.tcl.partnercustomizer/1000}
+      PackageSetting{ba77936 com.android.keychain/1000}
+      PackageSetting{be95f4b com.tcl.overseasappshow/1000}
+      PackageSetting{c26b4ba com.tcl.tvinput/1000}
+      PackageSetting{c45c199 com.tcl.tv.tclhome_master/1000}
+      PackageSetting{c9e9be6 com.tcl.autopair/1000}
+      PackageSetting{cb1f747 com.tcl.miracast/1000}
+      PackageSetting{ce9f2c2 com.tcl.systemserver/1000}
+      PackageSetting{ceca527 com.tcl.smartalexa/1000}
+      PackageSetting{cf5c06a com.tcl.micmanager/1000}
+      PackageSetting{d5d4a41 com.tcl.settings/1000}
+      PackageSetting{dd50ad1 com.tcl.MultiScreenInteraction_TV/1000}
+      PackageSetting{de8790e com.tcl.keycustomfunctionservice/1000}
+      PackageSetting{df27c29 com.tcl.esticker/1000}
+      PackageSetting{e3e63d4 com.tcl.ui_mediaCenter/1000}
+      PackageSetting{ef3ad4f com.tcl.initsetup/1000}
+      PackageSetting{fb1ff2f com.tcl.providers.config/1000}
+    install permissions:
+      android.permission.REAL_GET_TASKS: granted=true
+      android.permission.ACCESS_CACHE_FILESYSTEM: granted=true
+      android.permission.WRITE_SETTINGS: granted=true
+      com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE: granted=true
+      android.permission.CONFIGURE_WIFI_DISPLAY: granted=true
+      android.permission.BIND_ATTENTION_SERVICE: granted=true
+      com.tcl.useragreement.service.start: granted=true
+      android.permission.RESTART_PACKAGES: granted=true
+      com.tcl.messagebox.access: granted=true
+      android.permission.MODIFY_AUDIO_SETTINGS: granted=true
+      android.permission.MANAGE_EXTERNAL_STORAGE: granted=true
+      android.permission.MODIFY_AUDIO_ROUTING: granted=true
+      android.permission.ACCESS_MOCK_LOCATION: granted=true
+      com.google.android.providers.gsf.permission.READ_GSERVICES: granted=true
+      android.permission.INSTALL_LOCATION_PROVIDER: granted=true
+      android.permission.USE_RESERVED_DISK: granted=true
+      com.tcl.tv.home.passive.contentProvider.permission: granted=true
+      android.permission.MANAGE_ACCOUNTS: granted=true
+      android.permission.SYSTEM_ALERT_WINDOW: granted=true
+      android.permission.CLEAR_APP_USER_DATA: granted=true
+      android.permission.SHUTDOWN: granted=true
+      android.permission.CHANGE_COMPONENT_ENABLED_STATE: granted=true
+      android.permission.INTERNAL_SYSTEM_WINDOW: granted=true
+      com.tcl.bi.permission.access: granted=true
+      android.permission.NETWORK_SETTINGS: granted=true
+      android.permission.START_ANY_ACTIVITY: granted=true
+      android.permission.CHANGE_NETWORK_STATE: granted=true
+      android.permission.MASTER_CLEAR: granted=true
+      android.permission.FOREGROUND_SERVICE: granted=true
+      android.permission.WRITE_SYNC_SETTINGS: granted=true
+      android.permission.MANAGE_DYNAMIC_SYSTEM: granted=true
+      android.permission.RECEIVE_BOOT_COMPLETED: granted=true
+      android.permission.CONTROL_DEVICE_LIGHTS: granted=true
+      android.permission.PEERS_MAC_ADDRESS: granted=true
+      com.tcl.bi.param: granted=true
+      android.permission.DEVICE_POWER: granted=true
+      android.permission.SET_TIME_ZONE: granted=true
+      android.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS: granted=true
+      android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: granted=true
+      com.android.providers.tv.permission.READ_EPG_DATA: granted=true
+      android.permission.READ_PROFILE: granted=true
+      android.permission.BLUETOOTH: granted=true
+      android.permission.CHANGE_WIFI_MULTICAST_STATE: granted=true
+      com.google.android.assistant.WRITE_HOTWORD_STATE: granted=true
+      com.android.alarm.permission.SET_ALARM: granted=true
+      android.permission.WRITE_MEDIA_STORAGE: granted=true
+      com.android.setupwizard.permission.SETUP: granted=true
+      android.permission.GET_TASKS: granted=true
+      android.permission.ACCESS_SURFACE_FLINGER: granted=true
+      android.permission.AUTHENTICATE_ACCOUNTS: granted=true
+      android.permission.INTERNET: granted=true
+      android.permission.TV_INPUT_HARDWARE: granted=true
+      android.permission.REORDER_TASKS: granted=true
+      android.permission.BLUETOOTH_ADMIN: granted=true
+      android.permission.CONTROL_VPN: granted=true
+      android.permission.UPDATE_DEVICE_STATS: granted=true
+      com.android.providers.tv.permission.WRITE_EPG_DATA: granted=true
+      android.permission.ACCESS_INSTANT_APPS: granted=true
+      android.permission.GET_PACKAGE_SIZE: granted=true
+      android.permission.ACCESS_CONTEXT_HUB: granted=true
+      android.permission.INTERACT_ACROSS_USERS_FULL: granted=true
+      android.permission.PACKAGE_USAGE_STATS: granted=true
+      android.permission.MOUNT_UNMOUNT_FILESYSTEMS: granted=true
+      android.permission.GET_ACCOUNTS_PRIVILEGED: granted=true
+      android.permission.WRITE_SECURE_SETTINGS: granted=true
+      android.permission.MANAGE_DEBUGGING: granted=true
+      uk.co.freeview.fvpconfigauth.FVP_CONFIG_READ: granted=true
+      com.tcl.notereminder.provider.permission: granted=true
+      android.permission.SET_ACTIVITY_WATCHER: granted=true
+      android.permission.ACCESS_LOCATION_EXTRA_COMMANDS: granted=true
+      android.permission.TRIGGER_TIME_ZONE_RULES_CHECK: granted=true
+      android.permission.BROADCAST_STICKY: granted=true
+      android.intent.category.MASTER_CLEAR.permission.C2D_MESSAGE: granted=true
+      android.permission.BIND_JOB_SERVICE: granted=true
+      android.permission.CONFIRM_FULL_BACKUP: granted=true
+      android.permission.TCL_USB_CAMERA: granted=true
+      android.permission.CHANGE_WIFI_STATE: granted=true
+      com.android.providers.tv.permission.ACCESS_ALL_EPG_DATA: granted=true
+      android.permission.MANAGE_USERS: granted=true
+      android.permission.SET_PREFERRED_APPLICATIONS: granted=true
+      android.permission.DELETE_CACHE_FILES: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+      android.permission.DISABLE_KEYGUARD: granted=true
+      android.permission.BACKUP: granted=true
+      android.permission.CHANGE_CONFIGURATION: granted=true
+      android.permission.LOCAL_MAC_ADDRESS: granted=true
+      android.permission.READ_LOGS: granted=true
+      android.permission.INTERACT_ACROSS_USERS: granted=true
+      android.permission.SET_WALLPAPER: granted=true
+      com.netflix.ninja.permission.ESN: granted=true
+      android.permission.READ_DREAM_STATE: granted=true
+      android.permission.INSTALL_SELF_UPDATES: granted=true
+      android.permission.KILL_BACKGROUND_PROCESSES: granted=true
+      android.permission.CONNECTIVITY_USE_RESTRICTED_NETWORKS: granted=true
+      android.permission.READ_SYNC_STATS: granted=true
+      android.permission.REBOOT: granted=true
+      android.permission.REQUEST_DELETE_PACKAGES: granted=true
+      com.google.android.assistant.READ_HOTWORD_STATE: granted=true
+      com.tcl.eva.service.EvaService: granted=true
+      android.permission.SEND_SHOW_SUSPENDED_APP_DETAILS: granted=true
+      android.permission.CONNECTIVITY_INTERNAL: granted=true
+      android.permission.SET_WALLPAPER_HINTS: granted=true
+      android.permission.LOADER_USAGE_STATS: granted=true
+      android.permission.OVERRIDE_WIFI_CONFIG: granted=true
+      android.permission.FORCE_STOP_PACKAGES: granted=true
+      android.permission.SUGGEST_MANUAL_TIME_AND_ZONE: granted=true
+      android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS: granted=true
+      com.android.providers.tv.permission.ACCESS_WATCHED_PROGRAMS: granted=true
+      android.permission.MEDIA_RESOURCE_OVERRIDE_PID: granted=true
+      android.permission.VIBRATE: granted=true
+      android.permission.HDMI_CEC: granted=true
+      com.tcl.permission.START_CHECK_SYSTEMUPDATE: granted=true
+      android.permission.READ_USER_DICTIONARY: granted=true
+      android.permission.MANAGE_SCOPED_ACCESS_DIRECTORY_PERMISSIONS: granted=true
+      android.permission.ACCESS_WIFI_STATE: granted=true
+      uk.co.freeview.systemdistributor.appList.app_config: granted=true
+      com.android.launcher.permission.INSTALL_SHORTCUT: granted=true
+      android.permission.READ_FRAME_BUFFER: granted=true
+      android.permission.QUERY_ALL_PACKAGES: granted=true
+      com.tcl.ShortcutKey: granted=true
+      android.permission.DUMP: granted=true
+      android.permission.LOCATION_HARDWARE: granted=true
+      android.permission.WAKE_LOCK: granted=true
+      android.permission.INJECT_EVENTS: granted=true
+      android.permission.BIND_NETWORK_RECOMMENDATION_SERVICE: granted=true
+      uk.co.freeview.fvpconfigauth.FVP_CONFIG_WRITE: granted=true
+      android.permission.READ_OEM_UNLOCK_STATE: granted=true
+      android.permission.DELETE_PACKAGES: granted=true
+    User 0: 
+      gids=[2001, 1077, 1065, 3002, 3003, 3001, 3007, 1018, 1006, 1007]
+      runtime permissions:
+        android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+        android.permission.READ_EXTERNAL_STORAGE: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_INSTALLER_EXEMPT|RESTRICTION_SYSTEM_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+        android.permission.ACCESS_COARSE_LOCATION: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+        android.permission.READ_PHONE_STATE: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+        android.permission.SEND_SMS: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|RESTRICTION_SYSTEM_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+        android.permission.CAMERA: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+        android.permission.GET_ACCOUNTS: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+        android.permission.WRITE_EXTERNAL_STORAGE: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_INSTALLER_EXEMPT|RESTRICTION_SYSTEM_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+        android.permission.RECORD_AUDIO: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT]
+        android.permission.READ_CONTACTS: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT]
+        android.permission.ACCESS_BACKGROUND_LOCATION: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+        android.permission.ACCESS_MEDIA_LOCATION: granted=true, flags=[ SYSTEM_FIXED|GRANTED_BY_DEFAULT|RESTRICTION_SYSTEM_EXEMPT]
+
+Package Changes:
+  Sequence number=0
+
+
+Dexopt state:
+  [com.tcl.versionUpdateApp]
+    path: /product/app/SystemUpdate/SystemUpdate.apk
+      arm: [status=speed-profile] [reason=bg-dexopt]
+
+
+Compiler stats:
+  [com.tcl.versionUpdateApp]
+     SystemUpdate.apk - 12662

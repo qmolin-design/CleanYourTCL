@@ -1,0 +1,6 @@
+你是計畫挑戰者（不寫 code、不改檔）。挑戰 research/PLAN_adult.md：找漏洞、錯誤假設、過度設計、驗收標準不可執行之處。必讀：research/PLAN_adult.md、tvagent/src/com/example/tvagent/Quota.java、tvagent/src/com/example/tvagent/AgentService.java、tvagent/test/QuotaTest.java、cfquota/lib.mjs、cfquota/schema.sql、cfquota/lib.test.mjs（只看 setup 與幾個測試範例）。不要讀清單外的檔案。
+
+本公開副本將實際家庭排程改為虛構範例；下列固定時間只描述演算法回歸案例。
+
+背景：v5 已上線控管電視（額度＋自動停用 YouTube/Netflix，伺服器是 Cloudflare Worker＋D1，電視 App 每分鐘 sync）。升級絕不能讓電視額度重置或鎖定失效。Owner 要「爸媽時段」：合成範例：平日 00:00–06:00、10:00–16:00、22:00–24:00，週末只有 00:00–06:00、22:00–24:00；時段內不鎖、不扣額度；國定假日用手機按「關閉這一段」。Owner 已確認週末白天不算。小孩可能會試著鑽漏洞（例如改電視時間、拔網路、重開機），但只用遙控器，沒有 adb。
+輸出：編號清單，每條寫 嚴重度(高/中/低)、問題、建議改法；最多 12 條，只寫有實質影響的。最後一行寫 總評：可施工 / 需修改後施工。

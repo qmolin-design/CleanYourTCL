@@ -1,0 +1,35 @@
+你是 Android 工程師。在 git worktree /Users/example-owner/TV-wt-tvagent-wl（分支 tvagent-wl）修改 tvagent，讓它自動把 TCL TGuard 的保護名單設回去。只改這個 worktree，不要 commit、不要 push、不要執行 adb、不要碰電視。
+
+## 背景
+- tvagent（tvagent/）是電視上的前景服務，透過自己實作的 AdbClient 連 127.0.0.1:5555 的 adbd，以 shell uid 執行指令。心跳由 AlarmManager 每 60 秒叫醒一次：`AgentService.heartbeat(src)` 執行 `echo ok`，寫一行 log 到 files/agent.log。先讀 tvagent/README.md 與 tvagent/src/com/example/tvagent/AgentService.java。
+- TCL 內建的 TGuard（com.tcl.guard）會砍背景 App。它的保護名單 mKillWhiteList 可以用 shell 指令整份取代（已經在實機驗證過）：
+  `dumpsys activity service com.tcl.guard/.memorymanager.TGuardService mKillWhiteList '<逗號分隔的套件清單>'`
+  讀取：`dumpsys activity service com.tcl.guard/.memorymanager.TGuardService` 的輸出裡，每個成員各一行，格式是 `    KillWhiteList:          com.xxx`。
+- 這份名單只存在 TGuard 的記憶體裡，TGuard 重啟或電視重開機就會變回預設的 11 個（不含 tvagent）。
+
+## 要做的事
+1. 在 AgentService 加常數，存 Owner 選定的名單（共 9 個，順序照抄）：
+   `com.android.bluetooth,com.tcl.tvinput,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV,com.example.tvagent`
+2. 每次心跳（src=start 與 src=alarm 都要）在 `echo ok` 之後，用**同一個 runAdb 呼叫、一條 shell 指令**做「檢查→必要時設定→再驗證」，輸出一個字：
+   - 名單已經有 `com.example.tvagent` → `keep`
+   - 沒有 → 執行設定，再讀一次；有了 → `set`，還是沒有 → `fail`
+   建議形式（自行確認引號正確）：
+   `S=com.tcl.guard/.memorymanager.TGuardService; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo keep || { dumpsys activity service $S mKillWhiteList '<名單>' >/dev/null 2>&1; dumpsys activity service $S | grep -q 'KillWhiteList:.*com.example.tvagent' && echo set || echo fail; }`
+3. 心跳 log 行尾加 ` wl=<keep|set|fail|錯誤類別>`，例如 `... src=alarm adb=ok wl=keep`。echo 失敗（adb 不通）時不做名單檢查，記 `wl=skip`。名單指令丟例外時，用跟 adb= 一樣的格式記錯誤類別，例如 `wl=io:...`。心跳本身不能因為名單步驟失敗而中斷或少寫 log。
+4. 判斷結果的程式寫成一個可以離線測試的 static 方法（例如 `static String wlStatus(String shellOutput)`：trim 後是 keep/set/fail 就原樣回傳，其他回 `unexpected`）。在 test/ 加測試（沿用 AdbClientTest 的風格，或另寫一個極小的 main 測試，由 test.sh 一起跑），涵蓋 keep、set、fail、空字串、亂碼。注意 test.sh 只用純 Java 編譯，不能 import android.*；如果 AgentService 不能被 javac 單獨編譯，就把這個方法放到不依賴 android.* 的小類別（例如 Whitelist.java），AgentService 呼叫它。
+5. 更新 tvagent/README.md：說明保護名單常數、wl= 欄位意思、「名單只在 TGuard 記憶體、由心跳每分鐘自動補回」、手動還原原名單的指令（原 11 個：`com.google.android.apps.mediashell,com.android.bluetooth,com.android.providers.media.module,com.tcl.tvinput,com.android.providers.tv,com.tcl.autopair,com.google.android.katniss,com.tcl.ttvs,com.tcl.versionUpdateApp,com.tcl.usagestats,com.tcl.MultiScreenInteraction_TV`）。README 原本寫的「程式裡沒有其他套件名」要改成正確描述。
+6. 執行 `sh tvagent/test.sh`（最後一行要是 ALL PASS），再執行 `sh tvagent/build.sh` 產生新的 tvagent/tvagent.apk（用 repo 內的 debug.keystore，不要產生新 keystore；簽章換了，電視上就沒辦法覆蓋安裝）。
+
+## 禁止事項
+- 不改 tvagent/testdata/、不改 debug.keystore、不改 AdbClient.java 的協定行為。
+- 不改心跳間隔、鬧鐘機制、selftest 流程。
+- 不加新權限、不加新的 Android 元件。
+- 除了 tvagent/ 底下的檔案，什麼都不改。
+
+## 完成標準（Opus 會照這些驗收）
+- `cd /Users/example-owner/TV-wt-tvagent-wl && sh tvagent/test.sh` 最後一行 ALL PASS，且包含新測試的輸出。
+- `sh tvagent/build.sh` 成功，tvagent/tvagent.apk 的 mtime 更新。
+- `git -C /Users/example-owner/TV-wt-tvagent-wl diff --stat` 只動到 tvagent/ 底下的檔案，testdata/ 沒有變動。
+- `grep -n "wl=" tvagent/src/com/example/tvagent/AgentService.java` 有結果；名單常數和上面完全一致。
+
+做完在 /Users/example-owner/TV/research/wo/WO-G2_done.md 寫：改了哪些檔、test.sh 最後 5 行輸出、build 結果、任何疑慮。

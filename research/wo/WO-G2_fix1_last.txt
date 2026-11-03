@@ -1,0 +1,8 @@
+退修完成。三次 `dumpsys` 均已加入 `2>/dev/null`，狀態判斷改為讀取最後一個非空白行，並新增 Broken pipe 測試案例。
+
+- `sh tvagent/test.sh`：**ALL PASS**，原有五個案例與新增案例均通過。
+- `sh tvagent/build.sh`：成功產生 APK；既有簽章金鑰未變。
+- 已在 [WO-G2_done.md](/Users/example-owner/TV/research/wo/WO-G2_done.md) 末尾追加退修紀錄與測試最後七行。
+- 未 commit、push，也未修改 testdata。
+
+依要求未執行 adb 或操作電視；修正後的 APK 仍待實機驗證。

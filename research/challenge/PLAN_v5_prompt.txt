@@ -1,0 +1,9 @@
+你是計畫挑戰者，唯讀，不要修改任何檔案、不要執行 adb、不要連網。工作目錄 /Users/example-owner/TV。
+只讀：research/PLAN_v5_spike.md（要挑戰的計畫）、tkey/build.sh、tkey/AndroidManifest.xml（編譯方式參考）。不要讀清單外的檔案。
+
+挑戰重點：
+1. 技術假設是否錯誤：Android TV 11（API 30）上 App 用 adb 協定連 127.0.0.1:5555（adb tcpip 傳統模式，非無線偵錯配對）是否可行；adb AUTH 流程、RSAPUBLICKEY 格式（mincrypt 結構）、簽章方式（SHA-1 DigestInfo＋PKCS#1 v1.5 對 20 bytes token）是否寫對；CNXN 版本／maxdata；Android 11 adbd 有沒有可能要求 TLS（A_STLS）；targetSdk 30 前景服務與 BOOT_COMPLETED 的限制；debuggable＋run-as 讀檔是否可行。
+2. 漏洞：實驗會不會干擾已上線的 v4（Mac 用 adb 管 YouTube）、會不會把電視弄壞或無法還原；RSA 提示的處理順序是否合理。
+3. 過度設計：對實驗而言哪些可以砍。
+4. 驗收標準是否可執行、可假通過（特別是 AdbClientTest 的假 adbd 是否足以抓到格式錯誤；工人和測試同一人寫的風險）。
+輸出：編號條列，每條「問題／為什麼／建議」，最後一行總結「可開工」或「需修改」。繁體中文。

@@ -1,0 +1,247 @@
+Reading additional input from stdin...
+OpenAI Codex v0.163.0
+--------
+workdir: /Users/example-owner/TV
+model: openai/gpt-6.1-terra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: high
+reasoning summaries: none
+session id: 00000000019-0000-4000-8000-000000000000
+--------
+user
+你是計畫挑戰者，唯讀，不要修改任何檔案、不要執行 adb、不要連網。工作目錄 /Users/example-owner/TV。
+只讀：research/PLAN_v5_spike.md（要挑戰的計畫）、tkey/build.sh、tkey/AndroidManifest.xml（編譯方式參考）。不要讀清單外的檔案。
+
+挑戰重點：
+1. 技術假設是否錯誤：Android TV 11（API 30）上 App 用 adb 協定連 127.0.0.1:5555（adb tcpip 傳統模式，非無線偵錯配對）是否可行；adb AUTH 流程、RSAPUBLICKEY 格式（mincrypt 結構）、簽章方式（SHA-1 DigestInfo＋PKCS#1 v1.5 對 20 bytes token）是否寫對；CNXN 版本／maxdata；Android 11 adbd 有沒有可能要求 TLS（A_STLS）；targetSdk 30 前景服務與 BOOT_COMPLETED 的限制；debuggable＋run-as 讀檔是否可行。
+2. 漏洞：實驗會不會干擾已上線的 v4（Mac 用 adb 管 YouTube）、會不會把電視弄壞或無法還原；RSA 提示的處理順序是否合理。
+3. 過度設計：對實驗而言哪些可以砍。
+4. 驗收標準是否可執行、可假通過（特別是 AdbClientTest 的假 adbd 是否足以抓到格式錯誤；工人和測試同一人寫的風險）。
+輸出：編號條列，每條「問題／為什麼／建議」，最後一行總結「可開工」或「需修改」。繁體中文。
+hook: SessionStart
+hook: SessionStart
+hook: SessionStart Completed
+hook: SessionStart Completed
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+我會只檢視指定的三個檔案，針對協定、電視安全、實驗範圍與驗收方式提出挑戰；不執行 adb，也不連網。
+hook: PreToolUse
+hook: PreToolUse Completed
+exec
+/bin/zsh -lc 'cat research/PLAN_v5_spike.md tkey/build.sh tkey/AndroidManifest.xml' in /Users/example-owner/TV
+ succeeded in 0ms:
+# PLAN v5 實驗：電視 App 自己當 adb 連線端（DRAFT）
+
+> 2026-10-30 Owner 開工單。目的：驗證「電視上的 App 不靠 Mac 就能停用／啟用 App」是否可行，作為 Cloudflare 額度方案（v5）的前提。**本計畫只做實驗，不做額度、不碰 Cloudflare、不取代 v4。**
+
+## 背景
+- v4（Mac 用 adb 鎖 YouTube）07:22 已上線，實驗期間照常跑，不能被干擾。
+- 一般 App 沒有權限停用別的 App。可行路線：App 用 adb 協定連電視本機 `127.0.0.1:5555`（`persist.adb.tcp.port=5555`、`ro.adb.secure=1`，第一次要在電視上按「允許」），以 shell 身分下 `pm disable-user`／`pm enable`。
+- 電視：Android TV 11（API 30）、2GB RAM、32 位元使用者空間；TCL 可能有自家的背景清理機制。
+- 編譯：沿用 `tkey/build.sh` 的方式（Docker 映像 `cleanyourtv-android-build-amd64`，javac＋d8，無 Gradle、無外部函式庫）。映像內有 Java 17，沒有 python；Mac 沒有 Java。
+
+## 要回答的三個問題
+1. App 能否連上本機 adb、通過 RSA 認證，並且停用＋啟用一個 App？
+2. 電視重開（`adb reboot`）與冷開機（拔插頭）後，App 能不能自己啟動？
+3. 常駐 24 小時會不會被系統砍掉？記憶體用多少？
+
+## WO-A1 實驗 App（工人施工）
+新目錄 `tvagent/`（套件 `com.example.tvagent`），仿 `tkey/` 結構：`AndroidManifest.xml`、`build.sh`、`src/…`、`debug.keystore`（build.sh 自動產生，與 tkey 分開）。
+
+功能：
+- **沒有桌面圖示**（不宣告 LAUNCHER／LEANBACK_LAUNCHER）。`android:debuggable="true"`（方便 `run-as` 讀紀錄；實驗用）。minSdk 26、targetSdk 30。
+- **adb 連線端**（純 Java，`java.net.Socket`＋`java.security`）：實作 adb 傳輸協定 CNXN／AUTH（先送簽章 token，被拒再送 RSAPUBLICKEY）／OPEN／OKAY／WRTE／CLSE，執行 `shell:<指令>` 並回傳輸出。RSA 2048 金鑰第一次執行時產生，存 App 私有目錄；公鑰用 Android adb 格式（mincrypt RSAPublicKey 結構：len=64、n0inv、n 小端、rr、exponent，base64 後接 ` tvagent@tv\0`）；簽章＝對 20 bytes token 做 PKCS#1 v1.5 簽章並帶 SHA-1 DigestInfo 前綴（等同 adbd 的 RSA_verify(NID_sha1)）。這個類別**不得依賴任何 android.* API**，才能在 Mac 的 Docker JVM 上單獨執行。
+- 該類別附 `main(String[] args)`：`java … AdbClient <host> <port> <keyfile> <shell 指令>`，金鑰檔不存在就產生；印出指令輸出，失敗印原因並以非 0 結束。
+- **開機自啟**：`BOOT_COMPLETED` 接收器 → `startForegroundService` 啟動前景服務（通知頻道，文字「tvagent 實驗」）。
+- **前景服務**：每 60 秒做一次心跳：連 `127.0.0.1:5555` 執行 `echo ok`，在 App 私有目錄 `files/agent.log` 追加一行：`<本地時間> uptime=<SystemClock.elapsedRealtime 秒> pid=<pid> adb=<ok|錯誤類別:訊息>`。服務啟動時記一行 `start reason=<boot|test|restart>`。檔案超過 1MB 時只保留後半。
+- **自我測試**：明確廣播 `am broadcast -n com.example.tvagent/.TestReceiver -a com.example.tvagent.SELFTEST` → 在背景執行緒依序執行並把每步結果寫進 agent.log：
+  1. `pm disable-user --user 0 com.example.tkey`
+  2. `pm list packages -d` 確認含 `com.example.tkey`
+  3. `pm enable com.example.tkey`
+  4. `pm list packages -d` 確認不含 `com.example.tkey`
+  5. 最後一行 `selftest PASS` 或 `selftest FAIL <步驟>`。**無論中途哪步失敗，都要嘗試 `pm enable com.example.tkey`。**
+  這個廣播也要確保服務在跑（沒在跑就啟動，reason=test）。
+- 只准停用／啟用 `com.example.tkey`，不得停用任何其他套件，程式裡不得出現 `youtube` 字樣（實驗期間 v4 在管 YouTube）。
+- `tvagent/README.md`：用途、安裝、讀紀錄（`adb shell run-as com.example.tvagent cat files/agent.log`）、移除（`adb uninstall com.example.tvagent`）。
+
+### 完成標準（工人自己跑、Opus 審定再跑）
+1. `sh tvagent/build.sh` 成功，產出 `tvagent/tvagent.apk`。
+2. `docker run … aapt2 dump badging tvagent/tvagent.apk`（或 `aapt dump badging`）顯示 package `com.example.tvagent`、targetSdkVersion 30、**沒有** `launchable-activity`／`leanback-launchable-activity`。
+3. 離線協定測試 `sh tvagent/test.sh`：在 Docker 內編譯並執行 `AdbClientTest.java`（純 Java）。測試內建假 adbd（`ServerSocket` 在 127.0.0.1）：
+   - 假 adbd 依 adb 協定驗證每個封包的 checksum 與 magic（`command ^ 0xffffffff`）。
+   - 第一輪：收到簽章就拒絕 → 要求客戶端送 RSAPUBLICKEY；假 adbd **用 BigInteger 從 adb 格式公鑰解出 n、e，獨立計算 sig^e mod n**，檢查 PKCS#1 v1.5 填充＋SHA-1 DigestInfo 前綴＋原 token；之後回 CNXN。
+   - 第二輪（同一金鑰檔）：簽章直接通過，不送公鑰。
+   - `shell:echo ok` 回 `ok`；分兩個 WRTE 回傳的輸出要完整拼接；adbd 斷線時客戶端回錯誤不卡住（5 秒內）。
+   - 驗證 n0inv 與 rr 的值（n0inv＝-1/n mod 2^32；rr＝(2^2048)^2 mod n）。
+   - 最後一行印 `ALL PASS`，任一失敗以非 0 結束。
+4. `grep -rn "disable-user" tvagent/src` 只出現在自我測試，且目標只有 `com.example.tkey`；`grep -rn "youtube" tvagent/src` 無結果。
+5. `git status --porcelain --untracked-files=all` 只有 `tvagent/` 底下的檔案。
+
+### 禁止
+- 不連電視、不執行真 adb（`adb` 指令一律不准）、不裝套件到電視、不碰 `tvgate/`、`tkey/`、`memlog/`、`~/.secrets`、launchd。
+- 不加 Gradle 或任何外部函式庫。不 commit。
+
+## WO-A2 實機實驗（Opus＋Owner，不委派）
+1. **先在 Mac 驗協定**（不裝 App）：Docker 跑 `AdbClient` 對 `192.0.2.69:5555` 執行 `echo ok` → 電視跳出 RSA 提示，**Owner 按「允許」（不勾一律允許）**。失敗 → 協定問題，退回 WO-A1。
+2. 安裝 `tvagent.apk` → `am broadcast` SELFTEST → 電視跳 RSA 提示，Owner 勾「一律允許」→ 讀 agent.log 看到 `selftest PASS`，且 `pm list packages -d` 不含 tkey、T 鍵正常。
+3. `adb reboot` → 不碰電視，5 分鐘內 agent.log 出現 `start reason=boot` 與 `adb=ok` 心跳。
+4. 冷開機（Owner 拔插頭 30 秒）→ 同第 3 項。
+5. 常駐 24 小時：心跳間隔最大值（扣掉待機時段另計）、`dumpsys meminfo com.example.tvagent` 的 TOTAL PSS；同時看 memlog 有無變差、v4 是否照常鎖。
+6. 記錄結果到 `research/batches/tvagent/NOTE.txt`；結論給 Owner 決定是否開 v5（額度＋Cloudflare）。
+- 收尾：Owner 決定不做 → `adb uninstall com.example.tvagent`（RSA 授權可在開發者選項撤銷）。
+
+## 風險
+- adbd 拒絕本機連線或 TCL 擋 → 問題 1 失敗，v5 改走「網頁搬 Cloudflare、Mac 照樣下 adb」。
+- RSA 授權被電視清掉（例如重設 adb）→ App 失效，要重按允許；記錄實驗中是否發生。
+- 這把 adb 金鑰＝電視 shell 權限，存在 App 私有目錄；App 不開任何對內連線埠。
+#!/bin/sh
+# 用 Docker 映像 cleanyourtv-android-build-amd64 編譯，輸出 tkey.apk。在 Mac 上執行：sh build.sh
+cd "$(dirname "$0")" && docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w cleanyourtv-android-build-amd64 sh -ec '
+BT=/opt/android-sdk/build-tools/34.0.0; JAR=/opt/android-sdk/platforms/android-34/android.jar
+rm -rf out && mkdir -p out/classes
+[ -f debug.keystore ] || keytool -genkeypair -keystore debug.keystore -storepass android -keypass android -alias tkey -keyalg RSA -validity 36500 -dname CN=tkey
+$BT/aapt2 link -o out/base.apk -I $JAR --manifest AndroidManifest.xml
+javac -source 8 -target 8 -bootclasspath $JAR -d out/classes src/com/example/tkey/Main.java
+$BT/d8 --min-api 26 --lib $JAR --output out out/classes/com/example/tkey/*.class
+(cd out && jar uf base.apk classes.dex)
+$BT/zipalign -f 4 out/base.apk out/aligned.apk
+$BT/apksigner sign --ks debug.keystore --ks-pass pass:android --out tkey.apk out/aligned.apk
+rm -rf out'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.tkey" android:versionCode="1" android:versionName="1">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="30" />
+    <queries><package android:name="com.google.android.youtube.tv" /></queries>
+    <application android:label="YouTube（T 鍵）" android:allowBackup="false">
+        <activity android:name=".Main" android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="com.tcl.partnercustomizer.tkey" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+1. **問題：協定版本、封包大小與 checksum 沒有訂明。**  
+   **為什麼：** CNXN 的版本與 maxdata 會影響雙方協商後的封包行為；測試只說驗證 checksum，卻沒有指定客戶端實際使用的版本及分段規則，實作可能通過假伺服器卻無法與真機互通。  
+   **建議：** 實驗先固定使用傳統版本 `0x01000000`、maxdata `4096`，依協商結果限制傳送大小並驗證封包長度、magic 與 checksum。測試加入大於單一封包及截斷封包的情境。
+
+2. **問題：RSA 公鑰格式與簽章方向大致正確，但驗收仍有空隙。**  
+   **為什麼：** 2048 位元 mincrypt 結構的 `len=64`、`n0inv`、小端序 `n` 和 `rr`、exponent，以及對既有 20-byte token 加 SHA-1 DigestInfo 後做 PKCS#1 v1.5，都是合理假設。若直接用 `SHA1withRSA` 對 token 簽章，會再雜湊一次，結果不符。測試若只解出 `n`、`e`，仍可能漏掉結構總長、欄位偏移、小端序、Base64、註解及結尾 NUL 的錯誤。  
+   **建議：** 指定結構為固定 524 bytes，逐欄檢查長度、偏移與小端序，並檢查 Base64 解碼結果和結尾 NUL；簽章測試要明確使用原始 token 驗證，避免二次 SHA-1。
+
+3. **問題：假 adbd 的第一輪認證流程描述不夠精確。**  
+   **為什麼：** 伺服器拒絕簽章後會再次送 AUTH token；客戶端送公鑰後須等待使用者授權，不能把送出公鑰直接當成認證成功。計畫也沒有規定等待授權的逾時與取消行為。  
+   **建議：** 假伺服器逐步檢查 `AUTH TOKEN → SIGNATURE → AUTH TOKEN → RSAPUBLICKEY → CNXN`，第二輪檢查既有金鑰簽章成功；另測授權逾時、拒絕或斷線。將一般 I/O 逾時與等待人工授權的較長逾時分開。
+
+4. **問題：Android 11 的 A_STLS 與本機 TCP 可用性未列為明確分支。**  
+   **為什麼：** 傳統 `adb tcpip` 與 Android 11 的無線偵錯配對是不同路徑；不能只憑 API 30 判定廠商 adbd 一定接受本機傳統 TCP，或斷言所有裝置都不會要求 TLS。  
+   **建議：** 保持傳統 TCP 為實驗假設；若收到 `A_STLS`，明確記錄「此端點要求 TLS，實驗不支援」並停止，不要擴寫配對或 TLS。連不上、認證失敗、要求 TLS 應分別記錄，避免一律歸咎協定實作。
+
+5. **問題：第一次自我測試的 RSA 提示順序可能讓測試先逾時。**  
+   **為什麼：** 服務心跳與自我測試都可能同時發起首次連線、觸發授權；廣播接收器的生命週期也不能靠普通背景執行緒保證。未獲授權前就依序執行測試，容易出現重複提示或測試中斷。  
+   **建議：** 首次啟動先由服務建立**單一**連線並等待 Owner 勾選允許，確認 `echo ok` 後才觸發自我測試。接收器只負責啟動服務，測試由服務執行；明定等待提示的逾時與失敗紀錄。
+
+6. **問題：Mac 驗證不一定能產生計畫預期的提示。**  
+   **為什麼：** Docker 連到電視要使用獨立測試金鑰，否則沿用已授權的 Mac 金鑰可能不出提示；不勾「一律允許」也不應被當作重連後仍獲授權的保證。Docker 網路、使用者未及時操作或裝置授權狀態都可能造成失敗，不能直接判定是協定問題。  
+   **建議：** 指定獨立、臨時的 Docker 金鑰，記錄連線階段及錯誤；只有取得足夠證據才退回協定修正。之後的電視 App 必須使用另一把自己的金鑰。
+
+7. **問題：前景服務與開機自啟的先決條件不足。**  
+   **為什麼：** API 30 可由 `BOOT_COMPLETED` 接收器啟動前景服務，但仍需宣告相應權限、及時呼叫 `startForeground()`，並考慮廠商背景管理。新安裝或被強制停止的套件可能處於 stopped 狀態；冷開機後使用者儲存空間是否已解鎖也會影響一般 `BOOT_COMPLETED` 與私有金鑰讀取。沒有桌面入口不代表安裝後一定已啟動過。  
+   **建議：** 明列 Manifest 的 `INTERNET`、`RECEIVE_BOOT_COMPLETED`、`FOREGROUND_SERVICE` 權限與元件 exported 設定，及啟動服務後立即升為前景的要求。驗收前先以明確廣播啟動一次；分別記錄是否曾強制停止、開機後是否需解鎖，以及通知是否存在。
+
+8. **問題：`run-as` 可行，但私鑰暴露與備份風險未納入。**  
+   **為什麼：** `debuggable=true` 通常可讓 shell 使用 `run-as` 讀取該 App 私有資料，但仍取決於裝置設定；同樣也可能讀到 adb 私鑰。此金鑰具備電視 shell 權限。  
+   **建議：** 明確設定 `android:allowBackup="false"`，驗證真機 `run-as`，不要把私鑰印到紀錄或報告。實驗結束後移除 App，並處理留下的授權。
+
+9. **問題：收尾的「撤銷 RSA 授權」可能影響已上線的 v4。**  
+   **為什麼：** 開發者選項的撤銷 USB 偵錯授權可能清除**所有**已授權 adb 金鑰，包括 Mac 的 v4 金鑰；卸載 App 也不等於移除 adbd 端留下的公鑰。  
+   **建議：** 不把全面撤銷列為預設收尾。先確認裝置是否有可只移除實驗金鑰的方法；若只能全面撤銷，應先準備 Mac 重新授權與 v4 恢復步驟，再由 Owner 決定時機。
+
+10. **問題：自我測試仍會暫時影響真實使用，失敗時未必能復原。**  
+    **為什麼：** `tkey` 的 Manifest 顯示它處理 TCL T 鍵；測試停用期間 T 鍵會受影響。若 adbd 中斷、App 被殺或電視斷電，即使有 `finally`，也無法保證執行 `pm enable`。若 tkey 原本就被停用，無條件啟用也會改變原狀。  
+    **建議：** 測試前確認 tkey 已啟用，並準備可從 Mac 執行的明確復原步驟。每步驗證 shell 結果及實際套件狀態；失敗時記錄復原是否成功。安排短暫 T 鍵中斷的時段，並在測後驗證 v4 與 T 鍵。
+
+11. **問題：`grep` 和假 adbd 容易形成假通過。**  
+    **為什麼：** 同一工人同時寫客戶端與測試，可能把同一個格式誤解寫進兩邊；搜尋 `disable-user` 或 `youtube` 也無法證明執行命令的目標受到限制，例如命令可由字串拼接或透過通用 CLI 傳入。  
+    **建議：** 審定者獨立檢查封包測試及實際程式，加入固定的公鑰／簽章測試向量與錯誤案例。檢查所有 shell 命令的呼叫路徑；明確區分供 Docker 使用的通用測試入口與電視端可觸發的命令，確保後者只操作 tkey。
+
+12. **問題：24 小時驗收沒有明確判定門檻，且紀錄輪替可能破壞證據。**  
+    **為什麼：** 「會不會被系統砍掉」不能只看有無心跳：程序重啟、待機、服務重啟及 adbd 失敗是不同事件；`adb=ok` 也應代表輸出確實為 `ok`。按位元組保留檔案後半可能截斷一行或多位元組文字。  
+    **建議：** 先訂明觀察起訖時間、允許的清醒時段心跳間隔、重啟如何計數，以及 PSS 的採樣時點；待機另列結果。記錄時保留完整行，並確認 24 小時期間證據未被輪替掉。
+
+13. **問題：部分實驗設計可再縮小。**  
+    **為什麼：** 此階段要驗證可行性，通用 shell CLI、複雜的服務重啟原因分類，以及 1 MB 日誌裁切都會增加失敗點；前提是仍能完成 Mac 協定驗證、真機自測與 24 小時觀察。  
+    **建議：** 保留純 Java 客戶端及必要的 Docker 測試入口；電視端只提供固定測試命令。日誌先採足以容納實驗期間紀錄的簡單方案，重啟原因只記能可靠辨識的資訊。
+
+未查閱指定清單外的資料，也未連網或執行 adb；協定與系統行為仍需依修正後的離線測試及真機實驗確認。
+
+需修改
+hook: Stop
+hook: Stop Completed
+tokens used
+25,938
+1. **問題：協定版本、封包大小與 checksum 沒有訂明。**  
+   **為什麼：** CNXN 的版本與 maxdata 會影響雙方協商後的封包行為；測試只說驗證 checksum，卻沒有指定客戶端實際使用的版本及分段規則，實作可能通過假伺服器卻無法與真機互通。  
+   **建議：** 實驗先固定使用傳統版本 `0x01000000`、maxdata `4096`，依協商結果限制傳送大小並驗證封包長度、magic 與 checksum。測試加入大於單一封包及截斷封包的情境。
+
+2. **問題：RSA 公鑰格式與簽章方向大致正確，但驗收仍有空隙。**  
+   **為什麼：** 2048 位元 mincrypt 結構的 `len=64`、`n0inv`、小端序 `n` 和 `rr`、exponent，以及對既有 20-byte token 加 SHA-1 DigestInfo 後做 PKCS#1 v1.5，都是合理假設。若直接用 `SHA1withRSA` 對 token 簽章，會再雜湊一次，結果不符。測試若只解出 `n`、`e`，仍可能漏掉結構總長、欄位偏移、小端序、Base64、註解及結尾 NUL 的錯誤。  
+   **建議：** 指定結構為固定 524 bytes，逐欄檢查長度、偏移與小端序，並檢查 Base64 解碼結果和結尾 NUL；簽章測試要明確使用原始 token 驗證，避免二次 SHA-1。
+
+3. **問題：假 adbd 的第一輪認證流程描述不夠精確。**  
+   **為什麼：** 伺服器拒絕簽章後會再次送 AUTH token；客戶端送公鑰後須等待使用者授權，不能把送出公鑰直接當成認證成功。計畫也沒有規定等待授權的逾時與取消行為。  
+   **建議：** 假伺服器逐步檢查 `AUTH TOKEN → SIGNATURE → AUTH TOKEN → RSAPUBLICKEY → CNXN`，第二輪檢查既有金鑰簽章成功；另測授權逾時、拒絕或斷線。將一般 I/O 逾時與等待人工授權的較長逾時分開。
+
+4. **問題：Android 11 的 A_STLS 與本機 TCP 可用性未列為明確分支。**  
+   **為什麼：** 傳統 `adb tcpip` 與 Android 11 的無線偵錯配對是不同路徑；不能只憑 API 30 判定廠商 adbd 一定接受本機傳統 TCP，或斷言所有裝置都不會要求 TLS。  
+   **建議：** 保持傳統 TCP 為實驗假設；若收到 `A_STLS`，明確記錄「此端點要求 TLS，實驗不支援」並停止，不要擴寫配對或 TLS。連不上、認證失敗、要求 TLS 應分別記錄，避免一律歸咎協定實作。
+
+5. **問題：第一次自我測試的 RSA 提示順序可能讓測試先逾時。**  
+   **為什麼：** 服務心跳與自我測試都可能同時發起首次連線、觸發授權；廣播接收器的生命週期也不能靠普通背景執行緒保證。未獲授權前就依序執行測試，容易出現重複提示或測試中斷。  
+   **建議：** 首次啟動先由服務建立**單一**連線並等待 Owner 勾選允許，確認 `echo ok` 後才觸發自我測試。接收器只負責啟動服務，測試由服務執行；明定等待提示的逾時與失敗紀錄。
+
+6. **問題：Mac 驗證不一定能產生計畫預期的提示。**  
+   **為什麼：** Docker 連到電視要使用獨立測試金鑰，否則沿用已授權的 Mac 金鑰可能不出提示；不勾「一律允許」也不應被當作重連後仍獲授權的保證。Docker 網路、使用者未及時操作或裝置授權狀態都可能造成失敗，不能直接判定是協定問題。  
+   **建議：** 指定獨立、臨時的 Docker 金鑰，記錄連線階段及錯誤；只有取得足夠證據才退回協定修正。之後的電視 App 必須使用另一把自己的金鑰。
+
+7. **問題：前景服務與開機自啟的先決條件不足。**  
+   **為什麼：** API 30 可由 `BOOT_COMPLETED` 接收器啟動前景服務，但仍需宣告相應權限、及時呼叫 `startForeground()`，並考慮廠商背景管理。新安裝或被強制停止的套件可能處於 stopped 狀態；冷開機後使用者儲存空間是否已解鎖也會影響一般 `BOOT_COMPLETED` 與私有金鑰讀取。沒有桌面入口不代表安裝後一定已啟動過。  
+   **建議：** 明列 Manifest 的 `INTERNET`、`RECEIVE_BOOT_COMPLETED`、`FOREGROUND_SERVICE` 權限與元件 exported 設定，及啟動服務後立即升為前景的要求。驗收前先以明確廣播啟動一次；分別記錄是否曾強制停止、開機後是否需解鎖，以及通知是否存在。
+
+8. **問題：`run-as` 可行，但私鑰暴露與備份風險未納入。**  
+   **為什麼：** `debuggable=true` 通常可讓 shell 使用 `run-as` 讀取該 App 私有資料，但仍取決於裝置設定；同樣也可能讀到 adb 私鑰。此金鑰具備電視 shell 權限。  
+   **建議：** 明確設定 `android:allowBackup="false"`，驗證真機 `run-as`，不要把私鑰印到紀錄或報告。實驗結束後移除 App，並處理留下的授權。
+
+9. **問題：收尾的「撤銷 RSA 授權」可能影響已上線的 v4。**  
+   **為什麼：** 開發者選項的撤銷 USB 偵錯授權可能清除**所有**已授權 adb 金鑰，包括 Mac 的 v4 金鑰；卸載 App 也不等於移除 adbd 端留下的公鑰。  
+   **建議：** 不把全面撤銷列為預設收尾。先確認裝置是否有可只移除實驗金鑰的方法；若只能全面撤銷，應先準備 Mac 重新授權與 v4 恢復步驟，再由 Owner 決定時機。
+
+10. **問題：自我測試仍會暫時影響真實使用，失敗時未必能復原。**  
+    **為什麼：** `tkey` 的 Manifest 顯示它處理 TCL T 鍵；測試停用期間 T 鍵會受影響。若 adbd 中斷、App 被殺或電視斷電，即使有 `finally`，也無法保證執行 `pm enable`。若 tkey 原本就被停用，無條件啟用也會改變原狀。  
+    **建議：** 測試前確認 tkey 已啟用，並準備可從 Mac 執行的明確復原步驟。每步驗證 shell 結果及實際套件狀態；失敗時記錄復原是否成功。安排短暫 T 鍵中斷的時段，並在測後驗證 v4 與 T 鍵。
+
+11. **問題：`grep` 和假 adbd 容易形成假通過。**  
+    **為什麼：** 同一工人同時寫客戶端與測試，可能把同一個格式誤解寫進兩邊；搜尋 `disable-user` 或 `youtube` 也無法證明執行命令的目標受到限制，例如命令可由字串拼接或透過通用 CLI 傳入。  
+    **建議：** 審定者獨立檢查封包測試及實際程式，加入固定的公鑰／簽章測試向量與錯誤案例。檢查所有 shell 命令的呼叫路徑；明確區分供 Docker 使用的通用測試入口與電視端可觸發的命令，確保後者只操作 tkey。
+
+12. **問題：24 小時驗收沒有明確判定門檻，且紀錄輪替可能破壞證據。**  
+    **為什麼：** 「會不會被系統砍掉」不能只看有無心跳：程序重啟、待機、服務重啟及 adbd 失敗是不同事件；`adb=ok` 也應代表輸出確實為 `ok`。按位元組保留檔案後半可能截斷一行或多位元組文字。  
+    **建議：** 先訂明觀察起訖時間、允許的清醒時段心跳間隔、重啟如何計數，以及 PSS 的採樣時點；待機另列結果。記錄時保留完整行，並確認 24 小時期間證據未被輪替掉。
+
+13. **問題：部分實驗設計可再縮小。**  
+    **為什麼：** 此階段要驗證可行性，通用 shell CLI、複雜的服務重啟原因分類，以及 1 MB 日誌裁切都會增加失敗點；前提是仍能完成 Mac 協定驗證、真機自測與 24 小時觀察。  
+    **建議：** 保留純 Java 客戶端及必要的 Docker 測試入口；電視端只提供固定測試命令。日誌先採足以容納實驗期間紀錄的簡單方案，重啟原因只記能可靠辨識的資訊。
+
+未查閱指定清單外的資料，也未連網或執行 adb；協定與系統行為仍需依修正後的離線測試及真機實驗確認。
+
+需修改

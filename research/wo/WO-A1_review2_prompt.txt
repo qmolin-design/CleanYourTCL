@@ -1,0 +1,13 @@
+你是唯讀審核員，不要修改任何檔案、不要執行 adb、不要連網、不要執行 build 或測試（已跑過 ALL PASS）。工作目錄 /Users/example-owner/TV-wt-tvagent。
+只讀以下內容，不要讀清單外的檔案：
+- /Users/example-owner/TV/research/wo/WO-A1_fix1_prompt.txt（本次退修工單：實機錯誤與要做 1～3）
+- `git -C /Users/example-owner/TV-wt-tvagent diff -- tvagent/src tvagent/test`（本次 diff）
+- tvagent/src/com/example/tvagent/AdbClient.java、tvagent/test/AdbClientTest.java（對照前後文）
+
+任務：
+1. 要做 1～3 逐項「做到／沒做到＋檔案:行號」。
+2. Android（Conscrypt）上的可行性：KeyFactory.getKeySpec(priv, RSAPrivateCrtKeySpec.class) 對 Conscrypt 的 OpenSSLRSAPrivateKey（非 CRT）可能丟 InvalidKeySpecException 或回傳缺參數——備援路徑是否真的能取得 modulus 與 publicExponent（例如 priv.getEncoded() 在 Conscrypt 上回傳什麼；或改讀金鑰檔）？是否有任何路徑仍會丟未處理例外或轉型錯誤？Cipher("RSA/ECB/NoPadding") 用私鑰 ENCRYPT_MODE 在 Conscrypt 是否可行？
+3. 測試斷言是否被放寬（看 diff 中 test 檔被刪除的行）；新增的 opaque 測試是否真的模擬了「不實作 RSA 介面的私鑰」。
+4. 新金鑰產生路徑（第一次在電視上執行）與既有金鑰檔載入路徑是否都能得到一致的公鑰。
+
+輸出：第一行只能是 PASS 或 FAIL。之後列問題，每條：檔案:行號、問題、理由。只有違反工單、在 Android 上會失敗、測試放寬才算 FAIL；其他列「非阻擋」。繁體中文。

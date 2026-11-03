@@ -1,0 +1,2 @@
+實驗 exp1（21:20，Owner「實驗 OK」）：amazon pm uninstall -k --user 0 → 重開後 installed=true（被裝回）；videos disable-user → 重開後 enabled=1。開機 logcat 從 21:20:20 起，找不到 setEnabled／install-existing 紀錄（推測在 PMS 開機掃描階段處理）。線索：persist.tcl.whitelistpath=/data/data/com.tcl.versionUpdateApp/shared_prefs/whitelist_data.xml（無 root 讀不到）。電視回到實驗前狀態，無需還原。
+live1（晚間）：10 個（1b＋批次 2）再次 disable-user，不重開（重開後會被恢復）。MemAvailable 約 560→621MB。
